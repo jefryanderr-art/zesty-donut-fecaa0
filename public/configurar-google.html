@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Activar Google · Acontec</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="setup-guide">
+    <a href="/">← Volver al acceso</a>
+    <h1>Activar el acceso con Google</h1>
+    <p>El ID público de Google ya está conectado en Acontec. El propietario solo necesita comprobar en Google que el dominio esté autorizado y que las cuentas de sus clientes puedan acceder. Los clientes no necesitan realizar esta configuración.</p>
+    <section class="card">
+      <h2>1. Abre tu cuenta de Google</h2>
+      <p>Entra en <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer">Google Cloud Console</a>. Selecciona un proyecto o crea uno con el nombre Acontec. Para este acceso no necesitas activar servicios de pago.</p>
+      <h2>2. Configura la aplicación</h2>
+      <p>Abre <strong>Google Auth Platform → Branding</strong> (o <strong>APIs y servicios → Pantalla de consentimiento de OAuth</strong>). Pulsa Comenzar si aparece. Escribe Acontec como nombre y selecciona tus correos de soporte y contacto.</p>
+      <p>En <strong>Audience / Público</strong>, selecciona Externo para permitir cuentas de tus clientes. Mientras esté en pruebas, agrega sus correos como usuarios de prueba. Para abrir el acceso a todos los clientes, cambia la aplicación a producción según las indicaciones de Google.</p>
+      <h2>3. Revisa el cliente web existente</h2>
+      <p>Abre <strong>Clients / Clientes</strong> (o <strong>APIs y servicios → Credenciales</strong>) y selecciona el cliente de tipo <strong>Aplicación web</strong> cuyo ID proporcionaste. No necesitas crear otro cliente.</p>
+      <p>En <strong>Orígenes autorizados de JavaScript</strong>, agrega exactamente este origen, sin rutas ni barra final:</p>
+      <p><code>https://zesty-donut-fecaa0.netlify.app</code></p>
+      <p>Si utilizas otro dominio o una vista previa, autoriza también su origen HTTPS. No necesitas configurar una URL de redirección para este flujo.</p>
+      <h2>4. El ID público ya está conectado</h2>
+      <p>Acontec utiliza el ID público que proporcionó el propietario. No necesitas guardar una variable en Netlify ni compartir el secreto del cliente.</p>
+      <p>Solo si cambias de cliente, abre <a href="https://app.netlify.com/projects/zesty-donut-fecaa0" target="_blank" rel="noopener noreferrer">el proyecto en Netlify</a> y entra en <strong>Project configuration → Environment variables → Add a variable</strong>. Usa <code>GOOGLE_CLIENT_ID</code> como nombre y el nuevo ID público como valor. Selecciona el alcance <strong>Functions</strong> para los contextos que utilices y redespliega una sola vez.</p>
+      <h2>5. Comprueba el acceso</h2>
+      <p>Después del despliegue de esta actualización, abre el dominio autorizado y pulsa <strong>Continuar con Google</strong>. Si aparece un error de origen, revisa que el dominio coincida exactamente con el del paso 3. Guardar cambios de orígenes o público en Google no requiere otro despliegue de Acontec.</p>
+    </section>
+    <section class="card">
+      <h2>Tu acceso por correo ya no necesita claves manuales</h2>
+      <p>En la pantalla de acceso, pulsa Crear cuenta, escribe tu correo, una contraseña de al menos ocho caracteres y el nombre de tu empresa. Abre el enlace de confirmación que recibas por correo. Después podrás entrar con esas credenciales y ver únicamente tus empresas.</p>
+      <p>No basta con escribir cualquier correo para entrar: se mantiene la verificación de identidad para proteger la contabilidad. Nunca compartas contraseñas ni secretos en un chat.</p>
+      <p>El botón de Google utiliza el ID público conectado y el servidor verifica la identidad antes de permitir el acceso. La autorización del dominio y del público se administra en Google, no desde esta página.</p>
+    </section>
+    <a class="btn" href="/">Volver a Acontec</a>
+  </main>
+</body>
+</html>

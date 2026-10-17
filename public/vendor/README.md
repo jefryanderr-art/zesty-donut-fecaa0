@@ -1,0 +1,9 @@
+# Bibliotecas de exportación
+
+Estas copias se obtuvieron de las dependencias npm del proyecto y se cargan únicamente para las descargas de PDF y ZIP. No requieren un paso de compilación ni un CDN externo.
+
+- `fflate.js`: fflate 0.8.3, distribución `umd/index.js`, licencia MIT.
+- `jspdf.js`: jsPDF 4.2.1, distribución `dist/jspdf.umd.min.js`, licencia MIT.
+- `autotable.js`: jsPDF-AutoTable 5.0.8, distribución `dist/jspdf.plugin.autotable.min.js`, licencia MIT.
+
+Cuando se actualicen estas dependencias, actualizar también sus copias locales. Se conservaron los avisos de las distribuciones originales.
