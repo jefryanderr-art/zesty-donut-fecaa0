@@ -1,7 +1,8 @@
+import { retainedCompanyData } from './accounting-storage.mjs';
 import { randomUUID } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
 import { and, eq } from 'drizzle-orm';
-import { companyBackups, companyMembers } from '../../db/schema.ts';
+import { companyMembers } from '../../db/schema.ts';
 import { allowed, equal, accessError, updateCompany, actorName } from './access.mjs';
 import { OPERATION_ARRAYS, operationalRole, salesAdministrator, supervisor, cashAdministrator, operatorId, receiptRecords } from './policies.mjs';
 
@@ -356,7 +357,7 @@ export async function runOperation(companyId, session, body) {
     const result = await updateCompany(companyId, session, body.revision, async (company, access, client) => {
       const data = initializeOperations(structuredClone(company.data));
       const operationSession = access.member ? { ...session, member: access.member } : session;
-      const historical = body.file ? await client.select({ data: companyBackups.data }).from(companyBackups).where(eq(companyBackups.companyId, companyId)) : [];
+      const historical = body.file ? await retainedCompanyData(client, companyId) : [];
       const operation = body.operation, userId = operatorId(access, session);
       if (operation === 'settings') {
         if (!access.owner) accessError('Solo el dueño configura cajas, series, descuentos y anticipos.');

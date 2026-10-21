@@ -1,3 +1,4 @@
+import { retainedCompanyData } from '../lib/accounting-storage.mjs';
 import { getStore } from '@netlify/blobs';
 import { login, signup, confirmEmail, requestPasswordRecovery, recoverPassword, AuthError, MissingIdentityError } from '@netlify/identity';
 import { OAuth2Client } from 'google-auth-library';
@@ -5,7 +6,7 @@ import { timingSafeEqual, createHash, randomBytes, randomUUID } from 'node:crypt
 import { and, desc, eq, gt, lt, or, sql } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
 import { users, companies, siteContent, loginAttempts, sessions, companyMembers, auditEvents, companyBackups } from '../../db/schema.ts';
-import { MODULES, allowed, allData, equal, accessError, accessibleCompanies, companyAccess, projectData, mergeData, safeMember, manageMember, verifyPassword, updateCompany, audit } from '../lib/access.mjs';
+import { MODULES, allowed, allData, equal, accessError, accessibleCompanies, companyAccess, projectData, mergeData, safeMember, manageMember, verifyPassword, updateCompany, audit, migrateAccountingStorage } from '../lib/access.mjs';
 import { runOperation, guardLedgerMutation } from '../lib/operations.mjs';
 import { PLATFORM_OWNER, receiptRecords, cashAdministrator, operatorId } from '../lib/policies.mjs';
 import { customerAdmin, isPlatformAdmin, ensureAcontecCompany, legalDocument, legalState, acceptLegal } from '../lib/customer-admin.mjs';
@@ -315,6 +316,7 @@ export default async (request, context) => {
     if (path === 'legal/accept' && method === 'POST') return json(await acceptLegal(session, body));
     if (path === 'customers-admin') return json(await customerAdmin(method, body, url, session));
     if (consent.required && !isAdmin && path !== 'me') return fail('Debes aceptar los términos de uso y la política de privacidad vigentes.', 428);
+    if (path === 'storage-migration' && method === 'POST') return json(await migrateAccountingStorage(url.searchParams.get('c'), session, body));
     if (path === 'operations' && method === 'POST') return json(await runOperation(url.searchParams.get('c'), session, body));
     if (path === 'company-logo' && method === 'POST') {
       const access = await companyAccess(db, url.searchParams.get('c'), session);
@@ -400,7 +402,7 @@ export default async (request, context) => {
           mergeData(company.data, data, { owner: true });
           guardLedgerMutation(company.data, data, currentAccess);
           if (!currentAccess.owner && ((company.data?.taxes || []).some(tax => tax.receipt) || (data.taxes || []).some(tax => tax.receipt))) accessError('Cuando hay comprobantes privados, solo el dueño puede restaurar la empresa.');
-          const historical = await client.select({ data: companyBackups.data }).from(companyBackups).where(eq(companyBackups.companyId, companyId));
+          const historical = await retainedCompanyData(client, companyId);
           const trustedReceipts = new Map([company.data, ...historical.map(backup => backup.data)].flatMap(document => receiptRecords(document).map(tax => [tax.receipt.key, { id: tax.id, receipt: tax.receipt }])));
           for (const tax of receiptRecords(data)) if (tax.receipt) {
             if (!currentAccess.owner || !tax.receipt.key?.startsWith(companyId + '/')) accessError('El respaldo contiene comprobantes no autorizados.', 400);
@@ -471,7 +473,7 @@ export default async (request, context) => {
         || (body.mime === 'image/png' && file.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])))
         || (body.mime === 'image/webp' && file.toString('ascii', 0, 4) === 'RIFF' && file.toString('ascii', 8, 12) === 'WEBP');
       if (!valid) return fail('Usa un PDF, JPG, PNG o WebP válido.');
-      const historical = await db.select({ data: companyBackups.data }).from(companyBackups).where(eq(companyBackups.companyId, companyId));
+      const historical = await retainedCompanyData(db, companyId);
       const receipts = [...new Map([company.data, ...historical.map(backup => backup.data)].flatMap(data => receiptRecords(data).map(record => [record.receipt.key, record.receipt]))).values()];
       if (receipts.length >= 100 || receipts.reduce((total,receipt) => total + receipt.size, 0) + file.length > 52428800) return fail('Límite de comprobantes alcanzado: 100 archivos o 50 MB por empresa.');
       const key = companyId + '/' + randomUUID();
@@ -511,10 +513,12 @@ export default async (request, context) => {
     if (path === 'data') {
       const companyId = url.searchParams.get('c');
       if (method === 'GET') {
-        const access = await companyAccess(db, companyId, session);
-        const { id, name, description } = access.company;
-        const company = { id, name, description, owner: access.owner, permissions: access.permissions, memberId: access.member?.id, role: access.owner ? 'Dueño' : access.member?.role };
-        return json({ data: projectData(access.company.data, access), revision: access.company.revision, company });
+        return await db.transaction(async client => {
+          const access = await companyAccess(client, companyId, session, true);
+          const { id, name, description } = access.company;
+          const company = { id, name, description, owner: access.owner, permissions: access.permissions, memberId: access.member?.id, role: access.owner ? 'Dueño' : access.member?.role };
+          return json({ data: projectData(access.company.data, access), revision: access.company.revision, company });
+        });
       }
       if (method === 'PUT') {
         let returnData = false;

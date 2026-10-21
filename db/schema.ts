@@ -1,4 +1,8 @@
-import { pgTable, text, uuid, jsonb, timestamp, integer, boolean, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { collections, children, snake } from './accounting-model.mjs';
+import { pgTable, text, uuid, jsonb, timestamp, integer, boolean, index, uniqueIndex, bigint, numeric, primaryKey, foreignKey, check, pgPolicy } from 'drizzle-orm/pg-core';
+
+const serverAccess = () => pgPolicy('acontec_solo_servidor', { for: 'all', to: 'public', using: sql`current_user NOT IN ('anon', 'authenticated') AND has_table_privilege(current_user, 'public.acontec_companies', 'UPDATE')`, withCheck: sql`current_user NOT IN ('anon', 'authenticated') AND has_table_privilege(current_user, 'public.acontec_companies', 'UPDATE')` });
 
 export const users = pgTable('acontec_users', {
   email: text().primaryKey(),
@@ -8,7 +12,7 @@ export const users = pgTable('acontec_users', {
   platformAdmin: boolean('platform_admin').default(false).notNull(),
   profile: jsonb().default({}).notNull(),
   version: integer().default(0).notNull(),
-});
+}, () => [serverAccess()]).enableRLS();
 
 export const customerPayments = pgTable('acontec_customer_payments', {
   id: uuid().defaultRandom().primaryKey(),
@@ -20,7 +24,7 @@ export const customerPayments = pgTable('acontec_customer_payments', {
   method: text().notNull(),
   actor: text().notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-}, table => [index('acontec_customer_payments_email_idx').on(table.email)]);
+}, table => [serverAccess(), index('acontec_customer_payments_email_idx').on(table.email)]).enableRLS();
 
 export const customerEvents = pgTable('acontec_customer_events', {
   id: uuid().defaultRandom().primaryKey(),
@@ -29,7 +33,7 @@ export const customerEvents = pgTable('acontec_customer_events', {
   action: text().notNull(),
   details: jsonb().notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-}, table => [index('acontec_customer_events_email_date_idx').on(table.email, table.createdAt)]);
+}, table => [serverAccess(), index('acontec_customer_events_email_date_idx').on(table.email, table.createdAt)]).enableRLS();
 
 export const legalAcceptances = pgTable('acontec_legal_acceptances', {
   id: uuid().defaultRandom().primaryKey(),
@@ -37,7 +41,7 @@ export const legalAcceptances = pgTable('acontec_legal_acceptances', {
   version: text().notNull(),
   contentHash: text('content_hash').notNull(),
   acceptedAt: timestamp('accepted_at').defaultNow().notNull(),
-}, table => [uniqueIndex('acontec_legal_acceptance_version_idx').on(table.email, table.version)]);
+}, table => [serverAccess(), uniqueIndex('acontec_legal_acceptance_version_idx').on(table.email, table.version)]).enableRLS();
 export const companies = pgTable('acontec_companies', {
   id: uuid().defaultRandom().primaryKey(),
   ownerEmail: text('owner_email').notNull().references(() => users.email),
@@ -46,24 +50,24 @@ export const companies = pgTable('acontec_companies', {
   data: jsonb(),
   revision: integer().default(0).notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, () => [serverAccess()]).enableRLS();
 export const siteContent = pgTable('acontec_site_content', {
   id: text().primaryKey(),
   content: jsonb().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, () => [serverAccess()]).enableRLS();
 export const loginAttempts = pgTable('acontec_login_attempts', {
   key: text().primaryKey(),
   count: integer().default(1).notNull(),
   expiresAt: timestamp('expires_at').notNull(),
-});
+}, () => [serverAccess()]).enableRLS();
 export const sessions = pgTable('acontec_sessions', {
   tokenHash: text('token_hash').primaryKey(),
   email: text().notNull().references(() => users.email, { onDelete: 'cascade' }),
   admin: boolean().default(false).notNull(),
   memberId: uuid('member_id').references(() => companyMembers.id, { onDelete: 'cascade' }),
   expiresAt: timestamp('expires_at').notNull(),
-}, table => [index('acontec_sessions_expires_at_idx').on(table.expiresAt)]);
+}, table => [serverAccess(), index('acontec_sessions_expires_at_idx').on(table.expiresAt)]).enableRLS();
 
 export const companyMembers = pgTable('acontec_company_members', {
   id: uuid().defaultRandom().primaryKey(),
@@ -77,7 +81,7 @@ export const companyMembers = pgTable('acontec_company_members', {
   active: boolean().default(true).notNull(),
   version: integer().default(0).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-}, table => [uniqueIndex('acontec_member_company_email_idx').on(table.companyId, table.email)]);
+}, table => [serverAccess(), uniqueIndex('acontec_member_company_email_idx').on(table.companyId, table.email)]).enableRLS();
 
 export const auditEvents = pgTable('acontec_audit_events', {
   id: uuid().defaultRandom().primaryKey(),
@@ -87,7 +91,7 @@ export const auditEvents = pgTable('acontec_audit_events', {
   changes: jsonb().notNull(),
   revision: integer(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-}, table => [index('acontec_audit_company_date_idx').on(table.companyId, table.createdAt)]);
+}, table => [serverAccess(), index('acontec_audit_company_date_idx').on(table.companyId, table.createdAt)]).enableRLS();
 
 export const companyBackups = pgTable('acontec_company_backups', {
   id: uuid().defaultRandom().primaryKey(),
@@ -97,4 +101,67 @@ export const companyBackups = pgTable('acontec_company_backups', {
   data: jsonb(),
   revision: integer().notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-}, table => [uniqueIndex('acontec_backup_company_revision_idx').on(table.companyId, table.revision)]);
+}, table => [serverAccess(), uniqueIndex('acontec_backup_company_revision_idx').on(table.companyId, table.revision)]).enableRLS();
+
+
+// Identificadores históricos de texto; todas las claves incluyen la empresa.
+function recordTable(definition: any, child = false) {
+  const tableName = 'acontec_' + definition.table;
+  const columns: any = {
+    companyId: uuid('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+    id: text('id').notNull(),
+    position: integer('position').notNull(),
+    date: text('date'),
+    extra: jsonb('extra').notNull(),
+  };
+  if (child) columns.entryId = text('entry_id').notNull();
+  for (const field of definition.text || []) columns[field] = text(snake(field));
+  for (const field of definition.money || []) columns[field + 'Cents'] = bigint(snake(field) + '_cents', { mode: 'number' });
+  for (const field of definition.numeric || []) columns[field] = numeric(snake(field));
+  return pgTable(tableName, columns, (table: any) => [
+    serverAccess(),
+    primaryKey({ columns: [table.companyId, table.id] }),
+    index(tableName + '_company_date_idx').on(table.companyId, table.date),
+    ...(child ? [foreignKey({ columns: [table.companyId, table.entryId], foreignColumns: [journalEntries.companyId, journalEntries.id] }).onDelete('cascade')] : []),
+    ...(definition.table === 'journal_lines' ? [check('acontec_line_nonnegative', sql`${table.dCents} >= 0 AND ${table.cCents} >= 0`)] : []),
+  ]).enableRLS();
+}
+export const ledgerAccounts = recordTable(collections.accounts);
+export const products = recordTable(collections.products);
+export const customers = recordTable(collections.customers);
+export const suppliers = recordTable(collections.suppliers);
+export const employees = recordTable(collections.employees);
+export const payrolls = recordTable(collections.payrolls);
+export const settlements = recordTable(collections.settlements);
+export const taxObligations = recordTable(collections.taxes);
+export const properties = recordTable(collections.properties);
+export const shifts = recordTable(collections.shifts);
+export const cashMovements = recordTable(collections.cashMovements);
+export const pettyFunds = recordTable(collections.pettyFunds);
+export const pettyVouchers = recordTable(collections.pettyVouchers);
+export const cashCounts = recordTable(collections.cashCounts);
+export const costCatalog = recordTable(collections.costCatalog);
+export const costs = recordTable(collections.costs);
+export const journalEntries = recordTable(collections.entries);
+export const journalLines = recordTable(children.lines, true);
+export const invoiceItems = recordTable(children.items, true);
+export const inventoryMovements = recordTable(children.stock, true);
+export const invoicePayments = recordTable(children.payments, true);
+export const invoices = recordTable({ table: 'invoices', text: ['type', 'reference', 'due', 'customerId', 'supplierId', 'pay'], money: ['subtotal', 'vat', 'total'] });
+export const accountingStorage = pgTable('acontec_accounting_storage', {
+  companyId: uuid('company_id').primaryKey().references(() => companies.id, { onDelete: 'cascade' }),
+  revision: integer('revision').notNull(),
+  mode: text('mode').notNull().default('relational'),
+  documentExtra: jsonb('document_extra').notNull(),
+  manifest: jsonb('manifest').notNull(),
+  sourceHash: text('source_hash').notNull(),
+  verifiedAt: timestamp('verified_at').defaultNow().notNull(),
+}, () => [serverAccess(), check('acontec_storage_mode', sql`mode IN ('relational', 'legacy')`)]).enableRLS();
+// Copia inicial independiente de la retención de las últimas 30 versiones.
+export const accountingOrigins = pgTable('acontec_accounting_origins', {
+  companyId: uuid('company_id').primaryKey().references(() => companies.id, { onDelete: 'cascade' }),
+  revision: integer('revision').notNull(),
+  data: jsonb('data'),
+  sourceHash: text('source_hash').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, () => [serverAccess()]).enableRLS();
