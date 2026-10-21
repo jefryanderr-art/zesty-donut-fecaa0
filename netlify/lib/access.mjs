@@ -1,3 +1,5 @@
+import { readAccounting, syncAccounting, convertAccounting, returnToLegacy, storageState, retainedCompanyData } from './accounting-storage.mjs';
+import { normalizeDocument } from './accounting-codec.mjs';
 import { promisify } from 'node:util';
 import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
@@ -54,9 +56,13 @@ export async function companyAccess(client, companyId, session, lock = false) {
   if (lock) query = query.for('update');
   const [company] = await query;
   if (!company) accessError('Empresa no encontrada.', 404);
-  if (!session.member && company.ownerEmail === session.email) return { company, owner: true, permissions: {} };
+  if (!session.member && company.ownerEmail === session.email) {
+    if (lock) company.data = await readAccounting(client, company);
+    return { company, owner: true, permissions: {} };
+  }
   const [member] = await client.select().from(companyMembers).where(and(eq(companyMembers.companyId, companyId), eq(companyMembers.active, true), session.member ? eq(companyMembers.id, session.member.id) : eq(companyMembers.email, session.email)));
   if (!member) accessError('Sin acceso a esta empresa.');
+  if (lock) company.data = await readAccounting(client, company);
   return { company, owner: false, permissions: member.permissions, member };
 }
 export function entryModule(entry) {
@@ -288,6 +294,7 @@ export async function updateCompany(companyId, session, revision, mutate, action
     if (Object.entries(patch).every(([name, value]) => equal(company[name], value))) return { revision: company.revision, data: projectData(company.data, access) };
     obsoleteKeys = await checkpoint(client, company);
     const [updated] = await client.update(companies).set({ ...patch, revision: company.revision + 1, updatedAt: new Date() }).where(eq(companies.id, companyId)).returning();
+    await syncAccounting(client, company, updated);
     const changes = dataChanges(company.data, updated.data);
     for (const field of ['name', 'description']) if (company[field] !== updated[field]) changes.push({ area: field, before: company[field], after: updated[field] });
     await audit(client, companyId, session, action, changes, updated.revision);
@@ -296,7 +303,7 @@ export async function updateCompany(companyId, session, revision, mutate, action
   if (obsoleteKeys.length) {
     try {
       const [current] = await db.select({ data: companies.data }).from(companies).where(eq(companies.id, companyId));
-      const backups = await db.select({ data: companyBackups.data }).from(companyBackups).where(eq(companyBackups.companyId, companyId));
+      const backups = await retainedCompanyData(db, companyId);
       const referenced = new Set([current, ...backups].flatMap(record => receiptRecords(record.data).map(item => item.receipt.key)));
       const store = getStore({ name: 'acontec-private-receipts', consistency: 'strong' });
       for (const key of new Set(obsoleteKeys)) if (key.startsWith(companyId + '/') && !referenced.has(key)) await store.delete(key);
@@ -355,5 +362,30 @@ export async function manageMember(companyId, session, body) {
     if (previous) await client.delete(sessions).where(or(eq(sessions.memberId, previous.id), ...(previous.email ? [eq(sessions.email, previous.email)] : [])));
     await audit(client, companyId, session, previous ? 'Acceso modificado' : 'Acceso creado', [{ area: 'accesibilidad', id: member.id, before: previous ? safeMember(previous) : null, after: safeMember(member), passwordChanged: !!passwordHash }]);
     return safeMember(member);
+  });
+}
+
+
+// Una empresa por operación, solo su dueño, sin cambiar su revisión contable.
+export async function migrateAccountingStorage(companyId, session, body) {
+  return db.transaction(async client => {
+    // Evita hidratar para permitir recuperación del JSON cuando falla la proyección.
+    const access = await companyAccess(client, companyId, session);
+    if (!access.owner) accessError('Solo el dueño puede migrar o recuperar el almacenamiento.');
+    const [company] = await client.select().from(companies).where(eq(companies.id, companyId)).for('update');
+    if (!Number.isInteger(body.revision) || body.revision !== company.revision) accessError('La empresa cambió. Repite la verificación con la revisión vigente.', 409);
+    const mode = body.action || 'verify';
+    if (!['verify', 'apply', 'rollback'].includes(mode)) accessError('Operación de almacenamiento inválida.', 400);
+    let result;
+    if (mode === 'verify') {
+      const converted = normalizeDocument(companyId, company.data);
+      const state = await storageState(client, companyId);
+      if (state?.mode === 'relational') await readAccounting(client, company);
+      return { mode: state?.mode || 'legacy', revision: company.revision, counts: converted.manifest.counts, debitCents: converted.manifest.debitCents, creditCents: converted.manifest.creditCents, verified: true, persisted: false };
+    }
+    if (mode === 'apply') result = await convertAccounting(client, company);
+    else result = await returnToLegacy(client, company);
+    await audit(client, companyId, session, mode === 'apply' ? 'Almacenamiento relacional activado y verificado' : 'Lectura JSON recuperada sin borrar tablas', [{ area: 'almacenamiento', after: result }], company.revision);
+    return { ...result, verified: true, persisted: true };
   });
 }

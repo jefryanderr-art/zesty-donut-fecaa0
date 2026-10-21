@@ -14,6 +14,16 @@ Administración contable tecnológica para varias empresas y clientes. El proyec
 - Netlify Blobs: imágenes públicas WebP y comprobantes fiscales privados autorizados por el propietario. Los registros contables y los metadatos de comprobantes permanecen en Netlify Database.
 - `@netlify/identity`: registro, confirmación de correo y acceso con correo y contraseña. Google Identity Services y `google-auth-library`: ingreso con Google y verificación del ID token en el servidor.
 
+## Fase 0: migración relacional en Netlify Database
+
+Se adaptó la Fase 0 a **Netlify Database (Postgres)** por decisión del propietario; no se conectó Supabase. Se mantuvieron Netlify Identity, Google, los permisos por empresa y módulo, la bitácora, las revisiones optimistas y las versiones recuperables. No se incorporaron variables privadas nuevas ni cambió el frontend estático.
+
+El esquema agregó tablas contables para asientos y líneas, facturas y artículos, productos y movimientos de inventario, clientes, proveedores, personal, nómina, impuestos y operaciones de caja. Los importes principales se almacenan en centavos enteros y las claves incluyen la empresa. RLS protege las tablas con acceso desde el servidor; el aislamiento de usuarios y empresas sigue validándose también en la API. Los metadatos históricos se conservan por registro y la copia JSON vigente permanece disponible durante la transición.
+
+La plataforma aplica la migración de esquema al desplegar. Después, el operador autorizado verifica y convierte **cada empresa explícitamente** con `npm run storage:migrate -- --company UUID --revision N`; agregar `--apply` solo cuando la verificación resulte correcta. El comando sin esa opción no escribe. La conversión compara conteos, debe y haber por asiento y globales, relaciones y reconstrucción completa; cualquier inconsistencia revierte la transacción. No redondea fracciones de centavo ni borra el origen. `--rollback` vuelve a leer la copia JSON vigente sin eliminar las tablas. Las empresas nuevas se normalizan en su primer guardado; las empresas existentes aún no convertidas siguen operando con el almacenamiento anterior.
+
+La [guía de migración](docs/migracion-contable.md) documenta comandos, permisos, limitaciones de la transición, recuperación y comprobaciones posteriores al despliegue. Los casos automáticos del conversor quedaron preparados en `tests/accounting-codec.test.mjs`, pendientes de ejecución por la plataforma. También quedan pendientes la conversión con datos reales, las pruebas de RLS y aislamiento, restauración y concurrencia. Esta entrega comprende solo la Fase 0; las mejoras de facturación e interfaz, sucursales y las fases 1–10 siguen pendientes.
+
 ## Ejecución local
 
 Requiere Node.js 22 o posterior y Netlify CLI. Instala las dependencias con `npm install`, vincula el proyecto en Netlify y ejecuta `netlify dev --port 8889`. Abre `http://localhost:8889`. Las cookies seguras se utilizan en producción HTTPS; para probar autenticación sin cambiar esa protección, usa una vista previa HTTPS de Netlify.
