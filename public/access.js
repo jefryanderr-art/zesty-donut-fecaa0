@@ -142,7 +142,7 @@ ACT.cfg=()=>modal('Datos de la empresa',`<label>Nombre<input name="name" require
   if(!CO.owner)return 'Solo el dueño modifica estos datos.';
   if(!await flush())return 'Guarda los cambios pendientes antes de modificar la empresa.';
   const result=await api('company','PUT',{id:CO.id,revision:REV,name:v(form,'name'),description:v(form,'description'),cfg:{ruc:v(form,'ruc'),cur:v(form,'cur')||'C$'}});
-  REV=result.revision;S=result.data;COS=result.companies;CO={...CO,...COS.find(company=>company.id===CO.id)};shell();view();
+  REV=result.revision;S=result.data;rememberCloud();COS=result.companies;CO={...CO,...COS.find(company=>company.id===CO.id)};shell();view();
 });
 ACT.switch=()=>{
   menu(false);
@@ -170,7 +170,7 @@ async function applyRestore(body){
   if(!permission('ajustes',true)||!completeAccess(true))throw new Error('No tienes permiso para restaurar.');
   if(!await flush())throw new Error('Guarda o descarga los cambios pendientes antes de restaurar.');
   const result=await api('backups?c='+CO.id,'POST',{...body,revision:REV});
-  REV=result.revision;S=result.data;saveVersion=0;savedVersion=0;COS=result.companies;CO={...CO,...COS.find(company=>company.id===CO.id)};shell();view();setSt('Respaldo restaurado en la nube');
+  REV=result.revision;S=result.data;rememberCloud();saveVersion=0;savedVersion=0;COS=result.companies;CO={...CO,...COS.find(company=>company.id===CO.id)};shell();view();setSt('Respaldo restaurado en la nube');
 }
 async function restoreFile(file){
   if(file.size>25000000)throw new Error('El archivo JSON supera el límite de lectura de 25 MB.');

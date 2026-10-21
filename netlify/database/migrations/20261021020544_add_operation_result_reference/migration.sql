@@ -1,0 +1,1 @@
+ALTER TABLE "acontec_save_operations" ADD COLUMN "result_id" text;

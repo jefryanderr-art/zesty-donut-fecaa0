@@ -6,7 +6,7 @@ import { transferOperation, CROSS_BRANCH_OPS } from './transfers.mjs';
 import { advancedOperation, handlesAdvanced } from './advanced.mjs';
 import { companyBranches, recordBranch } from './branches.mjs';
 import { retainedCompanyData } from './accounting-storage.mjs';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
 import { and, eq } from 'drizzle-orm';
 import { companyMembers, siteContent } from '../../db/schema.ts';
@@ -351,6 +351,8 @@ async function saveAttachment(data, companyId, body, record, addedKeys, historic
 export async function runOperation(companyId, session, body) {
   const addedKeys = [];
   let output = null;
+  if(body.operationId && !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.operationId)) accessError('Identificador de operación inválido.',400);
+  const receipt=body.operationId?{id:body.operationId,actor:session.email+':'+(session.memberId||''),hash:createHash('sha256').update(JSON.stringify(body)).digest('hex'),resultId:()=>typeof output==='string'?output:null}:null;
   try {
     const result = await updateCompany(companyId, session, body.revision, async (company, access, client) => {
       const crossBranch=CROSS_BRANCH_OPS.includes(body.operation);
@@ -651,8 +653,8 @@ export async function runOperation(companyId, session, body) {
       for(const entry of data.entries)if(!beforeIds.has(entry.id)){if(body.costCenter)entry.costCenter=text(body.costCenter,100);if(body.project)entry.project=text(body.project,100);}
       guardCash(crossBranch?access.company.data:company.data, data);
       return { data, ...(crossBranch?{crossBranch:true}:{}) };
-    }, 'Operación: ' + text(body.operation, 50));
-    return { ...result, id: output };
+    }, 'Operación: ' + text(body.operation, 50), receipt);
+    return { ...result, id: result.replayed ? result.resultId : output };
   } catch (error) {
     const store = getStore({ name: 'acontec-private-receipts', consistency: 'strong' });
     for (const key of addedKeys) { try { await store.delete(key); } catch {} }

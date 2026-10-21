@@ -10,7 +10,7 @@ import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
 import { and, desc, eq, lt, or, isNull } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
-import { companies, companyMembers, companyBackups, auditEvents, sessions } from '../../db/schema.ts';
+import { companies, companyMembers, companyBackups, auditEvents, sessions, saveOperations } from '../../db/schema.ts';
 import { OPERATION_ARRAYS, roleAllows, salesAdministrator, cashAdministrator, operatorId, receiptRecords } from './policies.mjs';
 
 export const MODULES = ['ventas', 'compras', 'gastos', 'inventario', 'contabilidad', 'finanzas', 'personal', 'fiscal', 'ajustes', 'accesibilidad', 'auditoria', 'facturacion', 'cajas', 'costos', 'proveedores'];
@@ -55,19 +55,19 @@ export async function accessibleCompanies(session) {
   return [...rows.map(company => ({ ...company, owner: true, permissions: {} })), ...memberships.filter(row => !rows.some(company => company.id === row.company.id)).map(({ company, member }) => ({ ...company, owner: false, permissions: member.permissions, memberId: member.id, role: member.role }))]
     .map(({ id, name, description, owner, permissions, memberId, role }) => ({ id, name, description, owner, permissions, memberId, role: owner ? 'Dueño' : role }));
 }
-export async function companyAccess(client, companyId, session, lock = false) {
+export async function companyAccess(client, companyId, session, lock = false, loadAccounting = true) {
   if (!/^[a-f0-9-]{36}$/.test(companyId || '')) accessError('Empresa no encontrada.', 404);
   let query = client.select().from(companies).where(eq(companies.id, companyId));
   if (lock) query = query.for('update');
   const [company] = await query;
   if (!company || company.archivedAt) accessError('Empresa no encontrada.', 404);
   if (!session.member && company.ownerEmail === session.email) {
-    if (lock) company.data = await readAccounting(client, company);
+    if (lock && loadAccounting) company.data = await readAccounting(client, company);
     return branchAccess({ company, owner: true, permissions: {} }, session);
   }
   const [member] = await client.select().from(companyMembers).where(and(eq(companyMembers.companyId, companyId), eq(companyMembers.active, true), session.member ? eq(companyMembers.id, session.member.id) : eq(companyMembers.email, session.email)));
   if (!member) accessError('Sin acceso a esta empresa.');
-  if (lock) company.data = await readAccounting(client, company);
+  if (lock && loadAccounting) company.data = await readAccounting(client, company);
   return branchAccess({ company, owner: false, permissions: member.permissions, member }, session);
 }
 export function entryModule(entry) {
@@ -295,14 +295,32 @@ export async function checkpoint(client, company) {
   }
   return [];
 }
-export async function updateCompany(companyId, session, revision, mutate, action = 'Datos contables actualizados') {
+export async function updateCompany(companyId, session, revision, mutate, action = 'Datos contables actualizados', operation = null) {
   let obsoleteKeys = [];
   const result = await db.transaction(async client => {
-    const access = await companyAccess(client, companyId, session, true);
+    const timings = {}, started = performance.now();
+    const access = await companyAccess(client, companyId, session, true, false);
+    timings.readMs = Math.round(performance.now() - started);
+    const operationActor = operation ? operation.actor + ':' + (access.branchId || 'all') : null;
+    if (operation) {
+      const [receipt] = await client.select().from(saveOperations).where(and(eq(saveOperations.companyId, companyId), eq(saveOperations.operationId, operation.id)));
+      if (receipt) {
+        if (receipt.actor !== operationActor || receipt.payloadHash !== operation.hash) accessError('Identificador de guardado reutilizado con otros datos.', 422);
+        return {revision: receipt.revision, replayed: true, resultId: receipt.resultId};
+      }
+    }
+    access.company.data = await readAccounting(client, access.company);
+    timings.readMs = Math.round(performance.now() - started);
+    const remember = async result => {
+      if (operation) await client.insert(saveOperations).values({companyId, operationId: operation.id, actor: operationActor, payloadHash: operation.hash, revision: result.revision, resultId: operation.resultId?.() || null});
+      return result;
+    };
     const fullCompany = access.company;
     const company = { ...fullCompany, data: scopeBranch(fullCompany.data, access) };
     if (!Number.isInteger(revision) || company.revision !== revision) accessError('Los datos cambiaron en otra pestaña. Descarga un respaldo y recarga antes de continuar.', 409);
+    let phase = performance.now();
     const patch = await mutate(company, access, client);
+    timings.validateMs = Math.round(performance.now() - phase);
     const crossBranch=patch.crossBranch;delete patch.crossBranch;
     if(crossBranch && !CROSS_BRANCH_OPS.some(op=>action==='Operación: '+op)) accessError('Operación entre sucursales no autorizada.');
     if (patch.data) {
@@ -311,14 +329,18 @@ export async function updateCompany(companyId, session, revision, mutate, action
       guardPeriods(fullCompany.data, patch.data, action);
       await syncBarcodes(client, fullCompany, patch.data);
     }
-    if (Object.entries(patch).every(([name, value]) => equal(fullCompany[name], value))) return { revision: company.revision, data: projectData(fullCompany.data, access) };
+    if (Object.entries(patch).every(([name, value]) => equal(fullCompany[name], value))) return remember({ revision: company.revision, data: projectData(fullCompany.data, access) });
+    phase = performance.now();
     obsoleteKeys = await checkpoint(client, fullCompany);
+    timings.backupMs = Math.round(performance.now() - phase);
     const [updated] = await client.update(companies).set({ ...patch, revision: company.revision + 1, updatedAt: new Date() }).where(eq(companies.id, companyId)).returning();
+    phase = performance.now();
     await syncAccounting(client, fullCompany, updated);
+    timings.recordsMs = Math.round(performance.now() - phase);
     const changes = dataChanges(fullCompany.data, updated.data);
     for (const field of ['name', 'description']) if (company[field] !== updated[field]) changes.push({ area: field, before: company[field], after: updated[field] });
     await audit(client, companyId, { ...session, auditBranchId: access.branchId }, action, changes, updated.revision);
-    return { revision: updated.revision, data: projectData(updated.data, access) };
+    return remember({ revision: updated.revision, data: projectData(updated.data, access), timings });
   });
   if (obsoleteKeys.length) {
     try {
