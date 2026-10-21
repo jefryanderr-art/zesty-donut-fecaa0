@@ -1,8 +1,15 @@
+import { tradeOperation, TRADE_OPS } from './trade.mjs';
+import { countryTemplate } from './country.mjs';
+import { importRecords } from './importer.mjs';
+import { invoiceTotals, payrollTotals, allocateReturnItems } from './accounting-engine.mjs';
+import { transferOperation, CROSS_BRANCH_OPS } from './transfers.mjs';
+import { advancedOperation, handlesAdvanced } from './advanced.mjs';
+import { companyBranches, recordBranch } from './branches.mjs';
 import { retainedCompanyData } from './accounting-storage.mjs';
 import { randomUUID } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
 import { and, eq } from 'drizzle-orm';
-import { companyMembers } from '../../db/schema.ts';
+import { companyMembers, siteContent } from '../../db/schema.ts';
 import { allowed, equal, accessError, updateCompany, actorName } from './access.mjs';
 import { OPERATION_ARRAYS, operationalRole, salesAdministrator, supervisor, cashAdministrator, operatorId, receiptRecords } from './policies.mjs';
 
@@ -82,16 +89,18 @@ export function guardCash(previous, next) {
 }
 export function guardLedgerMutation(previous, next, access) {
   requireValue(typeof next.cfg?.cur === 'string' && next.cfg.cur.length > 0 && next.cfg.cur.length <= 20 && !/[<>&"'`]/.test(next.cfg.cur), 'Usa un símbolo o código de moneda, sin contenido HTML.');
+  for(const record of next.payrolls||[]){const old=previous?.payrolls?.find(p=>p.id===record.id);if(!equal(old,record)){const calculated=payrollTotals(record);requireValue(calculated.gross===record.gross&&calculated.net===record.net,'Los importes de la nómina no coinciden.');}}
   const productIds = new Set();
   for (const product of next.products) {
     requireValue(/^[a-z0-9-]{1,80}$/.test(product.id || '') && !productIds.has(product.id) && typeof product.name === 'string' && product.name.trim() && product.name.length <= 200, 'Producto inválido o duplicado.');
     productIds.add(product.id);
     requireValue(Number.isFinite(product.price) && product.price >= 0 && Number.isFinite(Number(product.min || 0)) && Number(product.min || 0) >= 0 && Number.isFinite(Number(product.vatRate || 0)) && Number(product.vatRate || 0) >= 0 && Number(product.vatRate || 0) <= 100, 'Precio, mínimo o IVA del producto inválido.');
   }
-  for (const name of [...OPERATION_ARRAYS, 'invoiceSequences']) {
+  for (const name of [...OPERATION_ARRAYS, 'assets','loans','recurringEntries','exchangeRates','foreignDocuments','budgets','quotations','purchaseOrders','attendance','vacationRequests','employeeAdvances','stockTransfers','withholdings','instruments','partners', 'invoiceSequences']) {
     const empty = name === 'invoiceSequences' ? {} : [];
     requireValue(equal(previous?.[name] || empty, next[name] || empty), 'Usa la operación específica para modificar facturación, cajas o costos.');
   }
+  requireValue(equal(previous?.cfg?.print || {}, next.cfg?.print || {}), 'Configura la impresión desde Ajustes.');
   requireValue(equal(previous?.cfg?.pos || {}, next.cfg?.pos || {}) && equal(previous?.cfg?.cash || {}, next.cfg?.cash || {}) && equal(previous?.cfg?.advance || {}, next.cfg?.advance || {}), 'Los parámetros operativos solo se modifican desde su configuración.');
   const before = new Map((previous?.entries || []).map(entry => [entry.id, entry]));
   const after = new Map(next.entries.map(entry => [entry.id, entry]));
@@ -235,13 +244,14 @@ function makeSale(data, access, session, body) {
     const product = data.products.find(record => record.id === item.p), quantity = Number(item.q);
     requireValue(product && Number.isFinite(quantity) && quantity > 0 && quantity <= 1000000 && Math.abs(quantity - Math.round(quantity * 1e6) / 1e6) < 1e-9, 'Producto o cantidad inválida.');
     quantities.set(product.id, (quantities.get(product.id) || 0) + quantity);
-    const price = product.price, unit = round(price * (1 - discount / 100)), vatRate = Number(product.vatRate || 0);
+    const price = amount(item.u ?? product.price, true), unit = round(price * (1 - discount / 100)), vatRate = Number(product.vatRate || 0);
     requireValue(Number.isFinite(price) && price >= 0 && Number.isFinite(vatRate) && vatRate >= 0 && vatRate <= 100, 'Precio o IVA de producto inválido.');
-    return { p: product.id, name: product.name, unit: product.unit || 'unidad', q: quantity, listPrice: price, u: unit, cost: product.cost, vatRate };
+    const effectiveDiscount = product.price > 0 ? (1 - unit / product.price) * 100 : 0;
+    requireValue(effectiveDiscount <= limit + 0.000001, `La rebaja del precio excede el límite autorizado (${limit}%).`);
+    return { originalPrice: product.price, code: product.code || '', p: product.id, name: product.name, unit: product.unit || 'unidad', q: quantity, listPrice: price, u: unit, cost: product.cost, vatRate };
   });
   for (const [id, quantity] of quantities) requireValue(data.products.find(product => product.id === id).stock >= quantity, 'Existencia insuficiente.');
-  const subtotal = round(items.reduce((total, item) => total + round(item.q * item.u), 0));
-  const vat = round(items.reduce((total, item) => total + round(round(item.q * item.u) * item.vatRate / 100), 0)), total = round(subtotal + vat);
+  const {subtotal,vat,total}=invoiceTotals(items);
   requireValue(total > 0 && cents(payments.reduce((sum, payment) => sum + payment.amount, 0)) === cents(total), 'La suma de los pagos debe coincidir exactamente con el total.');
   const customer = data.customers.find(record => record.id === body.customerId);
   if (body.customerId) requireValue(customer && customer.status === 'activo', 'Selecciona un cliente activo.');
@@ -263,13 +273,17 @@ function makeSale(data, access, session, body) {
   data.invoiceSequences[series] = sequence;
   const reference = `${series}-${String(sequence).padStart(8, '0')}`;
   requireValue(!data.entries.some(entry => entry.type === 'venta' && entry.reference === reference), 'La numeración coincide con una factura histórica. Configura el siguiente número de serie.');
+  requireValue((settings.series||[{code:'A',branchId:'principal'}]).some(record=>record.code===series&&(record.branchId||'principal')===access.branchId),'Selecciona una serie de la sucursal activa.');
   const paymentAccounts = { efectivo: '1104', tarjeta: '1102', transferencia: '1102', credito: '1201' };
   const lines = payments.map(payment => ({ a: paymentAccounts[payment.method], d: payment.amount, c: 0 }));
   lines.push({ a: '4101', d: 0, c: subtotal });
   if (vat) lines.push({ a: '2106', d: 0, c: vat });
   const cost = round(items.reduce((sum, item) => sum + item.q * item.cost, 0));
   if (cost) lines.push(...linesBetween('5101', '1301', cost));
-  const entry = appendEntry(data, session, { date, due, reference, series, sequence, type: 'venta', origin: body.origin === 'ventas' ? 'ventas' : 'facturacion', desc: 'Venta - ' + (customer?.name || text(body.party) || 'Cliente general'), party: customer?.name || text(body.party) || 'Cliente general', customerId: customer?.id || '', customer: customer ? { name: customer.name, taxId: customer.taxId, address: customer.address } : null, operatorId: operatorId(access, session), operatorName: actorName(session), shiftId: shift?.id || null, discount, items, payments, pay: credit ? '1201' : methods.has('efectivo') ? '1104' : '1102', subtotal, vat, total, creditAmount: credit, stock: items.map(item => ({ pid: item.p, q: -item.q, unit: item.unit, unitCost: item.cost })), lines });
+  const quotation=body.sourceQuotation?data.quotations?.find(q=>q.id===body.sourceQuotation):null;
+  requireValue(!body.sourceQuotation||quotation?.status==='Pendiente','La cotización no está disponible para convertir.');
+  const entry = appendEntry(data, session, { date, due, reference, series, sequence, type: 'venta', origin: body.origin === 'ventas' ? 'ventas' : 'facturacion', desc: 'Venta - ' + (customer?.name || text(body.party) || 'Cliente general'), party: customer?.name || text(body.party) || 'Cliente general', customerId: customer?.id || '', customer: customer ? { name: customer.name, taxId: customer.taxId, address: customer.address, phone: customer.phone } : null, operatorId: operatorId(access, session), operatorName: actorName(session), shiftId: shift?.id || null, discount, items, payments, pay: credit ? '1201' : methods.has('efectivo') ? '1104' : '1102', subtotal, vat, total, creditAmount: credit, stock: items.map(item => ({ pid: item.p, q: -item.q, unit: item.unit, unitCost: item.cost })), lines });
+  if(quotation){quotation.status='Convertida';quotation.entryId=entry.id;}
   for (const [id, quantity] of quantities) { const product = data.products.find(record => record.id === id); product.stock = Math.round((product.stock - quantity) * 1e6) / 1e6; }
   if (settings.packagingCostId) {
     const catalog = data.costCatalog.find(record => record.id === settings.packagingCostId && record.active);
@@ -287,26 +301,10 @@ function creditNote(data, access, session, body) {
   const date = dateValue(body.date);
   requireValue(date >= original.date, 'La nota no puede ser anterior a la factura.');
   const previousNotes = data.entries.filter(entry => entry.type === 'nota-credito' && entry.invoiceId === original.id);
-  const quantities = new Map();
-  for (const item of body.items || []) {
-    const quantity = Number(item.q);
-    requireValue(Number.isFinite(quantity) && quantity >= 0, 'Cantidad a devolver inválida.');
-    quantities.set(item.p, (quantities.get(item.p) || 0) + quantity);
-  }
-  const grouped = new Map();
-  for (const item of original.items) {
-    if (!grouped.has(item.p)) grouped.set(item.p, { ...item, q: 0 });
-    grouped.get(item.p).q += item.q;
-  }
-  const items = [];
-  for (const [id, quantity] of quantities) if (quantity > 0) {
-    const item = grouped.get(id), returned = previousNotes.reduce((sum, note) => sum + (note.items || []).filter(row => row.p === id).reduce((total, row) => total + row.q, 0), 0);
-    requireValue(item && quantity <= Math.round((item.q - returned) * 1e6) / 1e6 && data.products.some(product => product.id === id), 'La cantidad supera lo pendiente de devolución.');
-    items.push({ ...item, q: quantity, cost: item.cost ?? data.products.find(product => product.id === id).cost });
-  }
-  requireValue(items.length > 0, 'Indica al menos un producto a devolver.');
+  const {items,finalReturn}=allocateReturnItems(original.items,previousNotes,body.items);
+  requireValue(items.every(item=>data.products.some(product=>product.id===item.p)),'Uno de los productos de la devolución ya no existe.');
   let subtotal = round(items.reduce((sum, item) => sum + round(item.q * item.u), 0)), vat = round(items.reduce((sum, item) => sum + round(round(item.q * item.u) * (item.vatRate || 0) / 100), 0));
-  const finalReturn = [...grouped].every(([id, item]) => previousNotes.reduce((sum, note) => sum + (note.items || []).filter(row => row.p === id).reduce((total, row) => total + row.q, 0), 0) + (quantities.get(id) || 0) >= item.q - 0.000001);
+
   if (finalReturn) {
     subtotal = round((original.subtotal ?? original.total - (original.vat || 0)) - previousNotes.reduce((sum, note) => sum + note.subtotal, 0));
     vat = round((original.vat || 0) - previousNotes.reduce((sum, note) => sum + note.vat, 0));
@@ -331,7 +329,7 @@ function creditNote(data, access, session, body) {
   if (finalReturn) cost = round(original.lines.filter(line => line.a === '5101').reduce((sum, line) => sum + line.d - line.c, 0) - previousNotes.reduce((sum, note) => sum + note.lines.filter(line => line.a === '5101').reduce((total, line) => total + line.c - line.d, 0), 0));
   if (cost) lines.push(...linesBetween('1301', '5101', cost));
   const number = (data.invoiceSequences.NC || 0) + 1; data.invoiceSequences.NC = number;
-  const note = appendEntry(data, session, { date, type: 'nota-credito', invoiceId: original.id, reference: 'NC-' + String(number).padStart(8, '0'), desc: 'Nota de crédito - ' + (original.reference || original.id), party: original.party, customerId: original.customerId || '', reason: text(body.reason, 1000), supervisor: actorName(session), originalOperatorId: original.operatorId || null, originalOperatorName: original.operatorName || original.actor || 'Histórico', operatorId: operatorId(access, session), shiftId: shift?.id || null, items, payments, subtotal, vat, total, stock: items.map(item => ({ pid: item.p, q: item.q, unit: item.unit || 'unidad', unitCost: item.cost })), lines });
+  const note = appendEntry(data, session, { date, type: 'nota-credito', invoiceId: original.id, reference: 'NC-' + String(number).padStart(8, '0'), desc: 'Nota de crédito - ' + (original.reference || original.id), party: original.party, customerId: original.customerId || '', reason: text(body.reason, 1000), supervisor: actorName(session), originalOperatorId: original.operatorId || null, originalOperatorName: original.operatorName || original.actor || 'Histórico', operatorId: operatorId(access, session), shiftId: shift?.id || null, items, payments, debtReduction, refund, subtotal, vat, total, stock: items.map(item => ({ pid: item.p, q: item.q, unit: item.unit || 'unidad', unitCost: item.cost })), lines });
   for (const item of items) { const product = data.products.find(record => record.id === item.p), value = product.stock * product.cost + item.q * item.cost; product.stock = Math.round((product.stock + item.q) * 1e6) / 1e6; product.cost = round(value / product.stock); }
   return note;
 }
@@ -355,16 +353,42 @@ export async function runOperation(companyId, session, body) {
   let output = null;
   try {
     const result = await updateCompany(companyId, session, body.revision, async (company, access, client) => {
-      const data = initializeOperations(structuredClone(company.data));
+      const crossBranch=CROSS_BRANCH_OPS.includes(body.operation);
+      const data = initializeOperations(structuredClone(crossBranch?access.company.data:company.data));
       const operationSession = access.member ? { ...session, member: access.member } : session;
       const historical = body.file ? await retainedCompanyData(client, companyId) : [];
+      const beforeIds=new Set(data.entries.map(e=>e.id));
       const operation = body.operation, userId = operatorId(access, session);
-      if (operation === 'settings') {
+      if(operation==='countryTemplate'){requirePermission(access,'fiscal');let template;try{template=countryTemplate(body)}catch(error){accessError(error.message,400)}data.cfg.countryTemplate=template;data.cfg.fiscal={...data.cfg.fiscal,...template.fiscal};for(const [code,name,tipo,nat]of [['6109','Aportes patronales','gasto','D'],['2112','Aportes patronales por pagar','pasivo','C']])if(!data.accounts.some(a=>a.code===code))data.accounts.push({code,name,tipo,nat,sub:''});}
+      else if(crossBranch){output=transferOperation(data,access,operationSession,body,{requireValue,requirePermission,appendEntry,dateValue,amount,ledgerBalance,guardCash});}
+      else if(TRADE_OPS.includes(operation)){output=tradeOperation(data,access,operationSession,body,{requireValue,requirePermission,appendEntry,dateValue,amount,ledgerBalance,guardCash});}
+      else if(operation==='importRecords'){ output=importRecords(data,access,operationSession,body,{requireValue,requirePermission,appendEntry,dateValue,validateSupplier}); }
+      else if (handlesAdvanced(operation)) {
+        output=advancedOperation(data,access,operationSession,body,{requireValue,requirePermission,appendEntry,dateValue,amount,actorName});
+      } else if (operation === 'branch') {
+        if(!access.owner) accessError('Solo el dueño administra sucursales.');
+        const branches=companyBranches(company.data),old=branches.find(b=>b.id===body.id);
+        const name=text(body.name,100),code=text(body.code,16).toUpperCase();
+        requireValue(name && /^[A-Z0-9-]{1,16}$/.test(code), 'Revisa nombre y código de sucursal.');
+        requireValue(!branches.some(b=>b.code===code&&b.id!==old?.id),'Código de sucursal repetido.');
+        requireValue(!body.id||old,'Sucursal no encontrada.');
+        if(!old){const [settings]=await client.select().from(siteContent).where(eq(siteContent.id,'branch-limits'));requireValue(branches.length < (settings?.content?.limit||5),'Se alcanzó el límite de sucursales configurado por Acontec.');}
+        const branch={id:old?.id||randomUUID(),name,code,address:text(body.address,1000),phone:text(body.phone,80),active:body.active!==false,main:old?.main||false,createdAt:old?.createdAt||new Date().toISOString()};
+        requireValue(!branch.main||branch.active,'La sucursal principal debe permanecer activa.');
+        if(!branch.active)requireValue(!data.shifts.some(s=>!s.closedAt&&recordBranch(s)===branch.id),'Cierra los turnos antes de desactivar una sucursal.');
+        if(!old){ data.cfg.pos||={series:[{code:'A',name:'Principal',branchId:'principal'}]};data.cfg.pos.series||=[{code:'A',name:'Principal',branchId:'principal'}];requireValue(!data.cfg.pos.series.some(s=>s.code===code),'El código coincide con una serie existente. Usa otro código de sucursal.');data.cfg.pos.series.push({code,name,branchId:branch.id});}
+        data.branches=old?branches.map(b=>b.id===old.id?branch:b):[...branches,branch];output=branch.id;
+      } else if (operation === 'printSettings') {
+        if (!access.owner) accessError('Solo el dueño configura la impresión.');
+        requireValue(['a4','letter','thermal'].includes(body.format), 'Formato inválido.');
+        data.cfg.print = Object.fromEntries(['format','address','phone','email','creditTerms','legalText','thanks'].map(key => [key, text(body[key], 2000)]));
+      } else if (operation === 'settings') {
         if (!access.owner) accessError('Solo el dueño configura cajas, series, descuentos y anticipos.');
         if (body.pos) {
           const series = body.pos.series;
           requireValue(Array.isArray(series) && series.length > 0 && series.length <= 50, 'Configura de 1 a 50 series.');
           const codes = new Set();
+          requireValue(series.every(record=>!record.branchId||companyBranches(access.company.data).some(b=>b.id===record.branchId)),'La serie debe pertenecer a una sucursal de esta empresa.');
           for (const record of series) { requireValue(/^[A-Z0-9-]{1,16}$/.test(record.code || '') && record.code !== 'NC' && !codes.has(record.code), 'Código de serie inválido o repetido.'); codes.add(record.code); }
           const limits = {};
           for (const role of ['cajero', 'vendedor', 'supervisor', 'contador']) { const limit = Number(body.pos.discountLimits?.[role] || 0); requireValue(Number.isFinite(limit) && limit >= 0 && limit <= 99, 'Límite de descuento inválido.'); limits[role] = limit; }
@@ -372,7 +396,7 @@ export async function runOperation(companyId, session, body) {
           if (packagingCostId) requireValue(data.costCatalog.some(cost => cost.id === packagingCostId && cost.active) && ['1101', '1102', '2101'].includes(body.pos.packagingPay), 'Revisa el costo de empaque y su forma de pago.');
           const logo = text(body.pos.logo, 200);
           requireValue(!logo || /^\/api\/image\?key=[a-f0-9-]+\.webp$/.test(logo), 'Logo no autorizado.');
-          data.cfg.pos = { series: series.map(record => ({ code: record.code, name: text(record.name, 80) })), discountLimits: limits, packagingCostId, packagingPay: body.pos.packagingPay || '2101', logo };
+          data.cfg.pos = { series: series.map(record => ({ code: record.code, name: text(record.name, 80), branchId:record.branchId||data.cfg.pos?.series?.find(s=>s.code===record.code)?.branchId||access.branchId||'principal' })), discountLimits: limits, packagingCostId, packagingPay: body.pos.packagingPay || '2101', logo };
           for (const record of series) if (record.next !== undefined) { const next = Number(record.next); requireValue(Number.isSafeInteger(next) && next >= (data.invoiceSequences[record.code] || 0) + 1 && next <= 999999999, 'El próximo número no puede retroceder.'); data.invoiceSequences[record.code] = next - 1; }
         }
         if (body.cash) data.cfg.cash = { receiptsEnabled: body.cash.receiptsEnabled === true };
@@ -390,6 +414,14 @@ export async function runOperation(companyId, session, body) {
         const supplier = validateSupplier(data, body), index = data.suppliers.findIndex(record => record.id === supplier.id);
         if (index < 0) data.suppliers.push(supplier); else data.suppliers[index] = supplier;
         output = supplier.id;
+      } else if (operation === 'stockCount') {
+        requirePermission(access,'inventario');
+        requireValue(body.confirmed===true&&Array.isArray(body.items)&&body.items.length>0&&body.items.length<=1000,'Confirma el resumen del conteo.');
+        const date=dateValue(body.date),ids=new Set(),stock=[],counts=[];let increase=0,decrease=0;
+        requireValue(['correccion','real'].includes(body.reason),'Selecciona el tratamiento de las diferencias.');
+        for(const row of body.items){const product=data.products.find(p=>p.id===row.p),count=Number(row.count);requireValue(product&&!ids.has(product.id)&&Number.isFinite(count)&&count>=0&&count<=1e9&&Math.abs(count*1e6-Math.round(count*1e6))<1e-5,'Producto duplicado o cantidad inválida.');ids.add(product.id);requireValue(row.expected===product.stock,'El inventario cambió. Revisa el conteo nuevamente.');const q=Math.round((count-product.stock)*1e6)/1e6,value=round(Math.abs(q)*product.cost);counts.push({p:product.id,expected:product.stock,count,difference:q});if(!q)continue;stock.push({pid:product.id,q,unit:product.unit||'unidad',unitCost:product.cost});if(q>0)increase+=value;else decrease+=value;product.stock=count;}
+        increase=round(increase);decrease=round(decrease);const lines=[];if(increase)lines.push(...linesBetween('1301',body.reason==='correccion'?'3191':'4102',increase));if(decrease)lines.push(...linesBetween(body.reason==='correccion'?'3191':'6107','1301',decrease));
+        output=appendEntry(data,operationSession,{date,type:'conteo',desc:'Conteo físico confirmado · '+text(body.reason),counts,stock,total:round(increase+decrease),lines}).id;
       } else if (operation === 'inventoryAdjustment') {
         requirePermission(access, 'inventario');
         const product = data.products.find(record => record.id === body.id);
@@ -411,16 +443,24 @@ export async function runOperation(companyId, session, body) {
         const entry = appendEntry(data, operationSession, { date, type: 'ajuste', adjustmentReason: reason, desc: labels[reason] + ' - ' + product.name + ': ' + text(body.note, 1000), total, stock: [{ pid: product.id, q: quantity, unit: product.unit || 'unidad', unitCost: product.cost }], lines: total ? quantity > 0 ? linesBetween('1301', counterpart, total) : linesBetween(counterpart, '1301', total) : [] });
         product.stock = stock;
         output = entry.id;
+      } else if (operation === 'quickProduct') {
+        requirePermission(access,'inventario');
+        requireValue(text(body.name,200) && text(body.unit,40),'Escribe nombre y unidad.');
+        const product={id:randomUUID(),name:text(body.name,200),unit:text(body.unit,40),code:text(body.code,80),price:amount(body.price,true),cost:amount(body.cost,true),stock:0,min:0,vatRate:0,barcodes:body.barcodes||[]};
+        data.products.push(product);output=product.id;
       } else if (operation === 'product') {
         requirePermission(access, 'inventario');
         const product = data.products.find(record => record.id === body.id);
+        if(product && body.barcodes !== undefined) product.barcodes=body.barcodes;
         requireValue(product && text(body.name), 'Producto no encontrado o nombre vacío.');
-        const cost = amount(body.cost, true), difference = round(product.stock * cost) - round(product.stock * product.cost);
+        const cost = amount(body.cost, true);
+        requireValue(cost===product.cost || (access.company.data?.products?.find(p=>p.id===product.id)?.stock??product.stock)===product.stock,'El producto tiene existencias en otras sucursales. Una revalorización global requiere revisión contable.');
+        const difference = round(product.stock * cost) - round(product.stock * product.cost);
         const date = dateValue(body.date);
         requireValue(cost === product.cost || !data.entries.some(entry => entry.date > date && (entry.productId === product.id || entry.stock?.some(movement => movement.pid === product.id))), 'La revalorización no puede preceder a movimientos posteriores del producto.');
         if (difference) appendEntry(data, operationSession, { date, type: 'ajuste-costo', desc: 'Revalorización de costo - ' + product.name, productId: product.id, previousCost: product.cost, nextCost: cost, stock: [{ pid: product.id, q: 0, unitCost: cost, revaluation: round(difference) }], total: Math.abs(difference), lines: difference > 0 ? linesBetween('1301', '6107', round(difference)) : linesBetween('6107', '1301', round(-difference)) });
         const unit = text(body.unit || product.unit || 'unidad', 40);
-        requireValue(unit && (!product.unit || unit === product.unit || !data.entries.some(entry => entry.stock?.some(row => row.pid === product.id))), 'La unidad tiene movimientos históricos. Crea otro producto para una presentación diferente.');
+        requireValue(unit && (!product.unit || unit === product.unit || !access.company.data.entries.some(entry => entry.stock?.some(row => row.pid === product.id))), 'La unidad tiene movimientos históricos. Crea otro producto para una presentación diferente.');
         Object.assign(product, { unit, name: text(body.name), code: text(body.code, 80), cost, price: amount(body.price, true), min: Number(body.min || 0), vatRate: Number(body.vatRate || 0) });
         requireValue(Number.isFinite(product.min) && product.min >= 0 && Number.isFinite(product.vatRate) && product.vatRate >= 0 && product.vatRate <= 100, 'Stock mínimo o IVA inválido.');
       } else if (operation === 'openShift') {
@@ -608,8 +648,9 @@ export async function runOperation(companyId, session, body) {
         const entry = appendEntry(data, operationSession, { date: end, type: 'fiscal-anticipo', desc: 'Anticipo mensual IR - ' + month, total, lines: linesBetween('6108', '2102', total) });
         data.taxes.push({ id: randomUUID(), name: 'Anticipo mensual IR', source: 'anticipo', period: month, date: end, due, base, rate: settings.rate, withholdings, grossAdvance, amount: total, paid: 0, payments: [], entryId: entry.id, expense: '6108', liability: '2102', frequency: 'mensual', country: settings.country });
       } else accessError('Operación no encontrada.', 404);
-      guardCash(company.data, data);
-      return { data };
+      for(const entry of data.entries)if(!beforeIds.has(entry.id)){if(body.costCenter)entry.costCenter=text(body.costCenter,100);if(body.project)entry.project=text(body.project,100);}
+      guardCash(crossBranch?access.company.data:company.data, data);
+      return { data, ...(crossBranch?{crossBranch:true}:{}) };
     }, 'Operación: ' + text(body.operation, 50));
     return { ...result, id: output };
   } catch (error) {

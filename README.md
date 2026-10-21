@@ -22,11 +22,11 @@ El esquema agregó tablas contables para asientos y líneas, facturas y artícul
 
 La plataforma aplica la migración de esquema al desplegar. Después, el operador autorizado verifica y convierte **cada empresa explícitamente** con `npm run storage:migrate -- --company UUID --revision N`; agregar `--apply` solo cuando la verificación resulte correcta. El comando sin esa opción no escribe. La conversión compara conteos, debe y haber por asiento y globales, relaciones y reconstrucción completa; cualquier inconsistencia revierte la transacción. No redondea fracciones de centavo ni borra el origen. `--rollback` vuelve a leer la copia JSON vigente sin eliminar las tablas. Las empresas nuevas se normalizan en su primer guardado; las empresas existentes aún no convertidas siguen operando con el almacenamiento anterior.
 
-La [guía de migración](docs/migracion-contable.md) documenta comandos, permisos, limitaciones de la transición, recuperación y comprobaciones posteriores al despliegue. Los casos automáticos del conversor quedaron preparados en `tests/accounting-codec.test.mjs`, pendientes de ejecución por la plataforma. También quedan pendientes la conversión con datos reales, las pruebas de RLS y aislamiento, restauración y concurrencia. Esta entrega comprende solo la Fase 0; las mejoras de facturación e interfaz, sucursales y las fases 1–10 siguen pendientes.
+La [guía de migración](docs/migracion-contable.md) documenta comandos, permisos, limitaciones de la transición, recuperación y comprobaciones posteriores al despliegue. Los casos automáticos del conversor quedaron preparados en `tests/accounting-codec.test.mjs`, pendientes de ejecución por la plataforma. También quedan pendientes la conversión con datos reales, las pruebas de RLS y aislamiento, restauración y concurrencia. La ampliación de gestión incorpora las funciones descritas en la [guía de gestión y sucursales](docs/gestion-y-sucursales.md). El alcance es parcial respecto a las nueve fases solicitadas; esa guía enumera los módulos disponibles, las funciones pendientes y las pruebas necesarias.
 
-## Ejecución local
+## Desarrollo y validación
 
-Requiere Node.js 22 o posterior y Netlify CLI. Instala las dependencias con `npm install`, vincula el proyecto en Netlify y ejecuta `netlify dev --port 8889`. Abre `http://localhost:8889`. Las cookies seguras se utilizan en producción HTTPS; para probar autenticación sin cambiar esa protección, usa una vista previa HTTPS de Netlify.
+Requiere Node.js 22 o posterior. En sesiones gestionadas no se ejecutan compilaciones, servidores ni pruebas locales; la plataforma valida y despliega. Se prepararon pruebas automáticas para ejecución por la plataforma mediante `npm test`. Para validar sesiones y cámara se necesita una vista previa HTTPS.
 
 El sitio publica `public` y carga Functions desde `netlify/functions`. No agregues un comando de compilación del frontend. Las importaciones internas TypeScript del esquema las empaqueta Netlify con esbuild.
 
@@ -184,3 +184,16 @@ La API evita listar todas las empresas al guardar o ejecutar operaciones, y el g
 La regla `build.ignore` omite despliegues Git cuando solo cambian README.md, LEEME.md, AGENTS.md, docs/ o el resumen interno de resultados. Cualquier cambio de aplicación, configuración, dependencias, migraciones o historial de Git no disponible permite el despliegue. No introduce compilación del frontend. Esta regla no limita los créditos de sesiones de agentes ni garantiza que la plataforma la aplique a despliegues iniciados por un agente; estos consumos se revisan aparte en Netlify. No se modificó la protección global del equipo.
 
 Se conservan auditoría, respaldos automáticos y controles de sesión. El documento contable completo y hasta 30 revisiones siguen almacenados: reducir su retención supondría perder capacidad de recuperación. No se prometen porcentajes de ahorro sin mediciones de uso posteriores al despliegue.
+
+
+## Gestión y sucursales
+
+Se mantuvo Netlify Database (Postgres), según la decisión confirmada, junto con Netlify Identity, Google, permisos y bitácora. No se trasladaron datos a Supabase ni se modificaron migraciones aplicadas.
+
+Crear factura permite ajustar el precio unitario junto a la cantidad; la selección de producto carga su precio predeterminado y los totales se recalculan. Al imprimir se elige A4, Carta o ticket térmico, con diseño de factura y pie «Sistema Acontec». El menú legal y el banner de cookies esenciales incorporan preferencias locales.
+
+Cada empresa cuenta con una sucursal Principal histórica y puede crear sucursales según el límite administrativo. El selector muestra una sucursal o el consolidado; las asignaciones y los permisos se verifican en Functions. Se incluyeron traslados de inventario con recepción y transferencias monetarias. Los clientes que ya tenían varias empresas conservan acceso y no pueden crear otras. Solo la cuenta administradora indicada puede crear sin ese límite y archivar empresas propias seleccionadas; Acontec permanece protegida. El archivo conserva los datos.
+
+Se añadieron controles contables, activos, préstamos, multimoneda manual, documentos comerciales, gestión fiscal de referencia, importaciones, análisis y códigos de barras. Consultar la [guía de alcance y comprobaciones](docs/gestion-y-sucursales.md) antes de utilizarlos en producción: contiene funciones no implementadas y restricciones operativas.
+
+HTML y funciones usan no-cache; los recursos estáticos usan caché anual inmutable con huellas en URL. Después de modificar recursos ejecutar `node scripts/version-assets.mjs`, sin compilar el frontend. Las bibliotecas de cámara y Excel se cargan solo al usarlas. El índice local temporal del catálogo nunca sustituye datos contables ni permisos del servidor.
