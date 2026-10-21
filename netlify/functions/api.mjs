@@ -1,3 +1,5 @@
+import '../../public/cloud-sync.js';
+import { gunzipSync } from 'node:zlib';
 import { statement } from '../lib/reporting.mjs';
 import { integrityReport } from '../lib/accounting-engine.mjs';
 import { scopeBranch } from '../lib/branches.mjs';
@@ -8,7 +10,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { timingSafeEqual, createHash, randomBytes, randomUUID } from 'node:crypto';
 import { and, desc, eq, gt, lt, or, sql, isNull } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
-import { users, companies, siteContent, loginAttempts, sessions, companyMembers, auditEvents, companyBackups } from '../../db/schema.ts';
+import { users, companies, siteContent, loginAttempts, sessions, companyMembers, auditEvents, companyBackups, saveFailures } from '../../db/schema.ts';
 import { MODULES, allowed, allData, equal, accessError, accessibleCompanies, companyAccess, projectData, mergeData, safeMember, manageMember, verifyPassword, updateCompany, audit, migrateAccountingStorage } from '../lib/access.mjs';
 import { runOperation, guardLedgerMutation } from '../lib/operations.mjs';
 import { PLATFORM_OWNER, receiptRecords, cashAdministrator, operatorId } from '../lib/policies.mjs';
@@ -80,12 +82,17 @@ async function issueSession(email, admin, request, memberId = null) {
 async function readSession(request) {
   const token = sessionToken(request);
   if (!/^[a-f0-9]{64}$/.test(token)) return null;
-  const [session] = await db.select({ email: sessions.email, admin: sessions.admin, memberId: sessions.memberId, activeBranchId: sessions.activeBranchId, name: users.name }).from(sessions).innerJoin(users, eq(users.email, sessions.email))
+  const [session] = await db.select({ email: sessions.email, admin: sessions.admin, memberId: sessions.memberId, activeBranchId: sessions.activeBranchId, name: users.name, expiresAt: sessions.expiresAt }).from(sessions).innerJoin(users, eq(users.email, sessions.email))
     .where(and(eq(sessions.tokenHash, hashToken(token)), gt(sessions.expiresAt, new Date())));
   if (session?.memberId) {
     const [member] = await db.select().from(companyMembers).where(and(eq(companyMembers.id, session.memberId), eq(companyMembers.active, true)));
     if (!member?.username) return null;
     session.member = member;
+  }
+  // Renew at most once per hour while requests keep the session active.
+  if (session && session.expiresAt.getTime() < Date.now() + 25200000) {
+    await db.update(sessions).set({expiresAt: new Date(Date.now() + 28800000)}).where(and(eq(sessions.tokenHash, hashToken(token)), gt(sessions.expiresAt, new Date())));
+    globalThis.Netlify?.context?.cookies?.set({name: SESSION, value: token, path: '/', httpOnly: true, secure: true, sameSite: 'strict', maxAge: 28800});
   }
   return session || null;
 }
@@ -121,7 +128,7 @@ async function limitAttempts(request, context) {
   return attempt.count <= 30;
 }
 
-export default async (request, context) => {
+const handleRequest = async (request, context, metrics) => {
   const url = new URL(request.url);
   const path = url.pathname.replace(/^\/api\//, '').replace(/\/$/, '');
   const method = request.method;
@@ -150,7 +157,16 @@ export default async (request, context) => {
       const image = await getStore({ name: 'acontec-images', consistency: 'strong' }).get(key, { type: 'arrayBuffer' });
       return image ? new Response(image, { headers: { 'content-type': 'image/webp', 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff' } }) : fail('Imagen no encontrada', 404);
     }
-    const rawBody = method === 'GET' ? '' : await request.text();
+    let rawBody = '';
+    if (method !== 'GET') {
+      const bytes = Buffer.from(await request.arrayBuffer());
+      metrics.bytes = bytes.length;
+      if (bytes.length > 5500000) return fail('El contenido supera el límite de envío.', 413);
+      try {
+        rawBody = request.headers.get('content-encoding') === 'gzip'
+          ? gunzipSync(bytes, {maxOutputLength: 5500001}).toString('utf8') : bytes.toString('utf8');
+      } catch { return fail('No se pudo leer la solicitud comprimida o supera el límite.', 413); }
+    }
     if (Buffer.byteLength(rawBody) > 5500000) return fail('El contenido supera el límite de 5 MB', 413);
     let body = {};
     if (rawBody) {
@@ -310,6 +326,7 @@ export default async (request, context) => {
     }
     const session = await readSession(request);
     if (!session) return fail('Sesión vencida. Ingresa de nuevo.', 401);
+    if (path === 'session' && method === 'POST') return json({ok:true});
     if (path === 'me' && method === 'GET' && !session.member && (session.email === PLATFORM_OWNER || session.email === adminEmail)) await ensureAcontecCompany(session.email);
     // List summaries only on routes that actually return or need the full list.
     const owned = ['me', 'company'].includes(path) ? await accessibleCompanies(session) : [];
@@ -583,20 +600,31 @@ export default async (request, context) => {
         });
       }
       if (method === 'PUT') {
+        if (body.operationId && !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.operationId)) return fail('Identificador de guardado inválido.', 400);
+        const operation = body.operationId ? {id: body.operationId, actor: session.email + ':' + (session.memberId || ''), hash: createHash('sha256').update(JSON.stringify(body)).digest('hex')} : null;
         let returnData = false;
         const result = await updateCompany(companyId, session, body.revision, (current, currentAccess) => {
           returnData = !currentAccess.owner;
-          const data = mergeData(current.data, body.data, currentAccess);
+          let incoming = body.data;
+          if (body.changes) {
+            let applied;
+            try { applied = globalThis.AcontecSync.apply(projectData(current.data, currentAccess), body.changes); }
+            catch { accessError('El formato de los cambios no es válido.', 400); }
+            if (applied.conflicts.length) accessError('Algunos registros cambiaron. Revisa los cambios pendientes.', 409);
+            incoming = applied.data;
+          }
+          const data = mergeData(current.data, incoming, currentAccess);
           guardLedgerMutation(current.data, data, currentAccess);
           const existing = (current.data?.taxes || []).filter(tax => tax.receipt);
-          const incoming = (data.taxes || []).filter(tax => tax.receipt);
-          if (existing.length !== incoming.length || existing.some(tax => {
-            const next = incoming.find(record => record.id === tax.id);
+          const incomingReceipts = (data.taxes || []).filter(tax => tax.receipt);
+          if (existing.length !== incomingReceipts.length || existing.some(tax => {
+            const next = incomingReceipts.find(record => record.id === tax.id);
             return !next || JSON.stringify(next.receipt) !== JSON.stringify(tax.receipt);
           })) accessError('Los comprobantes solo se modifican desde adjuntar o quitar archivo.', 400);
           return { data };
-        });
-        return json({ ok: true, revision: result.revision, ...(returnData ? { data: result.data } : {}) });
+        }, 'Datos contables actualizados', operation);
+        if(result.timings) console.info('Cloud save stages', JSON.stringify(result.timings));
+        return json({ ok: true, revision: result.revision, replayed: !!result.replayed, ...(returnData && result.data ? { data: result.data } : {}) });
       }
     }
     if (path === 'site' && method === 'PUT') {
@@ -646,4 +674,26 @@ export default async (request, context) => {
       context.cookies.delete('nf_refresh');
     }
   }
+};
+
+
+export default async (request, context) => {
+  const started = performance.now(), metrics = {bytes: 0};
+  const response = await handleRequest(request, context, metrics);
+  if (!((request.method === 'PUT' && new URL(request.url).pathname === '/api/data') || (request.method === 'POST' && new URL(request.url).pathname === '/api/operations'))) return response;
+  const durationMs = Math.round(performance.now() - started);
+  response.headers.set('Server-Timing', `save;dur=${durationMs}`);
+  if (response.status >= 400) {
+    const code = randomBytes(5).toString('hex').toUpperCase();
+    const companyId = new URL(request.url).searchParams.get('c');
+    // Fixed categories only: never persist document content, tokens or raw exceptions.
+    const reason = ({400:'invalid_request',401:'session_expired',403:'access_denied',409:'revision_conflict',413:'payload_limit',422:'operation_reused',429:'rate_limit'})[response.status] || 'server_error';
+    try {
+      await db.insert(saveFailures).values({code, companyId: /^[a-f0-9-]{36}$/i.test(companyId || '') ? companyId : null, status: response.status, reason, bytes: metrics.bytes, durationMs});
+    } catch { console.error('Cloud save diagnostic unavailable', code, response.status, durationMs); }
+    const payload = await response.json();
+    return json({...payload, supportCode: code}, response.status, {'Server-Timing': `save;dur=${durationMs}`});
+  }
+  console.info('Cloud save', response.status, metrics.bytes, durationMs);
+  return response;
 };

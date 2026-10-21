@@ -432,7 +432,9 @@ async function mutateReceipt(taxId,method,body={}){
   const operation=(async()=>{
     const result=await api('receipt?c='+encodeURIComponent(companyId)+'&tax='+encodeURIComponent(taxId),method,{...body,revision:REV});
     const tax=S.taxes.find(record=>record.id===taxId);if(tax){if(result.receipt)tax.receipt=result.receipt;else delete tax.receipt}
-    REV=result.revision;return true;
+    REV=result.revision;
+    if(cloudBase){const stored=cloudBase.taxes?.find(record=>record.id===taxId);if(stored){if(result.receipt)stored.receipt=copyCloud(result.receipt);else delete stored.receipt}}
+    return true;
   })();
   receiptMutation=operation;
   try{return await operation}finally{if(receiptMutation===operation)receiptMutation=null;if(saveVersion>savedVersion)flush()}

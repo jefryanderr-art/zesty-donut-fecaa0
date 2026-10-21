@@ -25,10 +25,50 @@ actionAllowed=function(action,data={}){
   return previousActionAllowed(action,data);
 };
 async function operate(operation,body={}){
-  if(!await flush())throw new Error('Hay cambios sin guardar. Descarga un respaldo y resuelve el conflicto antes de continuar.');
-  const companyId=CO.id,result=await api('operations?c='+companyId,'POST',{...body,operation,revision:REV});
-  if(CO.id!==companyId)throw new Error('La empresa cambió durante la operación. Recarga sus datos.');
-  REV=result.revision;S=result.data;prepareAccounting();setSt('Guardado en la nube');return result;
+  if(operationInFlight)return operationInFlight;
+  const signature=JSON.stringify({operation,body});
+  if(pendingCloudOperation&&pendingCloudOperation.signature!==signature)throw new Error('Primero reintenta la operación pendiente para confirmar si se guardó.');
+  if(!pendingCloudOperation){
+    if(!await flush())throw new Error('Hay cambios sin guardar. Resuélvelos antes de continuar.');
+    pendingCloudOperation={signature,operation,body:copyCloud(body),companyId:CO.id,base:copyCloud(S),request:{...copyCloud(body),operation,revision:REV,operationId:crypto.randomUUID()}};
+  }
+  operationInFlight=(async()=>{
+    const pending=pendingCloudOperation;
+    for(let attempt=0;attempt<=6;attempt++){
+      try{
+        setSt('Guardando operación…');
+        let result=await api('operations?c='+pending.companyId,'POST',pending.request);
+        if(result.replayed){const current=await api('data?c='+pending.companyId);result={...result,data:current.data,revision:current.revision}}
+        if(CO.id!==pending.companyId)throw new Error('La empresa cambió durante la operación.');
+        const edits=AcontecSync.diff(pending.base,S),merged=AcontecSync.apply(result.data,edits);
+        REV=result.revision;pendingCloudOperation=null;cloudSupportCode='';
+        if(merged.conflicts.length){cloudConflict={data:result.data,revision:REV};setSt('Sin guardar · Revisa los registros modificados durante la operación.');return result}
+        S=merged.data;cloudBase=copyCloud(result.data);prepareAccounting();setSt(saveVersion===savedVersion?'Guardado en la nube':'Sin guardar · Cambios pendientes');
+        return {...result,data:S};
+      }catch(error){
+        cloudSupportCode=error.supportCode||'';
+        if([400,403,404,409,413,422].includes(error.status))pendingCloudOperation=null;
+        if(error.status===409){
+          try{if(await rebaseCloud())pendingCloudOperation={...pending,base:copyCloud(S),request:{...pending.request,revision:REV,operationId:crypto.randomUUID()}}}catch{pendingCloudOperation=pending}
+          error.message='La empresa cambió. Revisa los datos y confirma de nuevo; el formulario conserva tus valores.';
+        }
+        if(error.status===401)sessionExpired=true;
+        setSt('Sin guardar · '+(error.status===401?'La sesión venció. Vuelve a ingresar; la operación sigue pendiente.':error.message));
+        if(attempt===6||!navigator.onLine||!(error.status===undefined||error.status===0||[408,429,500,502,503,504].includes(error.status)))throw error;
+        await new Promise(resolve=>{
+          const resume=()=>{clearTimeout(timer);window.removeEventListener('online',resume);resolve()};
+          const timer=setTimeout(resume,Math.min(60000,1500*2**attempt)+Math.random()*1000);
+          window.addEventListener('online',resume,{once:true});
+        });
+      }
+    }
+  })();
+  try{return await operationInFlight}finally{operationInFlight=null;setSt(saveStatus);if(!pendingCloudOperation&&!cloudConflict&&!sessionExpired&&saveVersion>savedVersion)setTimeout(flush,0)}
+}
+async function retryCloudOperation(){
+  if(!pendingCloudOperation||operationInFlight||sessionExpired)return;
+  const pending=pendingCloudOperation;
+  try{await operate(pending.operation,pending.body);if(!HOME)view()}catch{} // Details remain visible in the cloud status.
 }
 const selectField=(name,label,options)=>`<label>${esc(label)}<select name="${name}">${options}</select></label>`;
 const option=(value,label,selected=false)=>`<option value="${esc(value)}" ${selected?'selected':''}>${esc(label)}</option>`;

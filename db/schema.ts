@@ -198,3 +198,23 @@ export const withholdings = recordTable(collections.withholdings);
 export const instruments = recordTable(collections.instruments);
 
 export const partners = recordTable(collections.partners);
+
+// Operation receipts are committed atomically with the company revision.
+export const saveOperations = pgTable('acontec_save_operations', {
+  companyId: uuid('company_id').notNull().references(() => companies.id),
+  operationId: uuid('operation_id').notNull(),
+  actor: text().notNull(),
+  payloadHash: text('payload_hash').notNull(),
+  resultId: text('result_id'),
+  revision: integer().notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, table => [serverAccess(), primaryKey({columns: [table.companyId, table.operationId]})]).enableRLS();
+export const saveFailures = pgTable('acontec_save_failures', {
+  code: text().primaryKey(),
+  companyId: text('company_id'),
+  status: integer().notNull(),
+  reason: text().notNull(),
+  bytes: integer().notNull(),
+  durationMs: integer('duration_ms').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, table => [serverAccess(), index('acontec_save_failure_date_idx').on(table.createdAt)]).enableRLS();

@@ -27,24 +27,127 @@ const money2=n=>n<0?'('+money(-n)+')':money(n);
 const tshow=t=>t>'9000'?today():t;
 
 async function api(path,method='GET',body){
-  const r=await fetch('/api/'+path,{method,credentials:'same-origin',headers:{'content-type':'application/json'},body:body?JSON.stringify(body):undefined});
+  const headers={'content-type':'application/json'};
+  let payload=body?JSON.stringify(body):undefined;
+  if(((path.startsWith('data?')&&method==='PUT')||(path.startsWith('operations?')&&method==='POST'))&&payload){
+    const bytes=new TextEncoder().encode(payload);
+    cloudSizeNotice=bytes.length>3850000?' · Aviso: el envío supera el 70% del límite.':'';
+    if(bytes.length>3850000)setSt('Guardando · El envío supera el 70% del límite. Reduce los archivos o divide la operación.');
+    if(bytes.length>5500000){const error=new Error('El contenido supera el límite de envío. Divide la operación.');error.status=413;throw error}
+    if(bytes.length>16384&&typeof CompressionStream!=='undefined'){
+      payload=await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'))).blob();headers['content-encoding']='gzip';
+    }
+  }
+  const r=await fetch('/api/'+path,{method,credentials:'same-origin',headers,body:payload,signal:AbortSignal.timeout(45000)});
   const j=await r.json().catch(()=>null);
-  if(!r.ok||!j){const error=new Error(j?.error||'No se pudo confirmar la operación. Intenta guardar de nuevo.');error.status=r.status;throw error}
+  if(!r.ok||!j){const error=new Error(j?.error||'No se pudo confirmar la operación. Intenta guardar de nuevo.');error.status=r.ok?0:r.status;error.supportCode=j?.supportCode;throw error}
   return j;
 }
 let st,saveVersion=0,savedVersion=0,saving=null,receiptMutation=null,retryCount=0,saveStatus='Guardado en la nube';
-const setSt=text=>{saveStatus=text;const status=$('#st');if(status){status.textContent=text;if(saveVersion>savedVersion&&!saving){const retry=document.createElement('button');retry.type='button';retry.className='lk';retry.textContent=' · Reintentar guardado';retry.onclick=()=>{retryCount=0;flush()};status.append(retry)}}};
-function save(){if(typeof canSave==='function'&&!canSave())return;saveVersion++;retryCount=0;setSt('Cambios pendientes…');clearTimeout(st);st=setTimeout(flush,800)}
+let cloudBase=null,pendingSave=null,cloudConflict=null,sessionExpired=false,cloudSupportCode='',cloudSizeNotice='';
+let pendingCloudOperation=null,operationInFlight=null;
+const copyCloud=value=>AcontecSync.clone(value);
+function rememberCloud(){cloudBase=copyCloud(S);pendingSave=null}
+const setSt=text=>{
+  saveStatus=text;
+  if(saveVersion===savedVersion&&text==='Guardado en la nube'&&S)rememberCloud();
+  for(const status of [$('#st'),$('.home-save-status')].filter(Boolean)){
+    status.textContent=text+(text.startsWith('Sin guardar')&&cloudSupportCode?' · Soporte: '+cloudSupportCode:'')+cloudSizeNotice;
+    if((saveVersion>savedVersion||sessionExpired||pendingCloudOperation)&&!saving&&!operationInFlight){
+      const retry=document.createElement('button');retry.type='button';retry.className='lk';retry.textContent=sessionExpired?' · Volver a ingresar':cloudConflict?' · Resolver conflicto':' · Reintentar';
+      retry.onclick=()=>{retryCount=0;if(sessionExpired)reconnectCloud();else if(cloudConflict)resolveCloud();else if(pendingCloudOperation)retryCloudOperation();else flush()};status.append(retry);
+    }
+  }
+};
+function save(){if(typeof canSave==='function'&&!canSave())return;saveVersion++;retryCount=0;cloudSupportCode='';setSt('Sin guardar · Cambios pendientes');clearTimeout(st);st=setTimeout(flush,1200)}
+function exportPending(){
+  const url=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'})),link=document.createElement('a');link.href=url;link.download='acontec-cambios-pendientes.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function reconnectCloud(){
+  const email=U.email;
+  const recoveryForm=modal('La sesión venció',`<p>Los cambios pendientes siguen en esta pestaña. Ingresa con la misma cuenta para guardarlos. No cierres la pestaña.</p><label>Correo<input name="email" type="${U.worker?'text':'email'}" value="${esc(email)}" required></label><label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>`,async form=>{
+    if(v(form,'email').trim().toLowerCase()!==email)return 'Usa la misma cuenta para conservar el acceso a esta empresa.';
+    await api(U.worker?'worker-login':'login','POST',U.worker?{username:email,password:v(form,'password')}:{email,password:v(form,'password')});
+    const account=await api('me');if(account.user.email!==email)throw new Error('Ingresa con la misma cuenta.');
+    await api('branch-select','POST',{companyId:CO.id,branchId:CO.branchId||'all'});
+    sessionExpired=false;retryCount=0;setTimeout(()=>pendingCloudOperation?retryCloudOperation():flush(),0);
+  },'Ingresar y reintentar');
+  if(!U.worker&&GID){
+    const target=document.createElement('div');recoveryForm.querySelector('.mb').append(target);
+    loadGoogle().then(()=>{
+      if(!document.contains(target))return;
+      google.accounts.id.initialize({client_id:GID,callback:async result=>{
+        try{
+          await api('google','POST',{credential:result.credential});
+          const account=await api('me');
+          if(account.user.email!==email)throw new Error('Selecciona la misma cuenta para guardar tus cambios.');
+          await api('branch-select','POST',{companyId:CO.id,branchId:CO.branchId||'all'});
+          sessionExpired=false;retryCount=0;$('#modal').innerHTML='';pendingCloudOperation?retryCloudOperation():flush();
+        }catch(error){recoveryForm.querySelector('.err').textContent=error.message}
+      }});
+      google.accounts.id.renderButton(target,{theme:'outline',size:'large',text:'continue_with',width:280});
+    }).catch(()=>{recoveryForm.querySelector('.err').textContent='No se pudo cargar Google. Reintenta con tu contraseña.'});
+  }
+}
+
+function resolveCloud(){
+  if(!cloudConflict)return;
+  modal('Cambios en otra pestaña',`<p>Otra persona o pestaña modificó los mismos registros. Tu trabajo sigue aquí. Puedes conservar tus registros modificados o descargar una copia antes de usar la versión de la nube.</p><label>Cómo continuar<select name="choice"><option value="mine">Conservar mis registros modificados</option><option value="remote">Descargar mi copia y usar la nube</option></select></label>`,async form=>{
+    const remote=cloudConflict;
+    if(v(form,'choice')==='remote'){exportPending();S=copyCloud(remote.data);savedVersion=saveVersion}
+    else S=AcontecSync.apply(remote.data,AcontecSync.diff(cloudBase,S),true).data;
+    REV=remote.revision;cloudBase=copyCloud(remote.data);pendingSave=null;cloudConflict=null;retryCount=0;
+    if(savedVersion===saveVersion)rememberCloud();shell();view();setTimeout(()=>{if(pendingCloudOperation)setSt('Sin guardar · Reintenta la operación pendiente.');else flush()},0);
+  },'Aplicar decisión');
+}
+async function rebaseCloud(){
+  const remote=await api('data?c='+CO.id);
+  const applied=AcontecSync.apply(remote.data,AcontecSync.diff(cloudBase,S));
+  if(applied.conflicts.length){cloudConflict=remote;setSt('Sin guardar · Los mismos registros cambiaron en otra pestaña. Pulsa Resolver conflicto.');return false}
+  S=applied.data;REV=remote.revision;cloudBase=copyCloud(remote.data);pendingSave=null;if(!HOME)view();return true;
+}
 async function flush(){
   clearTimeout(st);
   if(receiptMutation)await receiptMutation;
   if(saving)return saving;
+  if(sessionExpired||cloudConflict||pendingCloudOperation)return false;
   saving=(async()=>{
     while(savedVersion<saveVersion){
-      const version=saveVersion;
-      try{setSt('Guardando…');const result=await api('data?c='+CO.id,'PUT',{data:JSON.parse(JSON.stringify(S)),revision:REV});if(!Number.isInteger(result.revision))throw new Error('El servidor no confirmó el guardado.');REV=result.revision;savedVersion=version;retryCount=0;if(result.data&&version===saveVersion){for(const product of S.products){const remote=result.data.products.find(record=>record.id===product.id);if(remote){product.stock=remote.stock;product.cost=remote.cost}}if(!HOME)view()}setSt(savedVersion===saveVersion?'Guardado en la nube':'Cambios pendientes…')}
-      catch(error){setSt('Sin guardar · '+error.message);if((!error.status||[408,429,500,502,503,504].includes(error.status))&&retryCount<2&&navigator.onLine){clearTimeout(st);st=setTimeout(flush,2000*3**retryCount++)}return false}
+      try{
+        if(!navigator.onLine){setSt('Sin guardar · Sin conexión. Se reintenta al volver internet.');return false}
+        if(!pendingSave){
+          const snapshot=copyCloud(S);
+          pendingSave={version:saveVersion,snapshot,body:{operationId:crypto.randomUUID(),revision:REV,...(cloudBase?{changes:AcontecSync.diff(cloudBase,snapshot)}:{data:snapshot})}};
+        }
+        const attempt=pendingSave;
+        setSt('Guardando…');
+        const result=await api('data?c='+CO.id,'PUT',attempt.body);
+        if(!Number.isInteger(result.revision))throw new Error('El servidor no confirmó el guardado.');
+        const previouslySaved=savedVersion;
+        REV=result.revision;savedVersion=attempt.version;cloudBase=copyCloud(attempt.snapshot);pendingSave=null;retryCount=0;cloudSupportCode='';
+        if(result.replayed){
+          // A newer revision may exist after an acknowledgement was lost.
+          try{if(!await rebaseCloud())return false}catch(error){savedVersion=previouslySaved;pendingSave=attempt;throw error}
+        }else if(result.data){
+          const changes=AcontecSync.diff(attempt.snapshot,S),merged=AcontecSync.apply(result.data,changes);
+          if(merged.conflicts.length){cloudConflict={data:result.data,revision:REV};savedVersion=Math.min(savedVersion,saveVersion-1);setSt('Sin guardar · Los mismos registros cambiaron. Pulsa Resolver conflicto.');return false}
+          S=merged.data;cloudBase=copyCloud(result.data);
+        }
+        setSt(savedVersion===saveVersion?'Guardado en la nube':'Sin guardar · Cambios pendientes');
+      }catch(error){
+        cloudSupportCode=error.supportCode||'';
+        if(error.status===409){
+          try{if(await rebaseCloud()){if(++retryCount<=6)continue;setSt('Sin guardar · Hay mucha actividad. Pulsa Reintentar.')} }catch(problem){setSt('Sin guardar · No se pudo descargar la versión actual. Reintenta.');st=setTimeout(flush,10000)}
+          return false;
+        }
+        if(error.status===401){sessionExpired=true;setSt('Sin guardar · La sesión venció. Vuelve a ingresar; tus cambios siguen en esta pestaña.');return false}
+        if([400,403,413,422].includes(error.status))pendingSave=null;
+        setSt('Sin guardar · '+(!navigator.onLine?'Sin conexión.':error.message));
+        if((!error.status||[408,429,500,502,503,504].includes(error.status))&&retryCount<6&&navigator.onLine){st=setTimeout(flush,Math.min(60000,1500*2**retryCount++)+Math.random()*1000)}
+        return false;
+      }
     }
+    setSt('Guardado en la nube');
     return true;
   })();
   try{return await saving}finally{saving=null;setSt(saveStatus)}
@@ -103,7 +206,7 @@ async function openCompany(id){
   const company=COS.find(item=>item.id==id)||COS[0];
   if(!company)throw new Error('No se encontró tu empresa.');
   const r=await api('data?c='+company.id);CO=r.company||company;REV=r.revision;saveVersion=0;savedVersion=0;retryCount=0;saveStatus='Guardado en la nube';localStorage.setItem('co',CO.id);
-  S=r.data||seed();S.cfg=S.cfg||{cur:'C$'};S.entries=S.entries||[];S.products=S.products||[];S.customers=S.customers||[];
+  cloudBase=copyCloud(r.data);pendingSave=null;cloudConflict=null;sessionExpired=false;S=r.data||seed();S.cfg=S.cfg||{cur:'C$'};S.entries=S.entries||[];S.products=S.products||[];S.customers=S.customers||[];
   if(!r.data)save();
   HOME=false;R=typeof firstAllowedRoute==='function'?firstAllowedRoute():'panel';shell();view();
   if(CO.owner&&CO.name=='Mi empresa'&&!S.cfg.asked){S.cfg.asked=1;save();setTimeout(ACT.cfg,400)}
@@ -382,6 +485,14 @@ document.addEventListener('change',e=>{const t=e.target;
   if(t.id=='msel'){MAY=t.value;view()}
   if(t.id=='rf'&&t.files[0]){restoreFile(t.files[0]).catch(error=>alert(error.message));t.value=''}});
 document.addEventListener('input',e=>{if(e.target.closest('.ln'))sumTot()});
-window.addEventListener('beforeunload',event=>{if(receiptMutation||saveVersion>savedVersion){event.preventDefault();event.returnValue=''}});
-window.addEventListener('online',()=>{if(CO&&saveVersion>savedVersion)flush()});
+window.addEventListener('beforeunload',event=>{if(receiptMutation||pendingCloudOperation||saveVersion>savedVersion){event.preventDefault();event.returnValue=''}});
+window.addEventListener('online',()=>{if(pendingCloudOperation&&!sessionExpired)retryCloudOperation();else if(CO&&saveVersion>savedVersion)flush()});
 document.addEventListener('DOMContentLoaded',boot,{once:true});
+
+// Keep active sessions alive without polling while the person is away.
+let lastCloudActivity=Date.now();
+for(const name of ['pointerdown','keydown'])window.addEventListener(name,()=>{lastCloudActivity=Date.now()},{passive:true});
+setInterval(async()=>{
+  if(!U||document.hidden||sessionExpired||Date.now()-lastCloudActivity>900000)return;
+  try{await api('session','POST',{})}catch(error){if(error.status===401){sessionExpired=true;setSt('Sin guardar · La sesión venció. Vuelve a ingresar antes de continuar.')}}
+},900000);
