@@ -4,7 +4,8 @@ import { collections, children } from '../../db/accounting-model.mjs';
 import { canonical, documentHash, normalizeDocument, restoreDocument, storageError } from './accounting-codec.mjs';
 
 const tables = {
-  accounts: schema.ledgerAccounts, products: schema.products, customers: schema.customers,
+  assets: schema.assets, loans: schema.loans, recurringEntries: schema.recurringEntries, exchangeRates: schema.exchangeRates, foreignDocuments: schema.foreignDocuments, budgets: schema.budgets, quotations: schema.quotations, purchaseOrders: schema.purchaseOrders, attendance: schema.attendance, vacationRequests: schema.vacationRequests, employeeAdvances: schema.employeeAdvances,
+  withholdings:schema.withholdings,instruments:schema.instruments,partners:schema.partners,stockTransfers: schema.stockTransfers, branches: schema.branches, accounts: schema.ledgerAccounts, products: schema.products, customers: schema.customers,
   suppliers: schema.suppliers, employees: schema.employees, payrolls: schema.payrolls,
   settlements: schema.settlements, taxes: schema.taxObligations, properties: schema.properties,
   shifts: schema.shifts, cashMovements: schema.cashMovements, pettyFunds: schema.pettyFunds,
@@ -31,7 +32,8 @@ export async function verifyStored(client, company, state) {
   const data = restoreDocument({ rows, extra: state.documentExtra, manifest: state.manifest });
   if (documentHash(data) !== state.sourceHash || documentHash(company.data) !== state.sourceHash) storageError('La verificación de integridad no coincide con el origen. Se conservó el documento JSON.');
   const verification = normalizeDocument(company.id, data);
-  if (canonical(verification.manifest) !== canonical(state.manifest)) storageError('Los totales contables no coinciden después de la conversión.');
+  const compatibleManifest={...state.manifest,counts:{...Object.fromEntries(Object.keys(tables).map(name=>[name,0])),...state.manifest.counts}};
+  if (canonical(verification.manifest) !== canonical(compatibleManifest)) storageError('Los totales contables no coinciden después de la conversión.');
   // Verifica también claves, índices de fecha y relaciones, no solo el JSON reconstruido.
   const byId = (a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   for (const name of Object.keys(tables)) if (canonical([...rows[name]].sort(byId)) !== canonical([...verification.rows[name]].sort(byId))) storageError('Una tabla relacional no coincide con el documento verificado.');

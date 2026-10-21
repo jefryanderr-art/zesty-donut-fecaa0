@@ -1,9 +1,14 @@
+import { TRADE_ARRAYS } from './trade.mjs';
+import { CROSS_BRANCH_OPS } from './transfers.mjs';
+import { ADVANCED_ARRAYS } from './advanced.mjs';
+import { branchAccess, scopeBranch, mergeBranch, companyBranches, materializeBranches } from './branches.mjs';
+import { syncBarcodes, guardPeriods } from './controls.mjs';
 import { readAccounting, syncAccounting, convertAccounting, returnToLegacy, storageState, retainedCompanyData } from './accounting-storage.mjs';
 import { normalizeDocument } from './accounting-codec.mjs';
 import { promisify } from 'node:util';
 import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
-import { and, desc, eq, lt, or } from 'drizzle-orm';
+import { and, desc, eq, lt, or, isNull } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
 import { companies, companyMembers, companyBackups, auditEvents, sessions } from '../../db/schema.ts';
 import { OPERATION_ARRAYS, roleAllows, salesAdministrator, cashAdministrator, operatorId, receiptRecords } from './policies.mjs';
@@ -20,9 +25,9 @@ export const allowed = (access, module, write = false) => {
   const level = access.permissions?.[module] ?? (access.member?.role?.toLowerCase() === 'contador' ? access.permissions?.[fallback[module]] : undefined);
   return !!roleAllows(access, module) && !(write && roleAllows(access, module) === 'lectura') && (level === 'escritura' || (!write && level === 'lectura'));
 };
-export const allData = (access, write = false) => salesAdministrator(access) && [...DATA_MODULES, 'ventas', 'facturacion', 'cajas', 'costos', 'proveedores'].every(module => allowed(access, module, write));
+export const allData = (access, write = false) => access.unrestrictedBranches !== false && salesAdministrator(access) && [...DATA_MODULES, 'ventas', 'facturacion', 'cajas', 'costos', 'proveedores'].every(module => allowed(access, module, write));
 export const actorName = session => session.member ? `${session.member.name} (${session.member.username || session.email})` : session.email;
-export const safeMember = member => ({ id: member.id, email: member.email, username: member.username, name: member.name, role: member.role, permissions: member.permissions, active: member.active, version: member.version });
+export const safeMember = member => ({ id: member.id, email: member.email, username: member.username, name: member.name, role: member.role, permissions: member.permissions, branchIds: member.branchIds, active: member.active, version: member.version });
 export function accessError(message, status = 403) {
   const error = new Error(message);
   error.publicMessage = message;
@@ -43,10 +48,10 @@ export async function verifyPassword(password, digest) {
 }
 export async function accessibleCompanies(session) {
   const summary = { id: companies.id, name: companies.name, description: companies.description };
-  const rows = session.member ? [] : await db.select(summary).from(companies).where(eq(companies.ownerEmail, session.email));
+  const rows = session.member ? [] : await db.select(summary).from(companies).where(and(eq(companies.ownerEmail, session.email), isNull(companies.archivedAt)));
   const memberships = await db.select({ member: { id: companyMembers.id, permissions: companyMembers.permissions, role: companyMembers.role }, company: summary }).from(companyMembers)
     .innerJoin(companies, eq(companies.id, companyMembers.companyId))
-    .where(and(eq(companyMembers.active, true), session.member ? eq(companyMembers.id, session.member.id) : eq(companyMembers.email, session.email)));
+    .where(and(isNull(companies.archivedAt), eq(companyMembers.active, true), session.member ? eq(companyMembers.id, session.member.id) : eq(companyMembers.email, session.email)));
   return [...rows.map(company => ({ ...company, owner: true, permissions: {} })), ...memberships.filter(row => !rows.some(company => company.id === row.company.id)).map(({ company, member }) => ({ ...company, owner: false, permissions: member.permissions, memberId: member.id, role: member.role }))]
     .map(({ id, name, description, owner, permissions, memberId, role }) => ({ id, name, description, owner, permissions, memberId, role: owner ? 'Dueño' : role }));
 }
@@ -55,21 +60,22 @@ export async function companyAccess(client, companyId, session, lock = false) {
   let query = client.select().from(companies).where(eq(companies.id, companyId));
   if (lock) query = query.for('update');
   const [company] = await query;
-  if (!company) accessError('Empresa no encontrada.', 404);
+  if (!company || company.archivedAt) accessError('Empresa no encontrada.', 404);
   if (!session.member && company.ownerEmail === session.email) {
     if (lock) company.data = await readAccounting(client, company);
-    return { company, owner: true, permissions: {} };
+    return branchAccess({ company, owner: true, permissions: {} }, session);
   }
   const [member] = await client.select().from(companyMembers).where(and(eq(companyMembers.companyId, companyId), eq(companyMembers.active, true), session.member ? eq(companyMembers.id, session.member.id) : eq(companyMembers.email, session.email)));
   if (!member) accessError('Sin acceso a esta empresa.');
   if (lock) company.data = await readAccounting(client, company);
-  return { company, owner: false, permissions: member.permissions, member };
+  return branchAccess({ company, owner: false, permissions: member.permissions, member }, session);
 }
 export function entryModule(entry) {
   if (entry.type === 'venta') return entry.shiftId ? 'facturacion' : 'ventas';
   if (entry.type === 'nota-credito') return 'facturacion';
   if (entry.type === 'costo') return 'costos';
   if (entry.type?.startsWith('caja')) return 'cajas';
+  if (['nota-credito-compra','nota-debito-compra','desembarque'].includes(entry.type)) return 'compras';
   if (entry.type === 'compra') return 'compras';
   if (entry.type === 'gasto') return 'gastos';
   if (['invini', 'ajuste'].includes(entry.type)) return 'inventario';
@@ -80,6 +86,7 @@ export function entryModule(entry) {
 }
 const visibleEntry = (access, entry) => allowed(access, entryModule(entry)) || ['contabilidad', 'finanzas', 'fiscal'].some(module => allowed(access, module));
 export function projectData(data, access) {
+  data = scopeBranch(data, access);
   if (!data || access.owner) return data;
   const operationalOnly = ['cajero', 'vendedor'].includes(String(access.member?.role).toLowerCase());
   const ownId = access.member?.id;
@@ -98,8 +105,9 @@ export function projectData(data, access) {
     return { id: entry.id, date: entry.date, type: entry.type, desc: 'Movimiento de inventario', lines: [], stock: entry.stock, total: 0 };
   });
   const cfg = structuredClone(data.cfg || {});
+  if(!access.unrestrictedBranches&&cfg.periodLocks)cfg.periodLocks=Object.fromEntries(Object.entries(cfg.periodLocks).filter(([key])=>key.startsWith(access.branchId+':')));
   if (!['personal', 'fiscal', 'ajustes'].some(module => allowed(access, module))) cfg.fiscal = { vatRate: cfg.fiscal?.vatRate || 0 };
-  const projected = { cfg, accounts: structuredClone(data.accounts || []), entries, products: [] };
+  const projected = { branches: access.branches, cfg, accounts: structuredClone(data.accounts || []), entries, products: [] };
   projected.customers = allowed(access, 'ventas') || allowed(access, 'facturacion') ? structuredClone(data.customers || []) : [];
   if (['ventas', 'facturacion', 'compras', 'inventario', 'contabilidad', 'finanzas', 'fiscal'].some(module => allowed(access, module))) projected.products = structuredClone(data.products || []).map(product => operationalOnly ? { ...product, cost: 0 } : product);
   for (const name of OPERATION_ARRAYS) {
@@ -115,6 +123,8 @@ export function projectData(data, access) {
   for (const name of ['taxes', 'properties']) projected[name] = allowed(access, 'fiscal') ? structuredClone(data[name] || []).map(record => {
     const copy = { ...record }; delete copy.receipt; return copy;
   }) : [];
+  for(const [name,module] of Object.entries({...ADVANCED_ARRAYS,...TRADE_ARRAYS})) projected[name]=allowed(access,module)?structuredClone(data[name]||[]):[];
+  projected.stockTransfers=allowed(access,'inventario')?structuredClone(data.stockTransfers||[]):[];
   return projected;
 }
 function validateEntries(data) {
@@ -182,7 +192,7 @@ export function mergeData(current, incoming, access) {
   if (!Array.isArray(incoming.customers)) accessError('Cartera de clientes inválida.', 400);
   if (access.owner) { validateEntries(incoming); validateCustomers(incoming); return incoming; }
   if (!DATA_MODULES.some(module => allowed(access, module, true))) accessError('Tu acceso es de solo lectura.');
-  const projected = projectData(current, access);
+  const projected = projectData(current, { ...access, branchId: null });
   const merged = structuredClone(current);
   merged.customers = merged.customers || [];
   for (const [name, module] of Object.entries({ customers: 'ventas', accounts: 'contabilidad', employees: 'personal', payrolls: 'personal', settlements: 'personal', taxes: 'fiscal', properties: 'fiscal' })) {
@@ -254,6 +264,7 @@ export function mergeData(current, incoming, access) {
   }
   const oldReceipts = new Map((current.taxes || []).filter(tax => tax.receipt).map(tax => [tax.id, tax.receipt]));
   for (const tax of merged.taxes || []) if (oldReceipts.has(tax.id)) tax.receipt = oldReceipts.get(tax.id);
+  for(const [name,module] of Object.entries({...ADVANCED_ARRAYS,...TRADE_ARRAYS})) if(!equal(incoming[name]||[],projected[name]||[])) accessError('Usa la operación autorizada para modificar '+name+'.');
   validateEntries(merged);
   validateCustomers(merged);
   return merged;
@@ -272,7 +283,7 @@ export function dataChanges(previous, next) {
   return changes;
 }
 export async function audit(client, companyId, session, action, changes, revision = null) {
-  await client.insert(auditEvents).values({ companyId, actor: actorName(session), action, changes, revision });
+  await client.insert(auditEvents).values({ companyId, branchId: session.auditBranchId ?? (session.activeBranchId === 'all' ? null : session.activeBranchId || 'principal'), actor: actorName(session), action, changes, revision });
 }
 export async function checkpoint(client, company) {
   if (!company.data) return [];
@@ -288,16 +299,25 @@ export async function updateCompany(companyId, session, revision, mutate, action
   let obsoleteKeys = [];
   const result = await db.transaction(async client => {
     const access = await companyAccess(client, companyId, session, true);
-    const company = access.company;
+    const fullCompany = access.company;
+    const company = { ...fullCompany, data: scopeBranch(fullCompany.data, access) };
     if (!Number.isInteger(revision) || company.revision !== revision) accessError('Los datos cambiaron en otra pestaña. Descarga un respaldo y recarga antes de continuar.', 409);
     const patch = await mutate(company, access, client);
-    if (Object.entries(patch).every(([name, value]) => equal(company[name], value))) return { revision: company.revision, data: projectData(company.data, access) };
-    obsoleteKeys = await checkpoint(client, company);
+    const crossBranch=patch.crossBranch;delete patch.crossBranch;
+    if(crossBranch && !CROSS_BRANCH_OPS.some(op=>action==='Operación: '+op)) accessError('Operación entre sucursales no autorizada.');
+    if (patch.data) {
+      if(!crossBranch) patch.data = mergeBranch(fullCompany.data, company.data, patch.data, access, action === 'Operación: branch' && access.owner);
+      materializeBranches(patch.data);
+      guardPeriods(fullCompany.data, patch.data, action);
+      await syncBarcodes(client, fullCompany, patch.data);
+    }
+    if (Object.entries(patch).every(([name, value]) => equal(fullCompany[name], value))) return { revision: company.revision, data: projectData(fullCompany.data, access) };
+    obsoleteKeys = await checkpoint(client, fullCompany);
     const [updated] = await client.update(companies).set({ ...patch, revision: company.revision + 1, updatedAt: new Date() }).where(eq(companies.id, companyId)).returning();
-    await syncAccounting(client, company, updated);
-    const changes = dataChanges(company.data, updated.data);
+    await syncAccounting(client, fullCompany, updated);
+    const changes = dataChanges(fullCompany.data, updated.data);
     for (const field of ['name', 'description']) if (company[field] !== updated[field]) changes.push({ area: field, before: company[field], after: updated[field] });
-    await audit(client, companyId, session, action, changes, updated.revision);
+    await audit(client, companyId, { ...session, auditBranchId: access.branchId }, action, changes, updated.revision);
     return { revision: updated.revision, data: projectData(updated.data, access) };
   });
   if (obsoleteKeys.length) {
@@ -357,7 +377,10 @@ export async function manageMember(companyId, session, body) {
       const count = await client.select({ id: companyMembers.id }).from(companyMembers).where(eq(companyMembers.companyId, companyId)).limit(100);
       if (count.length >= 100) accessError('Límite de 100 accesos por empresa.', 400);
     }
-    const values = { name, role, email, username, permissions: validatePermissions(body.permissions, access, role), active: body.active !== false, passwordHash: username ? passwordHash || previous?.passwordHash : null };
+    const branchIds = body.branchIds ?? previous?.branchIds ?? ['principal'];
+    if (!Array.isArray(branchIds) || !branchIds.length || branchIds.some(id => !companyBranches(access.company.data).some(b => b.id === id && b.active !== false))) accessError('Selecciona sucursales válidas.', 400);
+    if (!access.owner && branchIds.some(id => !access.branches.some(b => b.id === id))) accessError('No puedes asignar otra sucursal.');
+    const values = { branchIds, name, role, email, username, permissions: validatePermissions(body.permissions, access, role), active: body.active !== false, passwordHash: username ? passwordHash || previous?.passwordHash : null };
     const [member] = previous ? await client.update(companyMembers).set({ ...values, version: previous.version + 1 }).where(eq(companyMembers.id, previous.id)).returning() : await client.insert(companyMembers).values({ ...values, companyId }).returning();
     if (previous) await client.delete(sessions).where(or(eq(sessions.memberId, previous.id), ...(previous.email ? [eq(sessions.email, previous.email)] : [])));
     await audit(client, companyId, session, previous ? 'Acceso modificado' : 'Acceso creado', [{ area: 'accesibilidad', id: member.id, before: previous ? safeMember(previous) : null, after: safeMember(member), passwordChanged: !!passwordHash }]);

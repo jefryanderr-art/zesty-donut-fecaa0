@@ -1,9 +1,12 @@
+import { statement } from '../lib/reporting.mjs';
+import { integrityReport } from '../lib/accounting-engine.mjs';
+import { scopeBranch } from '../lib/branches.mjs';
 import { retainedCompanyData } from '../lib/accounting-storage.mjs';
 import { getStore } from '@netlify/blobs';
 import { login, signup, confirmEmail, requestPasswordRecovery, recoverPassword, AuthError, MissingIdentityError } from '@netlify/identity';
 import { OAuth2Client } from 'google-auth-library';
 import { timingSafeEqual, createHash, randomBytes, randomUUID } from 'node:crypto';
-import { and, desc, eq, gt, lt, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, lt, or, sql, isNull } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
 import { users, companies, siteContent, loginAttempts, sessions, companyMembers, auditEvents, companyBackups } from '../../db/schema.ts';
 import { MODULES, allowed, allData, equal, accessError, accessibleCompanies, companyAccess, projectData, mergeData, safeMember, manageMember, verifyPassword, updateCompany, audit, migrateAccountingStorage } from '../lib/access.mjs';
@@ -61,7 +64,7 @@ const same = (first, second) => timingSafeEqual(
 const cleanEmail = value => String(value || '').trim().toLowerCase();
 const companyName = value => String(value || '').trim().slice(0, 80);
 const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), {
-  status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers },
+  status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache, no-store, must-revalidate', ...headers },
 });
 const fail = (message, status = 400) => json({ error: message }, status);
 const sessionToken = request => (request.headers.get('cookie') || '').split(';').map(part => part.trim())
@@ -77,7 +80,7 @@ async function issueSession(email, admin, request, memberId = null) {
 async function readSession(request) {
   const token = sessionToken(request);
   if (!/^[a-f0-9]{64}$/.test(token)) return null;
-  const [session] = await db.select({ email: sessions.email, admin: sessions.admin, memberId: sessions.memberId, name: users.name }).from(sessions).innerJoin(users, eq(users.email, sessions.email))
+  const [session] = await db.select({ email: sessions.email, admin: sessions.admin, memberId: sessions.memberId, activeBranchId: sessions.activeBranchId, name: users.name }).from(sessions).innerJoin(users, eq(users.email, sessions.email))
     .where(and(eq(sessions.tokenHash, hashToken(token)), gt(sessions.expiresAt, new Date())));
   if (session?.memberId) {
     const [member] = await db.select().from(companyMembers).where(and(eq(companyMembers.id, session.memberId), eq(companyMembers.active, true)));
@@ -316,6 +319,24 @@ export default async (request, context) => {
     if (path === 'legal/accept' && method === 'POST') return json(await acceptLegal(session, body));
     if (path === 'customers-admin') return json(await customerAdmin(method, body, url, session));
     if (consent.required && !isAdmin && path !== 'me') return fail('Debes aceptar los términos de uso y la política de privacidad vigentes.', 428);
+    if(['branch-comparison','consolidated'].includes(path)&&method==='GET'){
+      const from=url.searchParams.get('from')||'2000-01-01',to=url.searchParams.get('to')||new Date().toISOString().slice(0,10);
+      if(![from,to].every(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)&&!Number.isNaN(Date.parse(d)))||to<from)return fail('Período inválido.');
+      return await db.transaction(async client=>{
+        if(path==='branch-comparison'){
+          const access=await companyAccess(client,url.searchParams.get('c'),session,true);
+          if(!allowed(access,'finanzas')||!access.unrestrictedBranches)accessError('Solo dueño o contador con acceso financiero compara sucursales.');
+          return json({branches:access.branches.map(branch=>({id:branch.id,name:branch.name,...statement(scopeBranch(access.company.data,{...access,branchId:branch.id}),from,to)}))});
+        }
+        const ids=[...new Set((url.searchParams.get('ids')||'').split(',').filter(Boolean))].sort();if(!ids.length||ids.length>20)accessError('Selecciona de 1 a 20 empresas.',400);
+        const results=[];for(const id of ids){const access=await companyAccess(client,id,session,true);if(!allowed(access,'finanzas')||!access.unrestrictedBranches)accessError('Sin acceso financiero completo a una de las empresas.');results.push({id,name:access.company.name,currency:access.company.data?.cfg?.cur||'C$',...statement(access.company.data||{},from,to)})}
+        if(new Set(results.map(r=>r.currency)).size>1)accessError('La consolidación requiere la misma moneda base. Convierte y concilia las empresas antes de consolidar.',400);
+        const rows=new Map();for(const result of results)for(const row of result.rows){const key=[row.code,row.name,row.tipo,row.nat].join('|'),old=rows.get(key);if(old)for(const field of ['balance','periodBalance'])old[field]=Math.round((old[field]+row[field])*100)/100;else rows.set(key,{...row})}
+        const totals=Object.fromEntries(['assets','liabilities','equity','revenue','cost','expense','profit','inventory'].map(key=>[key,Math.round(results.reduce((s,r)=>s+r[key],0)*100)/100]));
+        return json({companies:results.map(({rows,...rest})=>rest),rows:[...rows.values()],totals,currency:results[0].currency});
+      });
+    }
+    if(path==='integrity' && method==='GET'){return await db.transaction(async client=>{const access=await companyAccess(client,url.searchParams.get('c'),session,true);if(!allowed(access,'contabilidad'))accessError('Sin permiso para revisar integridad contable.');return json(integrityReport(projectData(access.company.data,access)||{}));});}
     if (path === 'storage-migration' && method === 'POST') return json(await migrateAccountingStorage(url.searchParams.get('c'), session, body));
     if (path === 'operations' && method === 'POST') return json(await runOperation(url.searchParams.get('c'), session, body));
     if (path === 'company-logo' && method === 'POST') {
@@ -366,6 +387,7 @@ export default async (request, context) => {
       const from = url.searchParams.get('from'), to = url.searchParams.get('to');
       if ([from, to].some(value => value && (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(value))))) return fail('Fecha de búsqueda inválida.', 400);
       const filters = [eq(auditEvents.companyId, companyId)];
+      if(access.branchId)filters.push(access.branchId==='principal'?or(eq(auditEvents.branchId,'principal'),isNull(auditEvents.branchId)):eq(auditEvents.branchId,access.branchId));
       if (from) filters.push(sql`${auditEvents.createdAt} >= ${from}::date`);
       if (to) filters.push(sql`${auditEvents.createdAt} < ${to}::date + interval '1 day'`);
       const start = url.searchParams.get('start'), end = url.searchParams.get('end');
@@ -397,7 +419,7 @@ export default async (request, context) => {
             if (!/^[a-f0-9-]{36}$/.test(body.id)) accessError('Respaldo no encontrado.', 404);
             const [backup] = await client.select().from(companyBackups).where(and(eq(companyBackups.id, body.id), eq(companyBackups.companyId, companyId)));
             if (!backup?.data) accessError('Respaldo vacío o no encontrado.', 404);
-            data = backup.data; name = backup.name; description = backup.description;
+            data = scopeBranch(backup.data, currentAccess); name = backup.name; description = backup.description;
           }
           mergeData(company.data, data, { owner: true });
           guardLedgerMutation(company.data, data, currentAccess);
@@ -421,7 +443,7 @@ export default async (request, context) => {
       const taxId = url.searchParams.get('tax');
       if (session.member) return fail('Solo el dueño accede a los comprobantes privados.', 403);
       if (!/^[a-z0-9-]{1,80}$/.test(taxId || '')) return fail('Obligación no encontrada', 404);
-      const condition = and(eq(companies.id, companyId), eq(companies.ownerEmail, session.email));
+      const condition = and(eq(companies.id, companyId), eq(companies.ownerEmail, session.email),isNull(companies.archivedAt));
       const [company] = await db.select({ data: companies.data, revision: companies.revision }).from(companies).where(condition);
       if (!company) return fail('Solo el dueño accede a los comprobantes privados.', 403);
       const backupId = url.searchParams.get('backup');
@@ -497,15 +519,55 @@ export default async (request, context) => {
     if (path === 'me' && method === 'GET') return json({ user: { email: session.member?.username || session.email, name: session.member?.name || session.name, worker: !!session.member, admin: isAdmin, editor: canEditSite, consentRequired: consent.required, legal: consent.document }, companies: owned });
     if (path === 'company' && method === 'POST') {
       if (session.member) return fail('Los colaboradores no pueden crear empresas.', 403);
-      if (owned.filter(company => company.owner).length >= 20) return fail('Límite de empresas alcanzado');
+      if (session.email !== PLATFORM_OWNER && owned.some(company => company.owner)) return fail('Tu cuenta permite una empresa. Puedes crear sucursales dentro de ella.', 403);
       if (!companyName(body.name)) return fail('Escribe un nombre de empresa');
-      const [company] = await db.insert(companies).values({ ownerEmail: session.email, name: companyName(body.name), description: String(body.description || '').trim().slice(0, 2000) }).returning({ id: companies.id });
-      await audit(db, company.id, session, 'Empresa creada', [{ area: 'name', before: null, after: companyName(body.name) }], 0);
+      const company = await db.transaction(async client => {
+        await client.select({email:users.email}).from(users).where(eq(users.email,session.email)).for('update');
+        const current = await client.select({id:companies.id}).from(companies).where(and(eq(companies.ownerEmail,session.email),isNull(companies.archivedAt))).limit(1);
+        if(session.email !== PLATFORM_OWNER && current.length) accessError('Tu cuenta permite una empresa. Usa sucursales.',403);
+        const [created] = await client.insert(companies).values({ownerEmail:session.email,name:companyName(body.name),description:String(body.description||'').trim().slice(0,2000)}).returning({id:companies.id});
+        await audit(client,created.id,session,'Empresa creada',[{area:'name',before:null,after:companyName(body.name)}],0);
+        return created;
+      });
       return json({ id: company.id, companies: await accessibleCompanies(session) });
+    }
+    if (path === 'company' && method === 'DELETE') {
+      if(session.member || session.email !== PLATFORM_OWNER) return fail('Solo el administrador de Acontec puede borrar empresas.',403);
+      await db.transaction(async client => {
+        const access=await companyAccess(client,body.id,session,true),company=access.company;
+        if(!access.owner) accessError('Solo puedes borrar tus propias empresas.');
+        if(company.name.trim().toLowerCase()==='acontec') accessError('Acontec es la empresa principal y no se puede borrar.');
+        if(body.confirmName!==company.name || body.revision!==company.revision) accessError('Confirma el nombre y la revisión vigente de la empresa.',409);
+        await audit(client,company.id,session,'Empresa archivada por el administrador',[{area:'empresa',before:company.name,after:'Archivada; datos y respaldos conservados'}],company.revision);
+        await client.update(companies).set({archivedAt:new Date(),revision:company.revision+1}).where(eq(companies.id,company.id));
+        const members=await client.select().from(companyMembers).where(eq(companyMembers.companyId,company.id));
+        for(const member of members)await client.delete(sessions).where(or(eq(sessions.memberId,member.id),...(member.email?[eq(sessions.email,member.email)]:[])));
+      });
+      return json({companies:await accessibleCompanies(session)});
+    }
+    if(path==='branch-limits' && method==='GET'){
+      const [row]=await db.select().from(siteContent).where(eq(siteContent.id,'branch-limits'));
+      return json({limit:row?.content?.limit||5});
+    }
+    if(path==='branch-limits' && method==='PUT'){
+      if(session.member||session.email!==PLATFORM_OWNER)return fail('Solo el dueño de Acontec configura este límite.',403);
+      if(!Number.isInteger(body.limit)||body.limit<1||body.limit>100)return fail('El límite debe estar entre 1 y 100.');
+      await db.transaction(async client=>{
+        const [ownerCompany]=await client.select().from(companies).where(and(eq(companies.ownerEmail,PLATFORM_OWNER),isNull(companies.archivedAt))).limit(1);
+        await client.insert(siteContent).values({id:'branch-limits',content:{limit:body.limit}}).onConflictDoUpdate({target:siteContent.id,set:{content:{limit:body.limit},updatedAt:new Date()}});
+        if(ownerCompany)await audit(client,ownerCompany.id,session,'Límite de sucursales actualizado',[{area:'limiteSucursales',after:body.limit}]);
+      });return json({ok:true});
+    }
+    if(path==='branch-select' && method==='POST'){
+      const access=await companyAccess(db,body.companyId,session);
+      if(body.branchId==='all' ? !access.unrestrictedBranches : !access.branches.some(b=>b.id===body.branchId))return fail('Sucursal no autorizada.',403);
+      await db.update(sessions).set({activeBranchId:body.branchId}).where(eq(sessions.tokenHash,hashToken(sessionToken(request))));
+      return json({ok:true});
     }
     if (path === 'company' && method === 'PUT') {
       if (!owned.some(company => company.id === body.id && company.owner)) return fail('Solo el dueño modifica la empresa.', 403);
       if (!companyName(body.name)) return fail('Escribe un nombre de empresa');
+      if(owned.find(c=>c.id===body.id)?.name.trim().toLowerCase()==='acontec' && companyName(body.name).toLowerCase()!=='acontec') return fail('La empresa principal conserva el nombre Acontec.',403);
       if (/[<>&"'`]/.test(String(body.cfg?.cur || 'C$'))) return fail('Usa un símbolo o código de moneda, sin contenido HTML.');
       const result = await updateCompany(body.id, session, body.revision, company => ({ name: companyName(body.name), description: String(body.description || '').trim().slice(0, 2000), data: { ...company.data, cfg: { ...company.data?.cfg, ruc: String(body.cfg?.ruc || '').slice(0, 100), cur: String(body.cfg?.cur || 'C$').slice(0, 20), name: companyName(body.name) } } }), 'Empresa actualizada');
       return json({ ...result, companies: await accessibleCompanies(session) });
@@ -516,7 +578,7 @@ export default async (request, context) => {
         return await db.transaction(async client => {
           const access = await companyAccess(client, companyId, session, true);
           const { id, name, description } = access.company;
-          const company = { id, name, description, owner: access.owner, permissions: access.permissions, memberId: access.member?.id, role: access.owner ? 'Dueño' : access.member?.role };
+          const company = { id, name, description, owner: access.owner, permissions: access.permissions, memberId: access.member?.id, role: access.owner ? 'Dueño' : access.member?.role, branches: access.branches, branchId: access.branchId, unrestrictedBranches: access.unrestrictedBranches };
           return json({ data: projectData(access.company.data, access), revision: access.company.revision, company });
         });
       }
