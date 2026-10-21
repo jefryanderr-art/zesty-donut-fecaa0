@@ -2,6 +2,18 @@
 
 Administración contable tecnológica para varias empresas y clientes. El proyecto conserva el sitio estático del archivo adjunto y sus funciones de ventas, compras, gastos, inventario, asientos, libros contables, estados financieros y respaldo JSON. No requiere compilar el frontend.
 
+## Decisión de almacenamiento y transición pendiente
+
+El propietario eligió Supabase (Postgres) como base de datos oficial y anuló la prohibición del proyecto sobre bases externas. La migración todavía no está implementada: el código actual continúa usando Netlify Database. Las referencias a Netlify Database en las secciones siguientes describen el funcionamiento vigente, no el destino aprobado. No se activará Supabase como almacenamiento principal hasta que el propietario confirme la verificación.
+
+La futura conexión de servidor utilizará `DATABASE_URL`, configurada exclusivamente en variables privadas de Netlify. No se incluirán cadenas de conexión ni claves en el repositorio, frontend o logs. Se conservarán Identity, Google, cookies, permisos, bitácora, respaldos, revisión optimista y Netlify Blobs. El esquema de destino deberá normalizar los documentos contables, guardar montos en centavos enteros y activar RLS sin políticas públicas en todas las tablas.
+
+La copia de datos se ejecutará en Netlify, donde estarán disponibles ambas conexiones, mediante un endpoint protegido exclusivo del propietario. Este endpoint aún no existe. Deberá permitir un solo proceso efectivo, impedir concurrencia, persistir su progreso y reanudar fallos idempotentemente. Exigirá sesión verificada, origen del sitio y JSON. No borrará el origen ni activará automáticamente el destino. Generará un informe de conteos y totales por empresa al centavo, con diferencias en ventas, compras, saldos, inventario y debe/haber. Una reversión deberá contemplar las escrituras posteriores a la copia.
+
+La entrega requiere una rama distinta de main, un Pull Request y una vista previa antes de publicar. El sistema que gestiona esta sesión realiza las operaciones de GitHub; no se ha creado una rama ni un Pull Request desde el agente. Los cambios exclusivamente documentales pueden omitir el despliegue según la regla existente; esta actualización no demuestra una vista previa funcional.
+
+Para retirar Netlify Database será necesaria la confirmación del propietario después de conciliar los datos y comprobar acceso con Identity y Google, registro de ventas, persistencia al cerrar y reabrir, cambio y aislamiento de empresas, permisos, conflictos de revisión y descarga y restauración de respaldos. Conservar el origen y un respaldo restaurable hasta completar esas comprobaciones. No hay resultados de migración ni verificaciones funcionales en esta entrega documental.
+
 ## Estructura y tecnologías
 
 - `public/index.html`, `public/style.css` y `public/app.js`: aplicación en español, HTML, CSS y JavaScript sin framework.

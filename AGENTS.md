@@ -24,6 +24,16 @@ La sesión de la API usa un identificador aleatorio de 256 bits, cuyo hash y cad
 
 ## Cambios futuros
 
-Mantener `drizzle-orm@beta` y `drizzle-kit@beta` mientras esa línea sea necesaria para el adaptador Netlify. Todo cambio de esquema requiere una migración generada con `npx drizzle-kit generate --name nombre_descriptivo`, previa consulta de `netlify db status`. No modificar migraciones ya aplicadas. No usar bases de datos externas ni archivos locales para información persistente.
+Mantener `drizzle-orm@beta` y `drizzle-kit@beta` mientras esa línea sea necesaria para el adaptador Netlify. Todo cambio de esquema requiere una migración generada con `npx drizzle-kit generate --name nombre_descriptivo`, previa consulta de `netlify db status`. No modificar migraciones ya aplicadas. La prohibición del proyecto sobre bases de datos externas queda anulada por decisión del propietario: Supabase (Postgres) es el destino oficial aprobado. No usar archivos locales para información persistente. Esta decisión no implica que la migración esté implementada ni modifica las restricciones del entorno de ejecución.
 
 Las dependencias se instalan con npm. No ejecutar compilaciones, servidores ni pruebas locales en sesiones gestionadas por la plataforma: ella valida y despliega. Revisar código y documentación de forma estática, y distinguir comprobaciones reales de verificaciones pendientes posteriores al despliegue. No cambiar la protección del equipo de Netlify de forma global para publicar este proyecto.
+
+## Transición aprobada a Supabase (pendiente de implementación)
+
+Supabase (Postgres) es la base de datos oficial elegida por el propietario. Netlify Database sigue siendo el almacenamiento activo del código actual y se conservará como origen heredado durante la migración. Las descripciones anteriores de directorios, persistencia y sesiones reflejan ese estado actual. No activar Supabase como almacenamiento principal hasta que el propietario confirme la verificación.
+
+La conexión de destino usará únicamente `DATABASE_URL` en variables privadas de Netlify, nunca en el repositorio, frontend o logs. Mantener Netlify Identity, Google, cookies de sesión, permisos, revisión optimista, bitácora, versiones y Netlify Blobs. El destino requiere tablas normalizadas, montos en centavos enteros y RLS en todas las tablas, sin políticas públicas y con acceso exclusivo desde el servidor.
+
+La copia deberá ejecutarse desplegada en Netlify mediante un endpoint protegido, exclusivo del propietario y de un solo uso efectivo. Su implementación deberá permitir reanudar intentos fallidos de forma idempotente, impedir ejecuciones concurrentes y guardar el estado de ejecución en almacenamiento persistente. Exigir sesión verificada, origen del sitio y JSON; no aceptar credenciales en la solicitud ni devolver datos privados. No borrar el origen. Comparar conteos y totales al centavo por empresa, incluyendo ventas, compras, saldos, inventario y debe/haber, y conservar un informe de diferencias. La confirmación del propietario es un requisito separado del éxito de la copia. Definir cómo conciliar escrituras posteriores para una reversión sin pérdida.
+
+Los cambios se revisarán en una rama distinta de main mediante Pull Request y vista previa antes de publicar. En sesiones gestionadas, el sistema de la plataforma se encarga de crear ramas, commits y Pull Requests; no crearlos directamente desde el agente. No modificar migraciones ya aplicadas.
