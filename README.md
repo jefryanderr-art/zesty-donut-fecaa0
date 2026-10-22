@@ -197,3 +197,9 @@ Cada empresa cuenta con una sucursal Principal histórica y puede crear sucursal
 Se añadieron controles contables, activos, préstamos, multimoneda manual, documentos comerciales, gestión fiscal de referencia, importaciones, análisis y códigos de barras. Consultar la [guía de alcance y comprobaciones](docs/gestion-y-sucursales.md) antes de utilizarlos en producción: contiene funciones no implementadas y restricciones operativas.
 
 HTML y funciones usan no-cache; los recursos estáticos usan caché anual inmutable con huellas en URL. Después de modificar recursos ejecutar `node scripts/version-assets.mjs`, sin compilar el frontend. Las bibliotecas de cámara y Excel se cargan solo al usarlas. El índice local temporal del catálogo nunca sustituye datos contables ni permisos del servidor.
+
+## Centro de control y suscripciones
+
+Se integró el Centro de control en el Panel y menú de la empresa de plataforma, con rol de super administrador validado en el servidor. Reutiliza Administración de clientes, añade planes mensual/anual, prueba de 24 horas, revisión de pagos, Pagadito, correo en cola, comprobantes privados y soporte de 24 horas en solo lectura.
+
+La configuración, el mapa de módulos, las limitaciones, la guía de sandbox/producción y las comprobaciones pendientes están en [Centro de control y Pagadito](docs/centro-control-pagadito.md). Las credenciales se gestionan exclusivamente en variables de entorno de Netlify. Sin credenciales de Pagadito no se inicia el checkout; sin SMTP los correos permanecen en cola. La nueva migración es aditiva y la plataforma la aplica al desplegar.
