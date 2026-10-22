@@ -22,7 +22,13 @@ export async function subscription(email,client=db){
 export async function accountAccess(email,admin=false,client=db){const sub=await subscription(email,client),ent=entitlement(sub,admin),list=await plans(client),plan=admin?DEFAULT_PLANS.find(p=>p.id==='pro'):list.find(p=>p.id===ent.plan);return {sub,ent,plan:plan?{...plan,limits:admin?plan.limits:{...plan.limits,...sub.limits}}:null}}
 export async function requireBilling(email,admin=false,client=db){const a=await accountAccess(email,admin,client);if(!a.ent.access)billingError('Tu acceso venció. Abre Mi suscripción para elegir un plan.',402);return a}
 async function projectProfile(client,sub){const [u]=await client.select().from(users).where(eq(users.email,sub.email));const plan=(await plans(client)).find(p=>p.id===sub.plan);await client.update(users).set({profile:{...u.profile,plan:sub.plan||'',state:entitlement(sub).state,paidUntil:sub.paidUntil?managuaDay(new Date(sub.paidUntil)):'',currency:'USD',monthlyAmountCents:plan?(sub.interval==='anual'?Math.round(plan.annualCents/12):plan.monthlyCents):0},version:u.version+1}).where(eq(users.email,sub.email))}
-export async function billingMe(session,admin){const a=await accountAccess(session.email,admin);const [legal]=await db.select().from(siteContent).where(eq(siteContent.id,'legal'));return {legalVersion:legal?.content?.approved?legal.content.version:null,billingMonths:Math.max(1,Math.min(24,Number(env('PAGADITO_MONTHS')||12)||1)),billingYears:Math.max(1,Math.min(5,Number(env('PAGADITO_YEARS')||3)||1)),entitlement:a.ent,plan:a.plan,version:a.sub.version,provider:providerConfig(),serverNow:new Date().toISOString()}}
+export async function billingMe(session,admin){
+ const a=await accountAccess(session.email,admin);
+ const [legal]=await db.select().from(siteContent).where(eq(siteContent.id,'legal'));
+ const provider=providerConfig(),legalReady=!!(legal?.content?.approved&&legal.content.version&&legal.content.refunds);
+ const checkoutReason=session.member?'Solo el dueño de la empresa puede contratar el plan.':!legalReady?'Los pagos están pendientes de habilitación: el titular debe aprobar y publicar los documentos legales desde Administración de clientes.':!provider.ready?'El servicio de pagos todavía no está configurado. Contacta con Acontec.':null;
+ return {checkoutReady:!checkoutReason,checkoutReason,legalVersion:legalReady?legal.content.version:null,billingMonths:Math.max(1,Math.min(24,Number(env('PAGADITO_MONTHS')||12)||1)),billingYears:Math.max(1,Math.min(5,Number(env('PAGADITO_YEARS')||3)||1)),entitlement:a.ent,plan:a.plan,version:a.sub.version,provider,serverNow:new Date().toISOString()};
+}
 export async function checkout(session,body,request){
  if(session.member)billingError('El dueño contrata el plan.',403);
  if(body.accepted!==true)billingError('Acepta términos, privacidad y reembolsos antes de pagar.');
