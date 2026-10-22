@@ -1,9 +1,9 @@
 import {createVerify,X509Certificate} from 'node:crypto';
-import {env,providerConfig,billingError} from './billing-rules.mjs';
+import {providerConfig,billingError} from './billing-rules.mjs';
 export async function pagadito(path,body,environment){
  const config=providerConfig();if(!config.ready)billingError('Configura las credenciales de Pagadito en Netlify antes de pagar.',503);
  if(environment&&environment!==config.environment)billingError('Este cobro pertenece a otro entorno. Restaura su configuración para gestionarlo.',409);
- const response=await fetch(config.base+'/api/v2/'+path,{method:'POST',headers:{'content-type':'application/json',Accept:'application/json',Authorization:'Basic '+Buffer.from(`${env('PAGADITO_UID')}:${env('PAGADITO_WSK')}`).toString('base64')},body:JSON.stringify(body),signal:AbortSignal.timeout(12000),redirect:'error'});
+ const response=await fetch(config.base+'/api/v2/'+path,{method:'POST',headers:{'content-type':'application/json',Accept:'application/json',Authorization:'Basic '+Buffer.from(`${process.env.PAGADITO_UID.trim()}:${process.env.PAGADITO_WSK.trim()}`).toString('base64')},body:JSON.stringify(body),signal:AbortSignal.timeout(12000),redirect:'error'});
  if(!response.ok)billingError('Pagadito no respondió. Intenta nuevamente.',502);
  try{return await response.json()}catch{billingError('Respuesta no válida del proveedor de pagos.',502)}
 }
@@ -17,7 +17,7 @@ export async function verifyWebhook(headers,raw){
   const body=JSON.parse(raw.toString('utf8'));
   const response=await fetch(url,{redirect:'error',signal:AbortSignal.timeout(5000)});if(!response.ok||Number(response.headers.get('content-length')||0)>32768)return false;
   const pem=await response.text();if(pem.length>32768)return false;
-  const verifier=createVerify('RSA-SHA256');verifier.update(`${id}|${ts}|${body.id}|${crc32(raw)}|${env('PAGADITO_WSK')}`);
+  const verifier=createVerify('RSA-SHA256');verifier.update(`${id}|${ts}|${body.id}|${crc32(raw)}|${process.env.PAGADITO_WSK.trim()}`);
   return verifier.verify(new X509Certificate(pem).publicKey,Buffer.from(signature,'base64'));
  }catch{return false}
 }

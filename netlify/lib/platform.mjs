@@ -3,7 +3,7 @@ import {db} from '../../db/index.ts';
 import {users,companies,subscriptions,customerPayments,customerEvents,servicePlans,serviceMessages,siteContent,supportGrants,auditEvents} from '../../db/schema.ts';
 import {mailReady} from './service-mail.mjs';
 import {isPlatformAdmin} from './customer-admin.mjs';
-import {platformContextAllowed,billingError,entitlement,validatePlan,providerConfig,env,managuaDay,dayEnd} from './billing-rules.mjs';
+import {platformContextAllowed,billingError,entitlement,validatePlan,providerConfig,managuaDay,dayEnd} from './billing-rules.mjs';
 import {plans,subscription,event,confirmPayment,bookPayment,cancelSubscription} from './billing.mjs';
 export async function requirePlatform(session,companyId,client=db){
  if(!await isPlatformAdmin(session))billingError('Acceso exclusivo del super administrador de plataforma.',403);
@@ -25,7 +25,7 @@ export async function platformSummary(url){
  for(const row of clients){row.usage=use.find(u=>u.email===row.email)||{companies:0,branches:0,collaborators:0,storage_bytes:0,company_names:[]};row.usage.aiMessages=null;const p=list.find(p=>p.id===row.plan),limits={...p?.limits,...row.sub?.limits};row.nearLimit=!!p&&['companies','branches'].some(k=>limits[k]!=null&&row.usage[k]>=limits[k]*.8)}
  const alertRows=await db.execute(sql`SELECT count(*) FILTER (WHERE state='unknown')::int AS unresolved, count(*) FILTER (WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(charges) c WHERE c->>'status' IN ('FAILED','EXPIRED','UNCOLLECTABLE')))::int AS failed FROM acontec_billing_checkouts`);const alerts=(alertRows.rows||alertRows)[0];
  const [legal]=await db.select().from(siteContent).where(eq(siteContent.id,'legal'));
- const paymentSetup={missingVariables:['PAGADITO_UID','PAGADITO_WSK','PAGADITO_ENV'].filter(name=>!env(name)),legalReady:!!(legal?.content?.approved&&legal.content.version&&legal.content.refunds)};
+ const paymentSetup={missingVariables:Object.entries({PAGADITO_UID:process.env.PAGADITO_UID,PAGADITO_WSK:process.env.PAGADITO_WSK,PAGADITO_ENV:process.env.PAGADITO_ENV}).filter(([,value])=>!value?.trim()).map(([name])=>name),legalReady:!!(legal?.content?.approved&&legal.content.version&&legal.content.refunds)};
  const [settings]=await db.select().from(siteContent).where(eq(siteContent.id,'platform-accounting'));
  const [templateRow]=await db.select().from(siteContent).where(eq(siteContent.id,'platform-mail-templates'));const templates=templateRow?.content||{revision:0,reminder:{subject:'Tu suscripción de Acontec',text:'Hola {{nombre}}. Tu plan está pagado hasta {{pagadoHasta}}. Revisa Mi suscripción para consultar o renovar tu servicio.'},announcement:{subject:'Novedades de Acontec',text:'Hola {{nombre}}. Tenemos novedades para tu negocio.'}};
  const messages=await db.select({id:serviceMessages.id,email:serviceMessages.email,subject:serviceMessages.subject,state:serviceMessages.state,createdAt:serviceMessages.createdAt}).from(serviceMessages).orderBy(desc(serviceMessages.createdAt)).limit(50);
