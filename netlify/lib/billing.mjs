@@ -187,8 +187,18 @@ export async function reconcilePendingCheckouts(){
  const results=await Promise.allSettled(rows.map(row=>resolveCheckout(row.id,'scheduled')));
  console.info('pagadito_automatic_resolution',{processed:rows.length,errors:results.filter(r=>r.status==='rejected').length});
 }
-export async function confirmSubscription(session){
+export async function confirmSubscription(session,body={}){
  if(session.member)billingError('Solo el dueño consulta su pago.',403);
+ if(body.token!==undefined||body.ern!==undefined){
+  if(typeof body.token!=='string'||!body.token.trim()||body.token.length>2048||typeof body.ern!=='string'||!/^ACT-[a-f0-9-]+-[0-9]{2}$/.test(body.ern))billingError('El retorno de Pagadito no es válido.',400);
+  const [row]=await db.select().from(billingCheckouts).where(and(eq(billingCheckouts.email,session.email),sql`${billingCheckouts.charges} @> ${JSON.stringify([{ern:body.ern}])}::jsonb`)).limit(1);
+  if(!row?.providerToken)billingError('No se encontró el intento de pago de tu cuenta.',404);
+  // El token del retorno es un dato no confiable. Consultar con la autorización
+  // guardada en el servidor evita verificar tokens arbitrarios del navegador.
+  await syncCheckout(row.id);
+  const [checked]=await db.select().from(billingCheckouts).where(eq(billingCheckouts.id,row.id));
+  const a=await accountAccess(session.email);return {status:checked.state,entitlement:a.ent};
+ }
  const rows=await db.select().from(billingCheckouts).where(and(eq(billingCheckouts.email,session.email),sql`${billingCheckouts.state} in ('creating','pending','unknown','active','failed','expired','abandoned')`)).orderBy(desc(billingCheckouts.createdAt)).limit(1);
  for(const row of rows)await resolveCheckout(row.id);
  const [latest]=await db.select().from(billingCheckouts).where(eq(billingCheckouts.email,session.email)).orderBy(desc(billingCheckouts.createdAt)).limit(1);
@@ -198,7 +208,7 @@ export async function cancelSubscription(session,actor=session.email){if(session
 export async function billingRoute(path,method,body,session,request,admin){
  if(path==='billing/me'&&method==='GET'){if(session.member){const [company]=await db.select({ownerEmail:companies.ownerEmail}).from(companies).where(eq(companies.id,session.member.companyId));return billingMe({...session,email:company.ownerEmail},false)}return billingMe(session,admin);}
  if(path==='checkout'&&method==='POST')return checkout(session,body,request);
- if(path==='billing/confirm'&&method==='POST')return confirmSubscription(session);
+ if(path==='billing/confirm'&&method==='POST')return confirmSubscription(session,body);
  if(path==='cancel'&&method==='POST')return cancelSubscription(session);
  billingError('Método no permitido.',405);
 }

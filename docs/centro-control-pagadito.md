@@ -83,7 +83,7 @@ La administración permite revisar y aprobar los tres textos con una versión nu
 ## Guía de pruebas sin cobros reales
 
 1. Configura las credenciales del comercio de pruebas y confirma que el Centro de control indica sandbox. La última comprobación de esta sesión no encontró las tres variables de Pagadito; no se realizó ningún pago.
-2. En ese comercio registra el retorno `https://acontec.company/?pago=retorno` y el webhook `https://acontec.company/api/pagadito-webhook`. Para una vista previa usa su propio dominio y registra sus URL si el comercio lo permite.
+2. En ese comercio registra el retorno `https://acontec.company/?token={value}&ern={ern_value}` y el webhook `https://acontec.company/api/pagadito-webhook`. Para una vista previa usa su propio dominio y registra sus URL si el comercio lo permite.
 3. Completa y aprueba una versión de los tres documentos desde Administración de clientes. Configura SMTP si quieres comprobar recibos reales de correo.
 4. Entra con otro correo y comprueba la cuenta regresiva de 24 horas. Sin esperar al vencimiento, usa «Elegir plan y pagar» desde el panel. Elige Mensual, revisa precio y cobros programados y acepta las políticas. El botón permanece deshabilitado hasta aceptar.
 5. Antes de pagar, la dirección de Pagadito debe contener el host exacto `sandbox-connect.pagadito.com`. Si no aparece sandbox, cierra la página. Usa exclusivamente los datos de tarjeta ficticia indicados por Pagadito y por el documento adjunto, nunca una tarjeta real.
@@ -133,3 +133,12 @@ Las consultas de estado tienen un reintento por timeout. Crear una autorización
 Una respuesta perdida al crear una autorización puede dejar el intento sin token. La API integrada necesita ese token para consultar; no se inventa una confirmación ni se afirma una cancelación. Estos intentos expiran automáticamente y no bloquean nuevos pagos. Para garantizar la revocación de una autorización sin token se necesita un mecanismo de búsqueda por referencia respaldado por Pagadito.
 
 La sesión de implementación solo pudo consultar la rama de vista previa, que no contenía autorizaciones. No se modificaron pagos de producción ni se verificaron las dos autorizaciones reportadas. El despliegue y las pruebas de integración, incluidos retorno, timeout, rechazo, concurrencia y confirmación tardía, quedan sujetos a la validación de la plataforma. No se ejecutaron pruebas, servidores ni compilaciones locales.
+
+
+## Parámetros del retorno de Pagadito
+
+La URL exacta para configurar en el sandbox es `https://acontec.company/?token={value}&ern={ern_value}`. `token` recibe el token de Pagadito y `ern` recibe el número de comprobante o referencia ERN del comercio. Las llaves se conservan en la configuración para que Pagadito sustituya los valores.
+
+El navegador lee ambos parámetros, los retira de la barra de direcciones y los envía por POST JSON a `/api/billing/confirm` después de iniciar sesión. El servidor valida el formato y busca el ERN únicamente entre los intentos del usuario autenticado. El token recibido no concede permisos ni confirma un pago: se consulta `get-status-recurring-payments` con el token de autorización guardado en Database y el entorno del intento. La conciliación contrasta los ERN y los importes y moneda disponibles en la respuesta; solo los cargos `COMPLETED` activan cobertura. El retorno antiguo `?pago=retorno` y la verificación manual siguen conciliando el último intento.
+
+Esta revisión fue estática; quedó pendiente comprobar el retorno completo y la respuesta real de la API con un pago sandbox tras el despliegue. No se ejecutaron pruebas, servidores ni compilaciones locales.
