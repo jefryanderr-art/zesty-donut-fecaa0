@@ -23,7 +23,23 @@ export async function pagadito(path,body,environment){
   }
  }
 }
-export function safePaymentUrl(value){const config=providerConfig();let url;try{url=new URL(value)}catch{billingError('Enlace de pago inválido.',502)}if(url.protocol!=='https:'||url.hostname!==new URL(config.base).hostname||url.username||url.password||url.port)billingError('Enlace de pago no autorizado.',502);return url.href}
+export function safePaymentUrl(value){
+ const config=providerConfig();
+ const expectedDomain={sandbox:'sandbox.pagadito.com',production:'pagadito.com'}[config.environment];
+ let url;
+ try{url=new URL(value)}catch{
+  console.warn('pagadito_payment_url',{domain:null,reason:'invalid_url'});
+  billingError('Enlace de pago inválido.',502);
+ }
+ const reason=!expectedDomain?'invalid_environment':url.protocol!=='https:'?'https_required':url.hostname!==expectedDomain?'domain_not_allowed':url.username||url.password?'embedded_credentials':url.port?'custom_port':null;
+ // Nunca registrar URL completa, ruta, consulta, fragmento ni credenciales.
+ if(reason){
+  console.warn('pagadito_payment_url',{domain:url.hostname,reason});
+  billingError('Enlace de pago no autorizado.',502);
+ }
+ console.info('pagadito_payment_url',{domain:url.hostname,reason:'accepted'});
+ return url.href;
+}
 export function crc32(bytes){let c=0xffffffff;for(const b of bytes){c^=b;for(let k=0;k<8;k++)c=c&1?0xedb88320^(c>>>1):c>>>1}return (c^0xffffffff)>>>0}
 export async function verifyWebhook(headers,raw){
  try{
