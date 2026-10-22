@@ -96,3 +96,11 @@ No se ejecutaron compilaciones, servidores ni pruebas locales. Solo se revisó e
 ## Reversión conservando los datos
 
 Para retirar esta funcionalidad, restaura el código de la versión anterior y conserva todas las tablas, columnas, migraciones y registros añadidos. No deshagas SQL ni borres suscripciones, pagos, comprobantes, asientos o auditorías. Desactivar el checkout o volver al código anterior no cancela cobros en Pagadito: cancela primero las autorizaciones del comercio correspondiente. Antes de volver a activar el módulo concilia pagos y conserva las revisiones vigentes. Los asientos ya contabilizados se corrigen mediante asientos inversos, no mediante borrado.
+
+## Publicación autorizada para habilitar pagos
+
+La actualización de datos `20261022223000_publish_approved_payment_policies.sql` preparó la publicación de la versión `2026-10-22-pagos-1` a partir del borrador inicial, por autorización del propietario. No incorporó su nombre ni domicilio. Eliminó los espacios vacíos de identificación y conservó el correo de contacto que ya era público. No cambió precios, periodos, política de reembolso ni aceptación explícita del cliente.
+
+La actualización se aplica durante el despliegue, con bloqueo de la fila, incremento de revisión y evento de auditoría con la huella contractual. Conserva documentos ya aprobados. Si encuentra un borrador diferente o aceptaciones de las versiones involucradas, detiene la publicación para impedir sobrescrituras. No modifica el esquema ni migraciones anteriores y no elimina datos.
+
+La presencia de variables de Pagadito no acredita una conexión con el comercio. Se solicitó guardar el entorno de prueba en la configuración de producción; la CLI informó éxito, pero la lectura posterior no permitió confirmar el valor efectivo. Tras desplegar, comprobar el entorno en el Centro de control, la versión legal aprobada y un checkout con cuenta de cliente. No se confirmó ningún pago durante esta revisión.
