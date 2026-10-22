@@ -38,7 +38,7 @@ openCompany=async function(id){
  try{await billingOpenCompany(id);await refreshBilling();if(new URLSearchParams(location.search).get('pago')==='retorno'){history.replaceState(null,'',location.pathname);await showPlans(BILLING_LOCKED)}}catch(error){if(error.status===402){await refreshBilling();return}throw error}
 };
 const billingChrome=chrome;
-chrome=function(){billingChrome();$('#drawer .bot')?.insertAdjacentHTML('afterbegin','<button data-a="mySubscription"><span>◷</span><span id="billing-status">'+esc(billingStatus())+'</span></button>');if(CO.support)$('#main')?.insertAdjacentHTML('beforebegin',`<p class="access-status">Soporte temporal · solo lectura · vence ${esc(shortDate(CO.supportExpiresAt))}</p>`)};
+chrome=function(){billingChrome();$('#drawer .bot')?.insertAdjacentHTML('afterbegin','<button data-a="mySubscription"><span>◷</span><span>Mi suscripción y pagos<br><small id="billing-status">'+esc(billingStatus())+'</small></span></button>');if(CO.support)$('#main')?.insertAdjacentHTML('beforebegin',`<p class="access-status">Soporte temporal · solo lectura · vence ${esc(shortDate(CO.supportExpiresAt))}</p>`)};
 READ_ACTIONS.add('mySubscription');ACT.mySubscription=()=>{menu(false);showPlans(BILLING_LOCKED)};
 setInterval(()=>{if(!U)return;const status=$('#billing-status');if(status)status.textContent=billingStatus();const ent=BILLING?.entitlement||CO?.entitlement;if(ent?.trialEndsAt&&Date.now()>=Date.parse(ent.trialEndsAt)&&!BILLING_LOCKED){BILLING_LOCKED=true;refreshBilling().catch(()=>{});}},1000);
 setInterval(()=>{if(U&&!document.hidden)refreshBilling().catch(()=>{})},240000);
