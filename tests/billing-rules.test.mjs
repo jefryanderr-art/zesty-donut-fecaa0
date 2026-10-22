@@ -8,6 +8,21 @@ test('la prueba vence a las 24 horas y no se reinicia por consultar',()=>{
  assert.equal(entitlement(sub,false,Date.parse('2026-10-23T12:00:00Z')).access,false);
  assert.equal(sub.trialEndsAt,'2026-10-23T12:00:00Z');
 });
+test('el pago confirmado activa el plan elegido antes de terminar la prueba',()=>{
+ const now=Date.parse('2026-10-22T12:00:00Z');
+ const trialEndsAt='2026-10-23T12:00:00Z';
+ const sub={trialEndsAt,state:'prueba'};
+ assert.equal(entitlement(sub,false,now).state,'prueba');
+ for(const plan of DEFAULT_PLANS){
+  const paid=entitlement({...sub,state:'activo',plan:plan.id,interval:'mensual',paidUntil:dayEnd('2026-11-22')},false,now);
+  assert.equal(paid.access,true);
+  assert.equal(paid.state,'activo');
+  assert.equal(paid.plan,plan.id);
+  assert.equal(paid.paidUntil,dayEnd('2026-11-22').toISOString());
+  assert.equal(paid.trialEndsAt,undefined);
+ }
+ assert.equal(sub.trialEndsAt,trialEndsAt);
+});
 test('los meses y años conservan el calendario sin desbordar febrero',()=>{
  assert.equal(addMonths('2026-01-31',1),'2026-02-28');
  assert.equal(addMonths('2024-02-29',12),'2025-02-28');
