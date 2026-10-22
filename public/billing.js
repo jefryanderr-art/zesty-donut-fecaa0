@@ -52,9 +52,10 @@ function billingSummary(id,locked){
 const billingOpenCompany=openCompany;
 openCompany=async function(id){
  try{
-  const returned=new URLSearchParams(location.search).get('pago')==='retorno';
+  const params=new URLSearchParams(location.search);
+  const returned=params.get('pago')==='retorno'||params.has('token')||params.has('ern');
   let result;
-  if(returned){result=await api('billing/confirm','POST',{});history.replaceState(null,'',location.pathname)}
+  if(returned){const payload=params.has('token')||params.has('ern')?{token:params.get('token'),ern:params.get('ern')}:{};history.replaceState(null,'',location.pathname);result=await api('billing/confirm','POST',payload)}
   await billingOpenCompany(id);await refreshBilling();
   if(returned&&result.status!=='active'){await showPlans(BILLING_LOCKED);const message=$('#billing-error');if(message)message.textContent=['failed','expired','abandoned'].includes(result.status)?'El intento terminó sin pago confirmado. Puedes iniciar otro pago.':'Pagadito todavía está procesando tu pago. La confirmación es automática.'}
  }catch(error){if(error.status===402){await refreshBilling();return}throw error}
