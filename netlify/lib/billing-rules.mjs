@@ -7,9 +7,11 @@ export const DEFAULT_PLANS = [
 export const env = name => globalThis.Netlify?.env?.get(name) ?? process.env[name];
 export function billingError(message,status=400){throw Object.assign(new Error(message),{publicMessage:message,status})}
 export function providerConfig(){
- const mode=env('PAGADITO_ENV') || 'sandbox';
- if(!['sandbox','production'].includes(mode))billingError('Configura un entorno válido de Pagadito.',503);
- return {environment:mode,ready:!!env('PAGADITO_UID')&&!!env('PAGADITO_WSK')&&!!env('PAGADITO_ENV'),base:mode==='production'?'https://connect.pagadito.com':'https://sandbox-connect.pagadito.com'};
+ const received=String(env('PAGADITO_ENV')??'');
+ const normalized=received.trim().toLowerCase();
+ const mode=normalized || 'sandbox';
+ if(!['sandbox','production'].includes(mode))billingError(`PAGADITO_ENV recibió ${JSON.stringify(received.slice(0,80))}. Valores válidos: "sandbox" (pruebas) o "production" (pagos reales). Corrige la variable en Netlify con alcance Functions y vuelve a desplegar.`,503);
+ return {environment:mode,ready:!!env('PAGADITO_UID')&&!!env('PAGADITO_WSK')&&!!normalized,base:mode==='production'?'https://connect.pagadito.com':'https://sandbox-connect.pagadito.com'};
 }
 export const managuaDay = (now=new Date()) => new Intl.DateTimeFormat('en-CA',{timeZone:'America/Managua',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
 export function addMonths(day,count){const [y,m,d]=day.split('-').map(Number),t=new Date(Date.UTC(y,m-1+count,1)),last=new Date(Date.UTC(t.getUTCFullYear(),t.getUTCMonth()+1,0)).getUTCDate();return `${t.getUTCFullYear()}-${String(t.getUTCMonth()+1).padStart(2,'0')}-${String(Math.min(d,last)).padStart(2,'0')}`}

@@ -10,6 +10,22 @@ En Netlify, configura `PAGADITO_UID`, `PAGADITO_WSK` y `PAGADITO_ENV`, con alcan
 
 El cambio posterior se realiza en esas mismas variables: sustituye las dos credenciales por las del comercio real, selecciona el modo `production` y redespliega. Antes de cambiar, cancela y concilia las autorizaciones pendientes del entorno anterior. Cada autorización conserva su entorno y no puede consultarse o cancelarse con las credenciales del otro. Los pagos de sandbox conservan su historial, pero no activan una suscripción en producción ni se contabilizan como ingresos reales. Los pagos manuales nuevos también quedan identificados como pruebas cuando el entorno es sandbox.
 
+### Configuración exacta para un pago de prueba
+
+En Site configuration → Environment variables, configura estas tres variables con alcance **Functions**:
+
+| Nombre | Valor |
+|---|---|
+| `PAGADITO_ENV` | `sandbox` |
+| `PAGADITO_UID` | UID del comercio sandbox proporcionado por Pagadito |
+| `PAGADITO_WSK` | WSK del mismo comercio sandbox proporcionado por Pagadito |
+
+Las credenciales son privadas: cópialas directamente del comercio a Netlify. No se incluyen en el código ni se muestran en la web. Builds y Runtime no son necesarios para estas Functions; Runtime corresponde a otras funciones de la plataforma, como formularios y solicitudes firmadas. Aplica las variables al contexto Production si pruebas en acontec.company; el contexto de despliegue Production es independiente del modo sandbox del proveedor. Para una vista previa, configura también Deploy Previews.
+
+La lectura está centralizada en `netlify/lib/billing-rules.mjs`, mediante `Netlify.env.get` con respaldo en `process.env`, exclusivamente en el servidor. `providerConfig()` aplica `trim().toLowerCase()` a `PAGADITO_ENV`. Solo acepta `sandbox` y `production`; `test` y `live` no son alias válidos. Un valor ausente o en blanco mantiene el proveedor sin disponibilidad y nunca habilita pagos reales. Un valor inválido devuelve un error 503 que identifica la variable, muestra hasta 80 caracteres del valor recibido y enumera las opciones válidas, sin incluir UID ni WSK. El checkout ya presenta ese error como texto.
+
+Después de guardar las variables, realiza un nuevo despliegue para que las Functions reciban los cambios. Puedes usar **Clear cache and deploy site**, aunque limpiar la caché no es necesario para actualizar estas variables: basta un nuevo deploy. Tras el despliegue, confirma «Modo de pruebas: dinero ficticio» en el checkout y el dominio `sandbox-connect.pagadito.com` al continuar. El botón también exige disponibilidad del proveedor, documentos legales publicados y aceptación explícita. Esta revisión estática no acredita una conexión ni un pago confirmado con Pagadito.
+
 Las variables opcionales `PAGADITO_MONTHS`, `PAGADITO_YEARS` y `PAGADITO_GRACE_DAYS` controlan los cobros y la gracia. Se programan por defecto 12 mensualidades o 3 anualidades, incluyendo el primer cobro de hoy. El resumen presenta el número y el importe antes de aceptar. Los cambios de precio de planes no alteran los cobros ya autorizados. Una autorización ambigua por pérdida de respuesta bloquea otro intento hasta conciliarla con Pagadito; no se repite a ciegas un posible cobro.
 
 ## Planes y módulos
