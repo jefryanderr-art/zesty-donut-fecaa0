@@ -46,12 +46,18 @@ function billingSummary(id,locked){
  async function load(){details=null;retry.hidden=true;error.textContent='';mode.textContent='Consultando disponibilidad del pago…';update();try{const data=await api('billing/me');if(!current())return;details=data;BILLING=data;const count=annual?data.billingYears:data.billingMonths;mode.textContent=ready()?`${data.provider.environment==='sandbox'?'Modo de pruebas: dinero ficticio.':'Pagos reales en USD.'} Se programan ${count} cobros de ${usdCents(amount)}, incluido el de hoy. Versión legal: ${data.legalVersion}.`:data.checkoutReason||'El pago no está habilitado. Contacta con Acontec.';retry.hidden=ready();update()}catch(e){if(!current())return;mode.textContent='No se pudo verificar la disponibilidad del pago.';error.textContent=e.message;retry.hidden=false;update()}}
  sheet.querySelector('#billing-back').onclick=()=>{if(!busy)showPlans(locked)};
  accepted.onchange=update;retry.onclick=load;
- button.onclick=async()=>{if(busy||!ready()||!accepted.checked)return;busy=true;error.textContent='';sheet.querySelector('#billing-back').disabled=true;update();try{const r=await api('checkout','POST',{plan:id,interval,accepted:true,planVersion:p.version,amountCents:amount,legalVersion:details.legalVersion});const url=new URL(r.url);if(url.protocol!=='https:'||!['sandbox-connect.pagadito.com','connect.pagadito.com'].includes(url.hostname)||url.username||url.password||url.port)throw new Error('Enlace de pago inválido');location.assign(url.href)}catch(e){if(!current())return;error.textContent=e.message;BILLING_PLANS=[];busy=false;sheet.querySelector('#billing-back').disabled=false;update()}};
+ button.onclick=async()=>{if(busy||!ready()||!accepted.checked)return;busy=true;error.textContent='';sheet.querySelector('#billing-back').disabled=true;update();try{const r=await api('checkout','POST',{plan:id,interval,accepted:true,planVersion:p.version,amountCents:amount,legalVersion:details.legalVersion});if(r.status==='active'){await refreshBilling();root.remove();await openCompany(CO?.id||COS[0]?.id);return}const url=new URL(r.url);if(url.protocol!=='https:'||!['sandbox-connect.pagadito.com','connect.pagadito.com'].includes(url.hostname)||url.username||url.password||url.port)throw new Error('Enlace de pago inválido');location.assign(url.href)}catch(e){if(!current())return;error.textContent=e.message;BILLING_PLANS=[];busy=false;sheet.querySelector('#billing-back').disabled=false;update()}};
  load();button.focus();
 }
 const billingOpenCompany=openCompany;
 openCompany=async function(id){
- try{await billingOpenCompany(id);await refreshBilling();if(new URLSearchParams(location.search).get('pago')==='retorno'){history.replaceState(null,'',location.pathname);await showPlans(BILLING_LOCKED)}}catch(error){if(error.status===402){await refreshBilling();return}throw error}
+ try{
+  const returned=new URLSearchParams(location.search).get('pago')==='retorno';
+  let result;
+  if(returned){result=await api('billing/confirm','POST',{});history.replaceState(null,'',location.pathname)}
+  await billingOpenCompany(id);await refreshBilling();
+  if(returned&&result.status!=='active'){await showPlans(BILLING_LOCKED);const message=$('#billing-error');if(message)message.textContent=['failed','expired','abandoned'].includes(result.status)?'El intento terminó sin pago confirmado. Puedes iniciar otro pago.':'Pagadito todavía está procesando tu pago. La confirmación es automática.'}
+ }catch(error){if(error.status===402){await refreshBilling();return}throw error}
 };
 const billingChrome=chrome;
 chrome=function(){billingChrome();$('#drawer .bot')?.insertAdjacentHTML('afterbegin','<button data-a="mySubscription"><span>◷</span><span>Mi suscripción y pagos<br><small id="billing-status">'+esc(billingStatus())+'</small></span></button>');billingTrialOffer();if(CO.support)$('#main')?.insertAdjacentHTML('beforebegin',`<p class="access-status">Soporte temporal · solo lectura · vence ${esc(shortDate(CO.supportExpiresAt))}</p>`)};

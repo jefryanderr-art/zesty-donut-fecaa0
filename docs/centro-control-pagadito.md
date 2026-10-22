@@ -120,3 +120,16 @@ La actualización de datos `20261022223000_publish_approved_payment_policies.sql
 La actualización se aplica durante el despliegue, con bloqueo de la fila, incremento de revisión y evento de auditoría con la huella contractual. Conserva documentos ya aprobados. Si encuentra un borrador diferente o aceptaciones de las versiones involucradas, detiene la publicación para impedir sobrescrituras. No modifica el esquema ni migraciones anteriores y no elimina datos.
 
 La presencia de variables de Pagadito no acredita una conexión con el comercio. Se solicitó guardar el entorno de prueba en la configuración de producción; la CLI informó éxito, pero la lectura posterior no permitió confirmar el valor efectivo. Tras desplegar, comprobar el entorno en el Centro de control, la versión legal aprobada y un checkout con cuenta de cliente. No se confirmó ningún pago durante esta revisión.
+
+
+## Conciliación automática y expiración de intentos
+
+El retorno `?pago=retorno` solicita la confirmación al servidor antes de cargar la empresa, incluso si el acceso anterior venció. El servidor consulta Pagadito; el navegador no aporta estados, importes ni referencias que concedan vigencia. Solo los cargos `COMPLETED` de la respuesta del proveedor conceden cobertura, con las validaciones de referencia, importe y entorno existentes. El fallo del primer cargo termina el intento aunque existan cuotas futuras pendientes.
+
+La función `resolve-payments` procesa hasta 50 intentos por minuto en producción. Consulta primero los que conservan token y expira los intentos de más de 15 minutos. Al crear otro checkout, concilia el anterior: si ya fue pagado devuelve su activación; en caso contrario lo abandona y permite el nuevo intento. Mantiene bloqueo por usuario para solicitudes simultáneas y una espera breve mientras otra solicitud está creando el enlace. Intenta cancelar los cargos pendientes cuyos tokens conoce. La cancelación no confirmada se registra sin afirmar que el proveedor haya cancelado.
+
+Las consultas de estado tienen un reintento por timeout. Crear una autorización y cancelar cargos no se reintenta a ciegas. Los logs incluyen operación, estado HTTP y código PG, sin cuerpos de respuesta, credenciales ni tokens. Expirar o abandonar un intento es un estado local, no prueba de que Pagadito haya revocado la autorización. Los tokens e históricos se conservan; el webhook y el respaldo diario siguen conciliando confirmaciones tardías, con claves de pago idempotentes y sin reemplazar un plan posterior ya activado.
+
+Una respuesta perdida al crear una autorización puede dejar el intento sin token. La API integrada necesita ese token para consultar; no se inventa una confirmación ni se afirma una cancelación. Estos intentos expiran automáticamente y no bloquean nuevos pagos. Para garantizar la revocación de una autorización sin token se necesita un mecanismo de búsqueda por referencia respaldado por Pagadito.
+
+La sesión de implementación solo pudo consultar la rama de vista previa, que no contenía autorizaciones. No se modificaron pagos de producción ni se verificaron las dos autorizaciones reportadas. El despliegue y las pruebas de integración, incluidos retorno, timeout, rechazo, concurrencia y confirmación tardía, quedan sujetos a la validación de la plataforma. No se ejecutaron pruebas, servidores ni compilaciones locales.

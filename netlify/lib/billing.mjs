@@ -41,16 +41,22 @@ export async function checkout(session,body,request){
  if(body.legalVersion!==legal.content.version)billingError('Los documentos legales cambiaron. Revisa la versión vigente.',409);
  const count=Math.max(1,Math.min(step===12?5:24,Number(env(step===12?'PAGADITO_YEARS':'PAGADITO_MONTHS')||(step===12?3:12))||1));
  const charges=Array.from({length:count},(_,i)=>({ern:`ACT-${id}-${String(i+1).padStart(2,'0')}`,date:addMonths(managuaDay(),i*step),amountCents,status:'PENDING',months:step}));
- let existing;
+ // Resolver antes de bloquear la fila; las consultas remotas no mantienen bloqueos SQL.
+ const previous=await db.select().from(billingCheckouts).where(and(eq(billingCheckouts.email,session.email),sql`${billingCheckouts.state} in ('creating','pending','unknown')`));
+ for(const row of previous){
+  if(row.state==='creating'&&Date.now()-row.createdAt.getTime()<60000)billingError('El enlace se está preparando. Intenta de nuevo en unos segundos.',409);
+  const resolved=await resolveCheckout(row.id,'replace');
+  if(resolved?.state==='active')return {status:'active'};
+ }
+
  await db.transaction(async client=>{
   await client.select().from(users).where(eq(users.email,session.email)).for('update');
   const [open]=await client.select().from(billingCheckouts).where(and(eq(billingCheckouts.email,session.email),sql`${billingCheckouts.state} in ('creating','pending','unknown')`));
-  if(open){if(open.state==='pending'&&open.plan===body.plan&&open.interval===body.interval&&open.environment===config.environment){existing=open;return}billingError('Ya hay un pago en curso. Verifícalo o abandónalo antes de crear otro.',409)}
+  if(open)billingError('El enlace se está preparando. Intenta de nuevo en unos segundos.',409);
   const [currentLegal]=await client.select().from(siteContent).where(eq(siteContent.id,'legal')).for('share');if(!currentLegal.content.approved||legalHash(currentLegal.content)!==legalHash(legal.content))billingError('Los documentos legales cambiaron. Recarga.',409);
   await client.insert(legalAcceptances).values({email:session.email,version:legal.content.version,contentHash:legalHash(legal.content)}).onConflictDoNothing();
   await client.insert(billingCheckouts).values({id,email:session.email,plan:plan.id,interval:body.interval,environment:config.environment,charges,acceptedTerms:{version:legal.content.version,at:new Date().toISOString(),ip:request.headers.get('x-nf-client-connection-ip')||null,hash:createHash('sha256').update(JSON.stringify(legal.content)).digest('hex')}});
  });
- if(existing)return {url:safePaymentUrl(existing.paymentUrl),count:existing.charges.length};
  let definitelyRejected=false;
  try{
   const response=await pagadito('authorization-recurring-payments',{permissions:'initial_payment,automatic_charges',currency:'USD',pending_charges:charges.map(c=>({ern:c.ern,description:`Acontec ${plan.name} ${body.interval}`,date:c.date,amount:(c.amountCents/100).toFixed(2),details:[{quantity:1,description:`Suscripción ${plan.name}`,price:(c.amountCents/100).toFixed(2)}]}))});
@@ -60,7 +66,7 @@ export async function checkout(session,body,request){
   await db.update(billingCheckouts).set({state:'pending',providerToken:response.data.token,paymentUrl:url}).where(eq(billingCheckouts.id,id));
   await event(db,session.email,session.email,'Checkout iniciado',{checkout:id,plan:plan.id,interval:body.interval,environment:config.environment,count});return {url,count};
  }catch(error){
-  // Una respuesta perdida puede haber creado una autorización: se conserva para revisión y no se reintenta un cobro a ciegas.
+  // Una respuesta perdida conserva la referencia para conciliación automática; no se duplica la autorización.
   await db.update(billingCheckouts).set({state:definitelyRejected?'failed':'unknown'}).where(eq(billingCheckouts.id,id));throw error;
  }
 }
@@ -130,7 +136,7 @@ export async function syncCheckout(id){
   }
   const [latest]=await client.select({id:billingCheckouts.id,createdAt:billingCheckouts.createdAt}).from(billingCheckouts).where(and(eq(billingCheckouts.email,row.email),sql`${billingCheckouts.state} in ('active','canceled')`)).orderBy(desc(billingCheckouts.createdAt)).limit(1);
   const eligible=!latest||latest.createdAt.getTime()<=row.createdAt.getTime();
-  activation=firstCompleted&&row.state==='pending'&&eligible;
+  activation=firstCompleted&&!['active','canceled'].includes(row.state)&&eligible;
   if(firstCompleted&&eligible){
    await subscription(row.email,client);const [sub]=await client.select().from(subscriptions).where(eq(subscriptions.email,row.email)).for('update');
    let last;for(const charge of charges){if(charge.status!=='COMPLETED')break;last=charge}
@@ -141,14 +147,53 @@ export async function syncCheckout(id){
     await client.update(subscriptions).set(patch).where(eq(subscriptions.email,row.email));await projectProfile(client,{...sub,...patch});await event(client,row.email,'Pagadito','Vigencia sincronizada',{checkout:row.id,paidUntil:paidUntil.toISOString()});
    }
   }
-  await client.update(billingCheckouts).set({charges,state:row.state==='canceled'?'canceled':firstCompleted?'active':charges.every(c=>['FAILED','EXPIRED','CANCELED','REVOKED','UNCOLLECTABLE'].includes(c.status))?'failed':row.state,syncedAt:new Date()}).where(eq(billingCheckouts.id,id));
+  await client.update(billingCheckouts).set({charges,state:row.state==='canceled'?'canceled':firstCompleted?'active':['FAILED','EXPIRED','CANCELED','REVOKED','UNCOLLECTABLE'].includes(charges[0]?.status)?'failed':row.state,syncedAt:new Date()}).where(eq(billingCheckouts.id,id));
  });
  if(activation||snapshot.state==='active')await cancelOlderCheckouts(snapshot);
 }
 async function cancelOlderCheckouts(current){const rows=await db.select().from(billingCheckouts).where(eq(billingCheckouts.email,current.email));for(const row of rows)if(row.id!==current.id&&row.createdAt<=current.createdAt&&['active','pending'].includes(row.state))await cancelCheckout(row)}
 async function cancelOtherCheckouts(email,except){const rows=await db.select().from(billingCheckouts).where(eq(billingCheckouts.email,email));for(const row of rows)if(row.id!==except&&['active','pending','unknown','creating'].includes(row.state)){if(!row.providerToken)billingError('Hay una autorización pendiente de conciliación con Pagadito. Revisa el comercio antes de cancelar.',409);await cancelCheckout(row)}}
 async function cancelCheckout(row){if(row.charges.some(c=>['PENDING','VERIFYING'].includes(c.status)&&!c.token))billingError('Verifica primero los cobros pendientes; todavía no pueden cancelarse.',409);const tokens=row.charges.filter(c=>['PENDING','VERIFYING'].includes(c.status)&&c.token).map(c=>c.token);if(tokens.length){const r=await pagadito('cancel-pending-payments',{token:tokens},row.environment);if(r.code!=='PG1011')billingError('Pagadito no confirmó la cancelación. Reintenta; los cobros siguen visibles.',502)}else if(row.state==='pending')billingError('Verifica primero el pago pendiente para obtener sus cobros.',409);await db.update(billingCheckouts).set({state:'canceled',charges:row.charges.map(c=>['PENDING','VERIFYING'].includes(c.status)?{...c,status:'CANCELED'}:c)}).where(eq(billingCheckouts.id,row.id))}
-export async function confirmSubscription(session){const rows=await db.select().from(billingCheckouts).where(and(eq(billingCheckouts.email,session.email),sql`${billingCheckouts.state} in ('pending','active')`));for(const row of rows)await syncCheckout(row.id);const a=await accountAccess(session.email);return {status:a.ent.state==='activo'?'active':'pending',entitlement:a.ent}}
+// Un estado local terminal no equivale a una cancelación del proveedor. Se siguen
+// conciliando autorizaciones con token para reconocer confirmaciones tardías.
+export async function resolveCheckout(id,reason='return'){
+ const [snapshot]=await db.select().from(billingCheckouts).where(eq(billingCheckouts.id,id));
+ if(!snapshot)return null;
+ let unavailable=false;
+ if(snapshot.providerToken){
+  try{await syncCheckout(id)}catch{unavailable=true;console.warn('pagadito_reconcile_deferred',{checkout:id,reason})}
+ }
+ const [checked]=await db.select().from(billingCheckouts).where(eq(billingCheckouts.id,id));
+ if(checked&&['creating','pending','unknown'].includes(checked.state)&&checked.charges[0]?.status!=='COMPLETED'&&(reason==='replace'||Date.now()-checked.createdAt.getTime()>=15*60*1000)){
+  const tokens=checked.charges.filter(c=>['PENDING','VERIFYING'].includes(c.status)&&c.token).map(c=>c.token);
+  if(tokens.length)try{const response=await pagadito('cancel-pending-payments',{token:tokens},checked.environment);if(response.code!=='PG1011')console.warn('pagadito_cancel_deferred',{checkout:id})}catch{console.warn('pagadito_cancel_deferred',{checkout:id})}
+ }
+ return db.transaction(async client=>{
+  await client.select().from(users).where(eq(users.email,snapshot.email)).for('update');
+  const [row]=await client.select().from(billingCheckouts).where(eq(billingCheckouts.id,id)).for('update');
+  if(row.state==='active'||row.charges[0]?.status==='COMPLETED')return row;
+  if(!['creating','pending','unknown'].includes(row.state))return row;
+  const expired=Date.now()-row.createdAt.getTime()>=15*60*1000;
+  if(!expired&&reason==='scheduled'&&!unavailable)return row;
+  const state=expired?'expired':reason==='replace'?'abandoned':unavailable||!row.providerToken?'failed':null;
+  if(!state)return row;
+  await client.update(billingCheckouts).set({state,syncedAt:new Date()}).where(eq(billingCheckouts.id,id));
+  await event(client,row.email,'Pagadito','Intento resuelto automáticamente',{checkout:id,state,reason,providerUnavailable:unavailable,providerTokenAvailable:!!row.providerToken});
+  return {...row,state};
+ });
+}
+export async function reconcilePendingCheckouts(){
+ const rows=await db.select({id:billingCheckouts.id}).from(billingCheckouts).where(sql`${billingCheckouts.state} in ('creating','pending','unknown')`).orderBy(billingCheckouts.createdAt).limit(50);
+ const results=await Promise.allSettled(rows.map(row=>resolveCheckout(row.id,'scheduled')));
+ console.info('pagadito_automatic_resolution',{processed:rows.length,errors:results.filter(r=>r.status==='rejected').length});
+}
+export async function confirmSubscription(session){
+ if(session.member)billingError('Solo el dueño consulta su pago.',403);
+ const rows=await db.select().from(billingCheckouts).where(and(eq(billingCheckouts.email,session.email),sql`${billingCheckouts.state} in ('creating','pending','unknown','active','failed','expired','abandoned')`)).orderBy(desc(billingCheckouts.createdAt)).limit(1);
+ for(const row of rows)await resolveCheckout(row.id);
+ const [latest]=await db.select().from(billingCheckouts).where(eq(billingCheckouts.email,session.email)).orderBy(desc(billingCheckouts.createdAt)).limit(1);
+ const a=await accountAccess(session.email);return {status:latest?.state||'none',entitlement:a.ent};
+}
 export async function cancelSubscription(session,actor=session.email){if(session.member)billingError('Solo el dueño cancela cobros.',403);await cancelOtherCheckouts(session.email,null);await db.transaction(async client=>{const sub=await subscription(session.email,client);await client.update(subscriptions).set({canceledAt:new Date(),version:sub.version+1}).where(eq(subscriptions.email,session.email));await event(client,session.email,actor,'Cobros futuros cancelados',{});await projectProfile(client,{...sub,canceledAt:new Date()})});return {ok:true}}
 export async function billingRoute(path,method,body,session,request,admin){
  if(path==='billing/me'&&method==='GET'){if(session.member){const [company]=await db.select({ownerEmail:companies.ownerEmail}).from(companies).where(eq(companies.id,session.member.companyId));return billingMe({...session,email:company.ownerEmail},false)}return billingMe(session,admin);}
