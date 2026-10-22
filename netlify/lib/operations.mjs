@@ -369,12 +369,14 @@ export async function runOperation(companyId, session, body) {
         output=advancedOperation(data,access,operationSession,body,{requireValue,requirePermission,appendEntry,dateValue,amount,actorName});
       } else if (operation === 'branch') {
         if(!access.owner) accessError('Solo el dueño administra sucursales.');
+        if(access.billingPlan?.blockedModules?.includes('sucursales'))accessError('Tu plan no incluye administración de sucursales.');
         const branches=companyBranches(company.data),old=branches.find(b=>b.id===body.id);
         const name=text(body.name,100),code=text(body.code,16).toUpperCase();
         requireValue(name && /^[A-Z0-9-]{1,16}$/.test(code), 'Revisa nombre y código de sucursal.');
         requireValue(!branches.some(b=>b.code===code&&b.id!==old?.id),'Código de sucursal repetido.');
         requireValue(!body.id||old,'Sucursal no encontrada.');
-        if(!old){const [settings]=await client.select().from(siteContent).where(eq(siteContent.id,'branch-limits'));requireValue(branches.length < (settings?.content?.limit||5),'Se alcanzó el límite de sucursales configurado por Acontec.');}
+        if(!old&&access.billingPlan?.limits?.branches!=null)requireValue(branches.length<access.billingPlan.limits.branches,'Se alcanzó el límite de sucursales del plan.');
+        if(!old&&access.billingPlan?.limits?.branches!==null){const [settings]=await client.select().from(siteContent).where(eq(siteContent.id,'branch-limits'));requireValue(branches.length < (settings?.content?.limit||5),'Se alcanzó el límite de sucursales configurado por Acontec.');}
         const branch={id:old?.id||randomUUID(),name,code,address:text(body.address,1000),phone:text(body.phone,80),active:body.active!==false,main:old?.main||false,createdAt:old?.createdAt||new Date().toISOString()};
         requireValue(!branch.main||branch.active,'La sucursal principal debe permanecer activa.');
         if(!branch.active)requireValue(!data.shifts.some(s=>!s.closedAt&&recordBranch(s)===branch.id),'Cierra los turnos antes de desactivar una sucursal.');

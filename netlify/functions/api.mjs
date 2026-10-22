@@ -1,4 +1,8 @@
 import '../../public/cloud-sync.js';
+import {deliverMessages} from '../lib/service-mail.mjs';
+import {serviceReceipt} from '../lib/service-receipts.mjs';
+import {plans, billingRoute, subscription, requireBilling} from '../lib/billing.mjs';
+import {requirePlatform,platformSummary,platformAction,supportAction} from '../lib/platform.mjs';
 import { gunzipSync } from 'node:zlib';
 import { statement } from '../lib/reporting.mjs';
 import { integrityReport } from '../lib/accounting-engine.mjs';
@@ -82,7 +86,7 @@ async function issueSession(email, admin, request, memberId = null) {
 async function readSession(request) {
   const token = sessionToken(request);
   if (!/^[a-f0-9]{64}$/.test(token)) return null;
-  const [session] = await db.select({ email: sessions.email, admin: sessions.admin, memberId: sessions.memberId, activeBranchId: sessions.activeBranchId, name: users.name, expiresAt: sessions.expiresAt }).from(sessions).innerJoin(users, eq(users.email, sessions.email))
+  const [session] = await db.select({ email: sessions.email, admin: sessions.admin, memberId: sessions.memberId, activeBranchId: sessions.activeBranchId, activeCompanyId:sessions.activeCompanyId, name: users.name, expiresAt: sessions.expiresAt }).from(sessions).innerJoin(users, eq(users.email, sessions.email))
     .where(and(eq(sessions.tokenHash, hashToken(token)), gt(sessions.expiresAt, new Date())));
   if (session?.memberId) {
     const [member] = await db.select().from(companyMembers).where(and(eq(companyMembers.id, session.memberId), eq(companyMembers.active, true)));
@@ -150,6 +154,7 @@ const handleRequest = async (request, context, metrics) => {
       const [site] = await db.select().from(siteContent).where(eq(siteContent.id, 'public'));
       return json({ googleClientId, site: site?.content || {}, siteRevision: siteRevision(site?.content) });
     }
+    if(path==='plans'&&method==='GET')return json({plans:(await plans()).filter(p=>p.active)});
     if (path === 'legal' && method === 'GET') return json(await legalDocument());
     if (path === 'image' && method === 'GET') {
       const key = url.searchParams.get('key') || '';
@@ -334,7 +339,11 @@ const handleRequest = async (request, context, metrics) => {
     const canEditSite = isAdmin;
     const consent = await legalState(session);
     if (path === 'legal/accept' && method === 'POST') return json(await acceptLegal(session, body));
-    if (path === 'customers-admin') return json(await customerAdmin(method, body, url, session));
+    if(['billing/me','checkout','billing/confirm','cancel'].includes(path))return json(await billingRoute(path,method,body,session,request,isAdmin));
+    if(path==='support-grant')return json(await supportAction(session,url.searchParams.get('c'),method,body));
+    if(path==='service-receipt'){await requirePlatform(session,url.searchParams.get('c'));return json(await serviceReceipt(method,url.searchParams.get('id'),body,session));}
+    if(path==='platform'){await requirePlatform(session,url.searchParams.get('c'));if(method==='GET')return json(await platformSummary(url));if(method==='POST'){const result=await platformAction(session,body);if(['message','verifyPayment'].includes(body.operation))context.waitUntil(deliverMessages(20));return json(result);}return fail('Método no permitido.',405);}
+    if (path === 'customers-admin') {await requirePlatform(session,url.searchParams.get('c'));return json(await customerAdmin(method, body, url, session));}
     if (consent.required && !isAdmin && path !== 'me') return fail('Debes aceptar los términos de uso y la política de privacidad vigentes.', 428);
     if(['branch-comparison','consolidated'].includes(path)&&method==='GET'){
       const from=url.searchParams.get('from')||'2000-01-01',to=url.searchParams.get('to')||new Date().toISOString().slice(0,10);
@@ -536,12 +545,14 @@ const handleRequest = async (request, context, metrics) => {
     if (path === 'me' && method === 'GET') return json({ user: { email: session.member?.username || session.email, name: session.member?.name || session.name, worker: !!session.member, admin: isAdmin, editor: canEditSite, consentRequired: consent.required, legal: consent.document }, companies: owned });
     if (path === 'company' && method === 'POST') {
       if (session.member) return fail('Los colaboradores no pueden crear empresas.', 403);
-      if (session.email !== PLATFORM_OWNER && owned.some(company => company.owner)) return fail('Tu cuenta permite una empresa. Puedes crear sucursales dentro de ella.', 403);
+      const billing=await requireBilling(session.email,isAdmin);
+      const companyLimit=isAdmin?null:billing.plan?.limits?.companies;
+      if(companyLimit!=null&&owned.filter(c=>c.owner).length>=companyLimit)return fail('Se alcanzó el límite de empresas del plan.',403);
       if (!companyName(body.name)) return fail('Escribe un nombre de empresa');
       const company = await db.transaction(async client => {
         await client.select({email:users.email}).from(users).where(eq(users.email,session.email)).for('update');
-        const current = await client.select({id:companies.id}).from(companies).where(and(eq(companies.ownerEmail,session.email),isNull(companies.archivedAt))).limit(1);
-        if(session.email !== PLATFORM_OWNER && current.length) accessError('Tu cuenta permite una empresa. Usa sucursales.',403);
+        const current = await client.select({id:companies.id}).from(companies).where(and(eq(companies.ownerEmail,session.email),isNull(companies.archivedAt)));
+        if(companyLimit!=null&&current.length>=companyLimit) accessError('Se alcanzó el límite de empresas del plan.',403);
         const [created] = await client.insert(companies).values({ownerEmail:session.email,name:companyName(body.name),description:String(body.description||'').trim().slice(0,2000)}).returning({id:companies.id});
         await audit(client,created.id,session,'Empresa creada',[{area:'name',before:null,after:companyName(body.name)}],0);
         return created;
@@ -553,7 +564,7 @@ const handleRequest = async (request, context, metrics) => {
       await db.transaction(async client => {
         const access=await companyAccess(client,body.id,session,true),company=access.company;
         if(!access.owner) accessError('Solo puedes borrar tus propias empresas.');
-        if(company.name.trim().toLowerCase()==='acontec') accessError('Acontec es la empresa principal y no se puede borrar.');
+        if(company.isPlatformCompany||company.name.trim().toLowerCase()==='acontec') accessError('Acontec es la empresa principal y no se puede borrar.');
         if(body.confirmName!==company.name || body.revision!==company.revision) accessError('Confirma el nombre y la revisión vigente de la empresa.',409);
         await audit(client,company.id,session,'Empresa archivada por el administrador',[{area:'empresa',before:company.name,after:'Archivada; datos y respaldos conservados'}],company.revision);
         await client.update(companies).set({archivedAt:new Date(),revision:company.revision+1}).where(eq(companies.id,company.id));
@@ -595,7 +606,8 @@ const handleRequest = async (request, context, metrics) => {
         return await db.transaction(async client => {
           const access = await companyAccess(client, companyId, session, true);
           const { id, name, description } = access.company;
-          const company = { id, name, description, owner: access.owner, permissions: access.permissions, memberId: access.member?.id, role: access.owner ? 'Dueño' : access.member?.role, branches: access.branches, branchId: access.branchId, unrestrictedBranches: access.unrestrictedBranches };
+          await client.update(sessions).set({activeCompanyId:id}).where(eq(sessions.tokenHash,hashToken(sessionToken(request))));
+          const company = { isPlatformCompany:access.company.isPlatformCompany, billingPlan:access.billingPlan, entitlement:access.entitlement, readOnlyLimit:access.readOnlyLimit, support:access.support||false,supportExpiresAt:access.supportExpiresAt, id, name, description, owner: access.owner, permissions: access.permissions, memberId: access.member?.id, role: access.owner ? 'Dueño' : access.member?.role, branches: access.branches, branchId: access.branchId, unrestrictedBranches: access.unrestrictedBranches };
           return json({ data: projectData(access.company.data, access), revision: access.company.revision, company });
         });
       }

@@ -1,3 +1,6 @@
+import { requireBilling } from './billing.mjs';
+import { moduleIncluded,supportGrantActive } from './billing-rules.mjs';
+import { users, supportGrants } from '../../db/schema.ts';
 import { TRADE_ARRAYS } from './trade.mjs';
 import { CROSS_BRANCH_OPS } from './transfers.mjs';
 import { ADVANCED_ARRAYS } from './advanced.mjs';
@@ -8,7 +11,7 @@ import { normalizeDocument } from './accounting-codec.mjs';
 import { promisify } from 'node:util';
 import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
-import { and, desc, eq, lt, or, isNull } from 'drizzle-orm';
+import { and, desc, eq, lt, or, isNull, sql } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
 import { companies, companyMembers, companyBackups, auditEvents, sessions, saveOperations } from '../../db/schema.ts';
 import { OPERATION_ARRAYS, roleAllows, salesAdministrator, cashAdministrator, operatorId, receiptRecords } from './policies.mjs';
@@ -20,6 +23,9 @@ const round = value => Math.round(value * 100) / 100;
 const canonical = value => JSON.stringify(value, (key, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(name => [name, item[name]])) : item);
 export const equal = (first, second) => canonical(first) === canonical(second);
 export const allowed = (access, module, write = false) => {
+  if(access.support && write)return false;
+  if(access.billingPlan && !moduleIncluded(access.billingPlan,module))return false;
+  if(access.readOnlyLimit && write)return false;
   if (access.owner) return true;
   const fallback = { facturacion: 'ventas', cajas: 'contabilidad', costos: 'gastos', proveedores: 'compras' };
   const level = access.permissions?.[module] ?? (access.member?.role?.toLowerCase() === 'contador' ? access.permissions?.[fallback[module]] : undefined);
@@ -47,13 +53,16 @@ export async function verifyPassword(password, digest) {
   return expected.length === key.length && timingSafeEqual(expected, key) && String(password).length <= 128;
 }
 export async function accessibleCompanies(session) {
-  const summary = { id: companies.id, name: companies.name, description: companies.description };
+  const summary = { isPlatformCompany: companies.isPlatformCompany, id: companies.id, name: companies.name, description: companies.description };
   const rows = session.member ? [] : await db.select(summary).from(companies).where(and(eq(companies.ownerEmail, session.email), isNull(companies.archivedAt)));
   const memberships = await db.select({ member: { id: companyMembers.id, permissions: companyMembers.permissions, role: companyMembers.role }, company: summary }).from(companyMembers)
     .innerJoin(companies, eq(companies.id, companyMembers.companyId))
     .where(and(isNull(companies.archivedAt), eq(companyMembers.active, true), session.member ? eq(companyMembers.id, session.member.id) : eq(companyMembers.email, session.email)));
-  return [...rows.map(company => ({ ...company, owner: true, permissions: {} })), ...memberships.filter(row => !rows.some(company => company.id === row.company.id)).map(({ company, member }) => ({ ...company, owner: false, permissions: member.permissions, memberId: member.id, role: member.role }))]
-    .map(({ id, name, description, owner, permissions, memberId, role }) => ({ id, name, description, owner, permissions, memberId, role: owner ? 'Dueño' : role }));
+  const grants=session.member?[]:await db.select({company:summary}).from(supportGrants).innerJoin(companies,eq(companies.id,supportGrants.companyId)).innerJoin(users,eq(users.email,supportGrants.email)).where(and(eq(supportGrants.email,session.email),eq(users.platformAdmin,true),sql`${supportGrants.expiresAt}>now()`,isNull(companies.archivedAt)));
+  const [viewer]=await db.select({platformAdmin:users.platformAdmin}).from(users).where(eq(users.email,session.email));
+  const supportCompanies=grants.filter(({company})=>!rows.some(c=>c.id===company.id)&&!memberships.some(m=>m.company.id===company.id)).map(({company})=>({...company,owner:false,permissions:Object.fromEntries(MODULES.map(m=>[m,'lectura'])),role:'Soporte temporal'}));
+  return [...supportCompanies,...rows.map(company => ({ ...company, owner: true, permissions: {} })), ...memberships.filter(row => !rows.some(company => company.id === row.company.id)&&(!viewer?.platformAdmin||grants.some(g=>g.company.id===row.company.id))).map(({ company, member }) => ({ ...company, owner: false, permissions: member.permissions, memberId: member.id, role: member.role }))]
+    .map(({ isPlatformCompany, id, name, description, owner, permissions, memberId, role }) => ({ isPlatformCompany, id, name, description, owner, permissions, memberId, role: owner ? 'Dueño' : role }));
 }
 export async function companyAccess(client, companyId, session, lock = false, loadAccounting = true) {
   if (!/^[a-f0-9-]{36}$/.test(companyId || '')) accessError('Empresa no encontrada.', 404);
@@ -61,14 +70,31 @@ export async function companyAccess(client, companyId, session, lock = false, lo
   if (lock) query = query.for('update');
   const [company] = await query;
   if (!company || company.archivedAt) accessError('Empresa no encontrada.', 404);
+  const finish=async access=>{
+    const [ownerUser]=await client.select({platformAdmin:users.platformAdmin}).from(users).where(eq(users.email,company.ownerEmail));
+    const billing=await requireBilling(company.ownerEmail,ownerUser?.platformAdmin===true,client);
+    const result=await branchAccess(access,session);result.billingPlan=billing.plan;result.entitlement=billing.ent;
+    const ownedRows=await client.select({id:companies.id}).from(companies).where(and(eq(companies.ownerEmail,company.ownerEmail),isNull(companies.archivedAt))).orderBy(companies.id);
+    const limit=billing.plan?.limits?.companies;result.readOnlyLimit=limit!=null&&ownedRows.findIndex(c=>c.id===company.id)>=limit;
+    if(result.billingPlan?.blockedModules?.includes('sucursales')||result.billingPlan?.limits?.branches===1){result.branchId='principal';result.branches=result.branches.filter(b=>b.id==='principal');result.unrestrictedBranches=companyBranches(company.data).length===1}
+    return result;};
   if (!session.member && company.ownerEmail === session.email) {
     if (lock && loadAccounting) company.data = await readAccounting(client, company);
-    return branchAccess({ company, owner: true, permissions: {} }, session);
+    return finish({ company, owner: true, permissions: {} });
   }
-  const [member] = await client.select().from(companyMembers).where(and(eq(companyMembers.companyId, companyId), eq(companyMembers.active, true), session.member ? eq(companyMembers.id, session.member.id) : eq(companyMembers.email, session.email)));
-  if (!member) accessError('Sin acceso a esta empresa.');
+  const [viewer]=await client.select({platformAdmin:users.platformAdmin}).from(users).where(eq(users.email,session.email));
+  let [member] = await client.select().from(companyMembers).where(and(eq(companyMembers.companyId, companyId), eq(companyMembers.active, true), session.member ? eq(companyMembers.id, session.member.id) : eq(companyMembers.email, session.email)));
+  if(viewer?.platformAdmin&&!session.member)member=null;
+  if (!member) {
+    const [admin]=await client.select({platformAdmin:users.platformAdmin}).from(users).where(eq(users.email,session.email));
+    const [grant]=await client.select().from(supportGrants).where(and(eq(supportGrants.companyId,companyId),eq(supportGrants.email,session.email)));
+    if(!supportGrantActive(grant,session.email,admin?.platformAdmin,!!session.member))accessError('Sin acceso a esta empresa.');
+    if(lock&&loadAccounting)company.data=await readAccounting(client,company);
+    await audit(client,companyId,session,'Consulta de soporte · solo lectura',[{area:'support',expiresAt:grant.expiresAt.toISOString()}]);
+    return finish({company,owner:false,support:true,supportExpiresAt:grant.expiresAt,permissions:Object.fromEntries(MODULES.map(m=>[m,'lectura'])),member:{role:'contador'}});
+  }
   if (lock && loadAccounting) company.data = await readAccounting(client, company);
-  return branchAccess({ company, owner: false, permissions: member.permissions, member }, session);
+  return finish({ company, owner: false, permissions: member.permissions, member });
 }
 export function entryModule(entry) {
   if (entry.type === 'venta') return entry.shiftId ? 'facturacion' : 'ventas';
@@ -87,7 +113,7 @@ export function entryModule(entry) {
 const visibleEntry = (access, entry) => allowed(access, entryModule(entry)) || ['contabilidad', 'finanzas', 'fiscal'].some(module => allowed(access, module));
 export function projectData(data, access) {
   data = scopeBranch(data, access);
-  if (!data || access.owner) return data;
+  if (!data || (access.owner && !(access.billingPlan?.blockedModules||[]).some(m=>['personal','fiscal'].includes(m)))) return data;
   const operationalOnly = ['cajero', 'vendedor'].includes(String(access.member?.role).toLowerCase());
   const ownId = access.member?.id;
   const ownShiftIds = new Set((data.shifts || []).filter(shift => shift.operatorId === ownId).map(shift => shift.id));
@@ -190,7 +216,8 @@ export function mergeData(current, incoming, access) {
   if (incoming.customers === undefined) incoming.customers = allowed(access, 'ventas') ? structuredClone(current?.customers || []) : [];
   for (const name of ['employees', 'payrolls', 'taxes', 'properties', 'settlements']) if (incoming[name] !== undefined && !Array.isArray(incoming[name])) accessError('Datos contables inválidos.', 400);
   if (!Array.isArray(incoming.customers)) accessError('Cartera de clientes inválida.', 400);
-  if (access.owner) { validateEntries(incoming); validateCustomers(incoming); return incoming; }
+  if(access.support||access.readOnlyLimit)accessError('Este acceso es de solo lectura.');
+  if (access.owner && !(access.billingPlan?.blockedModules||[]).some(m=>['personal','fiscal'].includes(m))) { validateEntries(incoming); validateCustomers(incoming); return incoming; }
   if (!DATA_MODULES.some(module => allowed(access, module, true))) accessError('Tu acceso es de solo lectura.');
   const projected = projectData(current, { ...access, branchId: null });
   const merged = structuredClone(current);
@@ -300,6 +327,7 @@ export async function updateCompany(companyId, session, revision, mutate, action
   const result = await db.transaction(async client => {
     const timings = {}, started = performance.now();
     const access = await companyAccess(client, companyId, session, true, false);
+    if(access.support||access.readOnlyLimit)accessError('Este acceso es de solo lectura.');
     timings.readMs = Math.round(performance.now() - started);
     const operationActor = operation ? operation.actor + ':' + (access.branchId || 'all') : null;
     if (operation) {

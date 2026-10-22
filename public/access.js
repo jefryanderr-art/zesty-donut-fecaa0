@@ -3,7 +3,7 @@
 const ACCESS_MODULES=[['ventas','Ventas'],['compras','Compras'],['gastos','Gastos'],['inventario','Productos e inventario'],['contabilidad','Contabilidad y cuentas por cobrar / pagar'],['finanzas','Estados financieros'],['personal','Personal, nómina y liquidaciones'],['fiscal','Fiscal y reglas'],['ajustes','Ajustes y respaldo completo'],['accesibilidad','Administración de accesos'],['auditoria','Bitácora de auditoría']];
 const ROUTE_MODULE={ventas:'ventas',compras:'compras',gastos:'gastos',productos:'inventario',kardex:'inventario',apertura:'contabilidad',diario:'contabilidad',mayor:'contabilidad',cuentas:'contabilidad',cobrar:'contabilidad',pagar:'contabilidad',balanza:'finanzas',resultados:'finanzas',balance:'finanzas',flujo:'finanzas',personal:'personal',nomina:'personal',liquidaciones:'personal',provisiones:'personal',fiscal:'fiscal',impuestos:'fiscal',propiedades:'fiscal',reglas:'fiscal',ajustes:'ajustes',accesibilidad:'accesibilidad',auditoria:'auditoria'};
 const permission=(module,write=false)=>{
-  if(!CO)return false;if(CO.owner)return true;
+  if(!CO)return false;if(CO.support&&write)return false;if(CO.readOnlyLimit&&write)return false;if(CO.billingPlan?.blockedModules?.includes(module))return false;if(CO.owner)return true;
   const role=String(CO.role||'').trim().toLowerCase();
   if(module==='ventas'&&role!=='contador')return false;
   if(['cajero','vendedor','supervisor'].includes(role)&&['contabilidad','finanzas','personal','fiscal','ajustes','auditoria','accesibilidad'].includes(module))return false;
@@ -13,9 +13,9 @@ const permission=(module,write=false)=>{
 };
 ROUTE_MODULE.clientes='ventas';
 const completeAccess=(write=false)=>ACCESS_MODULES.slice(0,8).every(([module])=>permission(module,write));
-function routeAllowed(route){if(route==='panel')return completeAccess();if(route==='pagina')return !!U?.editor&&isAcontecCompany();if(route==='administracion')return !!U?.admin;return !!ROUTE_MODULE[route]&&permission(ROUTE_MODULE[route])}
+function routeAllowed(route){if(route==='panel')return !!CO;if(route==='pagina')return !!U?.editor&&isAcontecCompany();if(route==='administracion')return !!U?.admin;return !!ROUTE_MODULE[route]&&permission(ROUTE_MODULE[route])}
 function firstAllowedRoute(){return MENU.flatMap(([,items])=>items).find(([route])=>routeAllowed(route))?.[0]||'sinacceso'}
-function canSave(){return !!CO&&(CO.owner||ACCESS_MODULES.some(([module])=>permission(module,true)))}
+function canSave(){return !!CO&&!CO.support&&!CO.readOnlyLimit&&(CO.owner||ACCESS_MODULES.some(([module])=>permission(module,true)))}
 const READ_ACTIONS=new Set(['nav','menu','close','switch','opencomp','logout','per','print','printEntry','printSale','backup','backupAll','companyPdf','downloadSnapshot','auditPrev','auditNext','auditDetails','taxDetails','invoiceHistory','payrollDetail','exportTaxes','exportTaxReport','downloadReceipt']);
 const ACTION_MODULE={venta:'ventas',editventa:'ventas',compra:'compras',editcompra:'compras',gasto:'gastos',editgasto:'gastos',newprod:'inventario',editprod:'inventario',adjust:'inventario',delprod:'inventario',manual:'contabilidad',open:'contabilidad',newacc:'contabilidad',delacc:'contabilidad',newReceivable:'contabilidad',newPayable:'contabilidad',collectInvoice:'contabilidad',payInvoice:'contabilidad',newMember:'accesibilidad',editMember:'accesibilidad',toggleMember:'accesibilidad',restore:'ajustes',restoreSnapshot:'ajustes',cfg:'ajustes',newEmployee:'personal',editEmployee:'personal',newPayroll:'personal',editPayroll:'personal',closePayroll:'personal',deletePayroll:'personal',employeeLoan:'personal',newSettlement:'personal',closeSettlement:'personal',deleteSettlement:'personal',newTax:'fiscal',editTax:'fiscal',removeTax:'fiscal',payTax:'fiscal',nextTax:'fiscal',closeVAT:'fiscal',closeIncome:'fiscal',newProperty:'fiscal',editProperty:'fiscal',propertyTax:'fiscal',editRules:'fiscal'};
 Object.assign(ACTION_MODULE,{invoiceOpening:'contabilidad',invoicePay:'contabilidad',cobro:'contabilidad',pago:'contabilidad',adjprod:'inventario'});

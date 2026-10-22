@@ -19,12 +19,19 @@ export const customerPayments = pgTable('acontec_customer_payments', {
   email: text().notNull().references(() => users.email),
   amountCents: integer('amount_cents').notNull(),
   currency: text().notNull(),
+  status: text().default('confirmado').notNull(),
+  plan: text(),
+  interval: text().default('mensual').notNull(),
+  providerKey: text('provider_key').unique(),
+  receipt: jsonb(),
+  journalId: text('journal_id'),
+  version: integer().default(0).notNull(),
   date: text().notNull(),
   reference: text().notNull(),
   method: text().notNull(),
   actor: text().notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-}, table => [serverAccess(), index('acontec_customer_payments_email_idx').on(table.email)]).enableRLS();
+}, table => [serverAccess(), index('acontec_customer_payments_email_idx').on(table.email), index('acontec_service_payment_status_date_idx').on(table.status,table.date)]).enableRLS();
 
 export const customerEvents = pgTable('acontec_customer_events', {
   id: uuid().defaultRandom().primaryKey(),
@@ -45,13 +52,14 @@ export const legalAcceptances = pgTable('acontec_legal_acceptances', {
 export const companies = pgTable('acontec_companies', {
   id: uuid().defaultRandom().primaryKey(),
   archivedAt: timestamp('archived_at'),
+  isPlatformCompany: boolean('is_platform_company').default(false).notNull(),
   ownerEmail: text('owner_email').notNull().references(() => users.email),
   name: text().notNull(),
   description: text().default('').notNull(),
   data: jsonb(),
   revision: integer().default(0).notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-}, () => [serverAccess()]).enableRLS();
+}, table => [serverAccess(), uniqueIndex('acontec_one_platform_company_idx').on(table.isPlatformCompany).where(sql`${table.isPlatformCompany} = true`)]).enableRLS();
 export const siteContent = pgTable('acontec_site_content', {
   id: text().primaryKey(),
   content: jsonb().notNull(),
@@ -67,6 +75,7 @@ export const sessions = pgTable('acontec_sessions', {
   email: text().notNull().references(() => users.email, { onDelete: 'cascade' }),
   admin: boolean().default(false).notNull(),
   activeBranchId: text('active_branch_id'),
+  activeCompanyId: uuid('active_company_id'),
   memberId: uuid('member_id').references(() => companyMembers.id, { onDelete: 'cascade' }),
   expiresAt: timestamp('expires_at').notNull(),
 }, table => [serverAccess(), index('acontec_sessions_expires_at_idx').on(table.expiresAt)]).enableRLS();
@@ -218,3 +227,43 @@ export const saveFailures = pgTable('acontec_save_failures', {
   durationMs: integer('duration_ms').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, table => [serverAccess(), index('acontec_save_failure_date_idx').on(table.createdAt)]).enableRLS();
+
+// Datos comerciales de plataforma, separados de los documentos contables.
+export const servicePlans = pgTable('acontec_service_plans', {
+  id: text().primaryKey(), name: text().notNull(),
+  monthlyCents: bigint('monthly_cents', {mode:'number'}).notNull(),
+  annualCents: bigint('annual_cents', {mode:'number'}).notNull(),
+  currency: text().default('USD').notNull(), active: boolean().default(true).notNull(),
+  limits: jsonb().notNull(), blockedModules: jsonb('blocked_modules').default([]).notNull(),
+  version: integer().default(0).notNull(),
+}, () => [serverAccess()]).enableRLS();
+export const subscriptions = pgTable('acontec_subscriptions', {
+  email: text().primaryKey().references(() => users.email),
+  plan: text(), interval: text().default('mensual').notNull(),
+  state: text().default('prueba').notNull(), trialEndsAt: timestamp('trial_ends_at').notNull(),
+  recurringCents: bigint('recurring_cents', {mode:'number'}),
+  paidEnvironment: text('paid_environment'),
+  paidUntil: timestamp('paid_until'), canceledAt: timestamp('canceled_at'),
+  limits: jsonb().default({}).notNull(), version: integer().default(0).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, table => [serverAccess(),index('acontec_subscription_plan_paid_idx').on(table.plan,table.paidUntil)]).enableRLS();
+export const billingCheckouts = pgTable('acontec_billing_checkouts', {
+  id: text().primaryKey(), email: text().notNull().references(() => users.email),
+  plan: text().notNull(), interval: text().notNull(), environment: text().notNull(),
+  providerToken: text('provider_token'), paymentUrl: text('payment_url'),
+  state: text().default('creating').notNull(), acceptedTerms: jsonb('accepted_terms').notNull(),
+  charges: jsonb().notNull(), syncedAt: timestamp('synced_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, table => [serverAccess(), index('acontec_checkout_email_idx').on(table.email), index('acontec_checkout_sync_idx').on(table.state,table.environment,table.syncedAt), uniqueIndex('acontec_one_open_checkout_idx').on(table.email).where(sql`${table.state} in ('creating','pending','unknown')`)]).enableRLS();
+export const supportGrants = pgTable('acontec_support_grants', {
+  companyId: uuid('company_id').primaryKey().references(() => companies.id),
+  email: text().notNull(), grantedBy: text('granted_by').notNull(),
+  expiresAt: timestamp('expires_at').notNull(), createdAt: timestamp('created_at').defaultNow().notNull(),
+}, () => [serverAccess()]).enableRLS();
+export const serviceMessages = pgTable('acontec_service_messages', {
+  id: uuid().defaultRandom().primaryKey(), email: text().notNull().references(() => users.email),
+  subject: text().notNull(), body: text().notNull(),
+  state: text().default('pending').notNull(), dedupeKey: text('dedupe_key').unique(),
+  actor: text().notNull(), attempts: integer().default(0).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(), sentAt: timestamp('sent_at'),
+}, table => [serverAccess(),index('acontec_service_message_queue_idx').on(table.state,table.createdAt)]).enableRLS();

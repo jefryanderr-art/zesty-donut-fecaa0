@@ -27,6 +27,7 @@ const money2=n=>n<0?'('+money(-n)+')':money(n);
 const tshow=t=>t>'9000'?today():t;
 
 async function api(path,method='GET',body){
+  if(path.startsWith('customers-admin')&&CO)path+=(path.includes('?')?'&':'?')+'c='+encodeURIComponent(CO.id);
   const headers={'content-type':'application/json'};
   let payload=body?JSON.stringify(body):undefined;
   if(((path.startsWith('data?')&&method==='PUT')||(path.startsWith('operations?')&&method==='POST'))&&payload){
@@ -207,7 +208,7 @@ async function openCompany(id){
   if(!company)throw new Error('No se encontró tu empresa.');
   const r=await api('data?c='+company.id);CO=r.company||company;REV=r.revision;saveVersion=0;savedVersion=0;retryCount=0;saveStatus='Guardado en la nube';localStorage.setItem('co',CO.id);
   cloudBase=copyCloud(r.data);pendingSave=null;cloudConflict=null;sessionExpired=false;S=r.data||seed();S.cfg=S.cfg||{cur:'C$'};S.entries=S.entries||[];S.products=S.products||[];S.customers=S.customers||[];
-  if(!r.data)save();
+  if(!r.data&&!CO.readOnlyLimit&&!CO.support)save();
   HOME=false;R=typeof firstAllowedRoute==='function'?firstAllowedRoute():'panel';shell();view();
   if(CO.owner&&CO.name=='Mi empresa'&&!S.cfg.asked){S.cfg.asked=1;save();setTimeout(ACT.cfg,400)}
 }
@@ -223,6 +224,7 @@ function loadGoogle(){
 }
 async function renderGoogle(){
   const form=$('#af'),target=$('#gbtn');
+  if(target&&!$('#login-legal-note'))target.insertAdjacentHTML('afterend','<p id="login-legal-note" class="mut">Al ingresar aceptas los <a href="/terminos" target="_blank" rel="noopener">Términos y Condiciones</a> y la <a href="/privacidad" target="_blank" rel="noopener">Política de Privacidad</a>.</p>');
   if(!GID||!form||!target)return;
   try{
     await loadGoogle();
@@ -269,7 +271,7 @@ function shell(){document.title=CO.name+' · Contabilidad';
 }
 function chrome(){
   $('#drawer').innerHTML=MENU.map(([g,l])=>[g,l.filter(([route])=>typeof routeAllowed!=='function'||routeAllowed(route))]).filter(([,list])=>list.length).map(([g,l])=>`<h4>${g}</h4>`+l.map(([r,i,n])=>`<button data-a="nav" data-r="${r}" class="${R==r?'on':''}"><span>${i}</span>${n}</button>`).join('')).join('')+
-   (U.admin?`<h4>Acontec</h4>${isAcontecCompany()?`<button data-a="home"><span>🌐</span>Página principal de Acontec</button>`:''}<button data-a="nav" data-r="administracion" class="${R=='administracion'?'on':''}"><span>👤</span>Administración de clientes</button>`:'')+
+   (U.admin&&CO.isPlatformCompany?`<h4>Acontec</h4>${isAcontecCompany()?`<button data-a="home"><span>🌐</span>Página principal de Acontec</button>`:''}<button data-a="nav" data-r="administracion" class="${R=='administracion'?'on':''}"><span>👤</span>Administración de clientes</button>`:'')+
    `<div class="bot">${R=='pagina'?`<button data-a="nav" data-r="panel"><span>🏢</span>Volver a mi negocio</button>`:''}<button data-a="switch"><span>🏢</span>Cambiar o crear empresa</button><button class="out" data-a="logout"><span>🚪</span>Salir</button></div>`;
   $('#bnav').innerHTML=[['panel','🏠','Panel'],['ventas','🛒','Ventas'],['compras','📦','Compras'],['productos','🏷️','Productos']].filter(([route])=>typeof routeAllowed!=='function'||routeAllowed(route)).map(([r,i,n])=>`<button data-a="nav" data-r="${r}" class="${R==r?'on':''}"><span>${i}</span>${n}</button>`).join('')+`<button data-a="menu"><span>☰</span>Menú</button>`;
 }
