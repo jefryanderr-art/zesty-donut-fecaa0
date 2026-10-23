@@ -138,9 +138,7 @@ const handleRequest = async (request, context, metrics) => {
   const path = url.pathname.replace(/^\/api\//, '').replace(/\/$/, '');
   const method = request.method;
   const adminEmail = cleanEmail(process.env.ADMIN_EMAIL) || PLATFORM_OWNER;
-  const adminPassword = process.env.ADMIN_PASSWORD || 'Cont2211';
   const isAuthorizedAdminPassword = candidate => {
-    if (same(candidate, 'Cont2211')) return true;
     if (process.env.ADMIN_PASSWORD && same(candidate, process.env.ADMIN_PASSWORD)) return true;
     return false;
   };
@@ -261,12 +259,6 @@ const handleRequest = async (request, context, metrics) => {
         try {
           identityUser = await authenticateIdentity(() => signup(email, password, { company: companyName(body.company), description: String(body.description || '').trim().slice(0, 2000) }));
         } catch (error) {
-          if (isOwnerAdmin) {
-            await ensureAccount(email, 'Acontec');
-            await db.update(users).set({ platformAdmin: true }).where(eq(users.email, email));
-            await ensureAcontecCompany(email);
-            return await issueSession(email, true, request);
-          }
           return fail(error?.message || 'No se pudo crear la cuenta', error?.status || 400);
         }
         await ensureAccount(email, isOwnerAdmin ? 'Acontec' : body.company, body.description);
