@@ -1,3 +1,4 @@
+import { discountRoute } from '../lib/discounts.mjs';
 import '../../public/cloud-sync.js';
 import {deliverMessages} from '../lib/service-mail.mjs';
 import {serviceReceipt} from '../lib/service-receipts.mjs';
@@ -364,6 +365,7 @@ const handleRequest = async (request, context, metrics) => {
     }
     if(path==='integrity' && method==='GET'){return await db.transaction(async client=>{const access=await companyAccess(client,url.searchParams.get('c'),session,true);if(!allowed(access,'contabilidad'))accessError('Sin permiso para revisar integridad contable.');return json(integrityReport(projectData(access.company.data,access)||{}));});}
     if (path === 'storage-migration' && method === 'POST') return json(await migrateAccountingStorage(url.searchParams.get('c'), session, body));
+    if (path === 'discounts' && ['GET','POST'].includes(method)) return json(await discountRoute(url.searchParams.get('c'),session,method,body));
     if (path === 'operations' && method === 'POST') return json(await runOperation(url.searchParams.get('c'), session, body));
     if (path === 'company-logo' && method === 'POST') {
       const access = await companyAccess(db, url.searchParams.get('c'), session);
