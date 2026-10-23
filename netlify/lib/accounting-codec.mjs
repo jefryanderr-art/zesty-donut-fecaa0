@@ -21,7 +21,13 @@ const moneyNames = new Set([...Object.values(collections), ...Object.values(chil
 ]));
 // El JSON residual conserva configuraciones y campos históricos, nunca el documento completo.
 // Las cantidades y tasas conservan precisión; todo campo monetario conocido usa centavos.
+// Metadatos nuevos que ya se expresan en centavos enteros (incluye discountAudit.amountCents).
+const nativeCentNames = new Set(['amountCents']);
 function encode(value, key = '') {
+  if (nativeCentNames.has(key) && typeof value === 'number') {
+    if (!Number.isSafeInteger(value)) storageError('Los metadatos monetarios requieren centavos enteros seguros.');
+    return value;
+  }
   if (typeof value === 'number' && moneyNames.has(key)) return { $acontecCents: cents(value) };
   if (Array.isArray(value)) return value.map(item => encode(item));
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([name, item]) => [name, encode(item, name)]));

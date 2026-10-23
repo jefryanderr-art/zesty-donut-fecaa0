@@ -1,3 +1,4 @@
+import { consumeDiscount } from './discounts.mjs';
 import { tradeOperation, TRADE_OPS } from './trade.mjs';
 import { countryTemplate } from './country.mjs';
 import { importRecords } from './importer.mjs';
@@ -10,7 +11,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
 import { and, eq } from 'drizzle-orm';
 import { companyMembers, siteContent } from '../../db/schema.ts';
-import { allowed, equal, accessError, updateCompany, actorName } from './access.mjs';
+import { allowed, equal, accessError, updateCompany, actorName, audit } from './access.mjs';
 import { OPERATION_ARRAYS, operationalRole, salesAdministrator, supervisor, cashAdministrator, operatorId, receiptRecords } from './policies.mjs';
 
 const round = value => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -221,7 +222,7 @@ function registerCost(data, access, session, body) {
   data.costs.push(record);
   return record;
 }
-function makeSale(data, access, session, body) {
+async function makeSale(data, access, session, body, client, companyId) {
   requirePermission(access, 'facturacion');
   const date = dateValue(body.date), payments = body.payments;
   requireValue(Array.isArray(payments) && payments.length > 0 && payments.length <= 4, 'Indica las formas de pago.');
@@ -235,8 +236,8 @@ function makeSale(data, access, session, body) {
   if (body.shiftId || nonCredit) shift = currentShift(data, access, session, body.shiftId);
   requireValue(shift || salesAdministrator(access), 'El equipo registra las ventas dentro de un turno abierto.');
   if (shift) requireValue(date >= shift.date, 'La factura no puede ser anterior a la apertura del turno.');
-  const settings = data.cfg.pos || {}, role = access.owner ? 'dueno' : operationalRole(access);
-  const discount = Number(body.discount || 0), limit = settings.discountLimits?.[role] ?? (role === 'dueno' ? 100 : role === 'supervisor' ? 10 : 0);
+  const settings = data.cfg.pos || {};
+  const discount = Number(body.discount || 0), limit = 99;
   requireValue(Number.isFinite(discount) && discount >= 0 && discount <= limit && discount < 100, `El descuento excede el límite autorizado (${limit}%).`);
   requireValue(Array.isArray(body.items) && body.items.length && body.items.length <= 200, 'Agrega productos a la factura.');
   const quantities = new Map();
@@ -246,8 +247,7 @@ function makeSale(data, access, session, body) {
     quantities.set(product.id, (quantities.get(product.id) || 0) + quantity);
     const price = amount(item.u ?? product.price, true), unit = round(price * (1 - discount / 100)), vatRate = Number(product.vatRate || 0);
     requireValue(Number.isFinite(price) && price >= 0 && Number.isFinite(vatRate) && vatRate >= 0 && vatRate <= 100, 'Precio o IVA de producto inválido.');
-    const effectiveDiscount = product.price > 0 ? (1 - unit / product.price) * 100 : 0;
-    requireValue(effectiveDiscount <= limit + 0.000001, `La rebaja del precio excede el límite autorizado (${limit}%).`);
+    requireValue(price >= product.price, 'Usa el campo de descuento autorizado para rebajar el precio de catálogo.');
     return { originalPrice: product.price, code: product.code || '', p: product.id, name: product.name, unit: product.unit || 'unidad', q: quantity, listPrice: price, u: unit, cost: product.cost, vatRate };
   });
   for (const [id, quantity] of quantities) requireValue(data.products.find(product => product.id === id).stock >= quantity, 'Existencia insuficiente.');
@@ -282,7 +282,8 @@ function makeSale(data, access, session, body) {
   if (cost) lines.push(...linesBetween('5101', '1301', cost));
   const quotation=body.sourceQuotation?data.quotations?.find(q=>q.id===body.sourceQuotation):null;
   requireValue(!body.sourceQuotation||quotation?.status==='Pendiente','La cotización no está disponible para convertir.');
-  const entry = appendEntry(data, session, { date, due, reference, series, sequence, type: 'venta', origin: body.origin === 'ventas' ? 'ventas' : 'facturacion', desc: 'Venta - ' + (customer?.name || text(body.party) || 'Cliente general'), party: customer?.name || text(body.party) || 'Cliente general', customerId: customer?.id || '', customer: customer ? { name: customer.name, taxId: customer.taxId, address: customer.address, phone: customer.phone } : null, operatorId: operatorId(access, session), operatorName: actorName(session), shiftId: shift?.id || null, discount, items, payments, pay: credit ? '1201' : methods.has('efectivo') ? '1104' : '1102', subtotal, vat, total, creditAmount: credit, stock: items.map(item => ({ pid: item.p, q: -item.q, unit: item.unit, unitCost: item.cost })), lines });
+  const entry = appendEntry(data, session, { date, due, reference, series, sequence, type: 'venta', origin: body.origin === 'ventas' ? 'ventas' : 'facturacion', desc: 'Venta - ' + (customer?.name || text(body.party) || 'Cliente general'), party: customer?.name || text(body.party) || 'Cliente general', customerId: customer?.id || '', customer: customer ? { name: customer.name, taxId: customer.taxId, address: customer.address, phone: customer.phone } : null, operatorId: operatorId(access, session), operatorName: actorName(session), shiftId: shift?.id || null, discount, discountAudit: discount > 0 ? {actor:actorName(session),userId:operatorId(access,session),percent:discount,amountCents:cents(round(invoiceTotals(items.map(item=>({...item,u:item.listPrice}))).total-total)),at:new Date().toISOString()} : null, items, payments, pay: credit ? '1201' : methods.has('efectivo') ? '1104' : '1102', subtotal, vat, total, creditAmount: credit, stock: items.map(item => ({ pid: item.p, q: -item.q, unit: item.unit, unitCost: item.cost })), lines });
+  if(entry.discountAudit) await audit(client,companyId,session,'Descuentos',[{area:'descuentos',event:'Factura con descuento',invoiceId:entry.id,reference:entry.reference,...entry.discountAudit}]);
   if(quotation){quotation.status='Convertida';quotation.entryId=entry.id;}
   for (const [id, quantity] of quantities) { const product = data.products.find(record => record.id === id); product.stock = Math.round((product.stock - quantity) * 1e6) / 1e6; }
   if (settings.packagingCostId) {
@@ -361,6 +362,7 @@ export async function runOperation(companyId, session, body) {
       const historical = body.file ? await retainedCompanyData(client, companyId) : [];
       const beforeIds=new Set(data.entries.map(e=>e.id));
       const operation = body.operation, userId = operatorId(access, session);
+      if(operation==='sale') await consumeDiscount(client,companyId,access,operationSession,body);
       if(operation==='countryTemplate'){requirePermission(access,'fiscal');let template;try{template=countryTemplate(body)}catch(error){accessError(error.message,400)}data.cfg.countryTemplate=template;data.cfg.fiscal={...data.cfg.fiscal,...template.fiscal};for(const [code,name,tipo,nat]of [['6109','Aportes patronales','gasto','D'],['2112','Aportes patronales por pagar','pasivo','C']])if(!data.accounts.some(a=>a.code===code))data.accounts.push({code,name,tipo,nat,sub:''});}
       else if(crossBranch){output=transferOperation(data,access,operationSession,body,{requireValue,requirePermission,appendEntry,dateValue,amount,ledgerBalance,guardCash});}
       else if(TRADE_OPS.includes(operation)){output=tradeOperation(data,access,operationSession,body,{requireValue,requirePermission,appendEntry,dateValue,amount,ledgerBalance,guardCash});}
@@ -474,7 +476,7 @@ export async function runOperation(companyId, session, body) {
         const opening = amount(body.opening, true), shift = { id: randomUUID(), operatorId: userId, operatorName: actorName(operationSession), date: dateValue(body.date), opening, openedAt: new Date().toISOString(), reference: text(body.reference), closedAt: null };
         if (opening) { const record = movement(data, operationSession, { ...body, concept: 'Fondo inicial de turno', method: 'efectivo', exchangeRate: 1, currency: data.cfg.cur }, '1104', body.source, opening, { shiftId: shift.id, operatorId: userId }); shift.entryId = record.entryId; }
         data.shifts.push(shift); output = shift.id;
-      } else if (operation === 'sale') output = makeSale(data, access, operationSession, body).id;
+      } else if (operation === 'sale') output = (await makeSale(data, access, operationSession, body, client, companyId)).id;
       else if (operation === 'creditNote') output = creditNote(data, access, operationSession, body).id;
       else if (operation === 'closeShift') {
         requirePermission(access, 'facturacion');
