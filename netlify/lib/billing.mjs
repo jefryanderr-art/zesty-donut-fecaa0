@@ -22,15 +22,33 @@ export async function subscription(email,client=db){
 export async function accountAccess(email,admin=false,client=db){const sub=await subscription(email,client),ent=entitlement(sub,admin),list=await plans(client),plan=admin?DEFAULT_PLANS.find(p=>p.id==='pro'):list.find(p=>p.id===ent.plan);return {sub,ent,plan:plan?{...plan,limits:admin?plan.limits:{...plan.limits,...sub.limits}}:null}}
 export async function requireBilling(email,admin=false,client=db){const a=await accountAccess(email,admin,client);if(!a.ent.access)billingError('Tu acceso venció. Abre Mi suscripción para elegir un plan.',402);return a}
 async function projectProfile(client,sub){const [u]=await client.select().from(users).where(eq(users.email,sub.email));const plan=(await plans(client)).find(p=>p.id===sub.plan);await client.update(users).set({profile:{...u.profile,plan:sub.plan||'',state:entitlement(sub).state,paidUntil:sub.paidUntil?managuaDay(new Date(sub.paidUntil)):'',currency:'USD',monthlyAmountCents:plan?(sub.interval==='anual'?Math.round(plan.annualCents/12):plan.monthlyCents):0},version:u.version+1}).where(eq(users.email,sub.email))}
-export async function billingMe(session,admin){
- const a=await accountAccess(session.email,admin);
+// Resolve ownership independently of the login method, without requiring paid access.
+async function billingContext(session,companyId=session.activeCompanyId||session.member?.companyId){
+ const {accessibleCompanies}=await import('./access.mjs');
+ const available=await accessibleCompanies(session);
+ const selected=companyId?available.find(c=>c.id===companyId):available.find(c=>c.owner)||available[0];
+ if(!selected)billingError('Empresa no encontrada o sin acceso.',403);
+ const [company]=await db.select({ownerEmail:companies.ownerEmail}).from(companies).where(and(eq(companies.id,selected.id),isNull(companies.archivedAt)));
+ if(!company)billingError('Empresa no encontrada.',404);
+ const [owner]=await db.select({platformAdmin:users.platformAdmin}).from(users).where(eq(users.email,company.ownerEmail));
+ return {email:company.ownerEmail,admin:owner?.platformAdmin===true,canManageBilling:selected.owner===true&&!session.member};
+}
+async function requireBillingOwner(session){
+ const context=await billingContext(session);
+ if(!context.canManageBilling)billingError('Solo el dueño de la empresa activa puede gestionar su suscripción.',403);
+ return context;
+}
+export async function billingMe(session,admin,companyId){
+ const context=await billingContext(session,companyId);
+ const a=await accountAccess(context.email,context.admin);
+ if(!context.canManageBilling)return {canManageBilling:false,checkoutReady:false,checkoutReason:'Solo el dueño de la empresa puede contratar el plan.',entitlement:a.ent,plan:a.plan,version:a.sub.version,serverNow:new Date().toISOString()};
  const [legal]=await db.select().from(siteContent).where(eq(siteContent.id,'legal'));
  const provider=providerConfig(),legalReady=!!(legal?.content?.approved&&legal.content.version&&legal.content.refunds);
- const checkoutReason=session.member?'Solo el dueño de la empresa puede contratar el plan.':!legalReady?'Los pagos están pendientes de habilitación: el titular debe aprobar y publicar los documentos legales desde Administración de clientes.':!provider.ready?'El servicio de pagos todavía no está configurado. Contacta con Acontec.':null;
- return {checkoutReady:!checkoutReason,checkoutReason,legalVersion:legalReady?legal.content.version:null,billingMonths:Math.max(1,Math.min(24,Number(env('PAGADITO_MONTHS')||12)||1)),billingYears:Math.max(1,Math.min(5,Number(env('PAGADITO_YEARS')||3)||1)),entitlement:a.ent,plan:a.plan,version:a.sub.version,provider,serverNow:new Date().toISOString()};
+ const checkoutReason=!context.canManageBilling?'Solo el dueño de la empresa puede contratar el plan.':!legalReady?'Los pagos están pendientes de habilitación: el titular debe aprobar y publicar los documentos legales desde Administración de clientes.':!provider.ready?'El servicio de pagos todavía no está configurado. Contacta con Acontec.':null;
+ return {canManageBilling:context.canManageBilling,checkoutReady:!checkoutReason,checkoutReason,legalVersion:legalReady?legal.content.version:null,billingMonths:Math.max(1,Math.min(24,Number(env('PAGADITO_MONTHS')||12)||1)),billingYears:Math.max(1,Math.min(5,Number(env('PAGADITO_YEARS')||3)||1)),entitlement:a.ent,plan:a.plan,version:a.sub.version,provider,serverNow:new Date().toISOString()};
 }
 export async function checkout(session,body,request){
- if(session.member)billingError('El dueño contrata el plan.',403);
+ await requireBillingOwner(session);
  if(body.accepted!==true)billingError('Acepta términos, privacidad y reembolsos antes de pagar.');
  if(!['mensual','anual'].includes(body.interval))billingError('Modalidad inválida.');
  const [legal]=await db.select().from(siteContent).where(eq(siteContent.id,'legal'));if(!legal?.content?.approved||!legal.content.refunds)billingError('Los documentos legales todavía requieren aprobación del titular.',409);
@@ -188,7 +206,7 @@ export async function reconcilePendingCheckouts(){
  console.info('pagadito_automatic_resolution',{processed:rows.length,errors:results.filter(r=>r.status==='rejected').length});
 }
 export async function confirmSubscription(session,body={}){
- if(session.member)billingError('Solo el dueño consulta su pago.',403);
+ await requireBillingOwner(session);
  if(body.token!==undefined||body.ern!==undefined){
   if(typeof body.token!=='string'||!body.token.trim()||body.token.length>2048||typeof body.ern!=='string'||!/^ACT-[a-f0-9-]+-[0-9]{2}$/.test(body.ern))billingError('El retorno de Pagadito no es válido.',400);
   const [row]=await db.select().from(billingCheckouts).where(and(eq(billingCheckouts.email,session.email),sql`${billingCheckouts.charges} @> ${JSON.stringify([{ern:body.ern}])}::jsonb`)).limit(1);
@@ -206,9 +224,9 @@ export async function confirmSubscription(session,body={}){
 }
 export async function cancelSubscription(session,actor=session.email){if(session.member)billingError('Solo el dueño cancela cobros.',403);await cancelOtherCheckouts(session.email,null);await db.transaction(async client=>{const sub=await subscription(session.email,client);await client.update(subscriptions).set({canceledAt:new Date(),version:sub.version+1}).where(eq(subscriptions.email,session.email));await event(client,session.email,actor,'Cobros futuros cancelados',{});await projectProfile(client,{...sub,canceledAt:new Date()})});return {ok:true}}
 export async function billingRoute(path,method,body,session,request,admin){
- if(path==='billing/me'&&method==='GET'){if(session.member){const [company]=await db.select({ownerEmail:companies.ownerEmail}).from(companies).where(eq(companies.id,session.member.companyId));return billingMe({...session,email:company.ownerEmail},false)}return billingMe(session,admin);}
+ if(path==='billing/me'&&method==='GET')return billingMe(session,admin,new URL(request.url).searchParams.get('c')||undefined);
  if(path==='checkout'&&method==='POST')return checkout(session,body,request);
  if(path==='billing/confirm'&&method==='POST')return confirmSubscription(session,body);
- if(path==='cancel'&&method==='POST')return cancelSubscription(session);
+ if(path==='cancel'&&method==='POST'){await requireBillingOwner(session);return cancelSubscription(session);}
  billingError('Método no permitido.',405);
 }

@@ -597,13 +597,18 @@ const handleRequest = async (request, context, metrics) => {
     if (path === 'data') {
       const companyId = url.searchParams.get('c');
       if (method === 'GET') {
-        return await db.transaction(async client => {
+        try{return await db.transaction(async client => {
           const access = await companyAccess(client, companyId, session, true);
           const { id, name, description } = access.company;
           await client.update(sessions).set({activeCompanyId:id}).where(eq(sessions.tokenHash,hashToken(sessionToken(request))));
           const company = { isPlatformCompany:access.company.isPlatformCompany, billingPlan:access.billingPlan, entitlement:access.entitlement, readOnlyLimit:access.readOnlyLimit, support:access.support||false,supportExpiresAt:access.supportExpiresAt, id, name, description, owner: access.owner, permissions: access.permissions, memberId: access.member?.id, role: access.owner ? 'Dueño' : access.member?.role, branches: access.branches, branchId: access.branchId, unrestrictedBranches: access.unrestrictedBranches };
           return json({ data: projectData(access.company.data, access), revision: access.company.revision, company });
-        });
+        });}catch(error){
+          // companyAccess checks ownership/membership before checking the owner's plan.
+          // Preserve that selection even when expired access rolls back the data transaction.
+          if(error.status===402)await db.update(sessions).set({activeCompanyId:companyId}).where(eq(sessions.tokenHash,hashToken(sessionToken(request))));
+          throw error;
+        }
       }
       if (method === 'PUT') {
         if (body.operationId && !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.operationId)) return fail('Identificador de guardado inválido.', 400);

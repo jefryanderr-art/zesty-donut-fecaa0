@@ -142,3 +142,12 @@ La URL exacta para configurar en el sandbox es `https://acontec.company/?token={
 El navegador lee ambos parámetros, los retira de la barra de direcciones y los envía por POST JSON a `/api/billing/confirm` después de iniciar sesión. El servidor valida el formato y busca el ERN únicamente entre los intentos del usuario autenticado. El token recibido no concede permisos ni confirma un pago: se consulta `get-status-recurring-payments` con el token de autorización guardado en Database y el entorno del intento. La conciliación contrasta los ERN y los importes y moneda disponibles en la respuesta; solo los cargos `COMPLETED` activan cobertura. El retorno antiguo `?pago=retorno` y la verificación manual siguen conciliando el último intento.
 
 Esta revisión fue estática; quedó pendiente comprobar el retorno completo y la respuesta real de la API con un pago sandbox tras el despliegue. No se ejecutaron pruebas, servidores ni compilaciones locales.
+
+
+## Suscripción de colaboradores por empresa activa
+
+El acceso del colaborador, tanto por usuario como por correo, depende exclusivamente del plan del dueño de la empresa seleccionada. Consultar su plan no inicializa una suscripción ni una prueba personal del colaborador. Si también es dueño de otra empresa, su suscripción propia solo corresponde a sus empresas; no reemplaza el plan de la empresa donde colabora.
+
+La vista «Plan de la empresa» no ofrece contratación, confirmación ni cancelación de cobros a colaboradores o soporte. Esas operaciones requieren ser dueño de la empresa activa en la sesión del servidor; un nombre de rol administrativo de colaborador no concede permisos de pago. Cuando falta renovación, se muestra «El plan de la empresa está pendiente de renovación. Avisa al dueño o administrador.». Se conserva la selección de una empresa vencida para evitar gestionar accidentalmente la suscripción de la empresa anterior.
+
+Verificaciones pendientes después del despliegue: acceso por usuario y por correo a una empresa con plan vigente; vencimiento del dueño sin opciones de pago del colaborador; rechazo 403 de checkout, confirmación y cancelación con ambas clases de colaborador; alternancia entre una empresa propia y otra compartida con vigencias diferentes; contratación y retorno de pago del dueño durante prueba y tras vencimiento. Confirmar que las consultas de colaboradores sin empresas propias no crean suscripciones personales. Esta revisión fue estática y no ejecutó pruebas, servidores ni compilaciones locales, ni modificó datos existentes.
