@@ -2,27 +2,41 @@
 let BILLING=null,BILLING_PLANS=[],BILLING_INTERVAL='mensual',BILLING_LOCKED=false,BILLING_TIMER=null;
 const usdCents=n=>'US$'+(Number(n||0)/100).toLocaleString('es',{minimumFractionDigits:2,maximumFractionDigits:2});
 const billingModule=module=>({asistencia:'control_personal',simuladores:'decisiones',rentabilidad:'decisiones',pronostico:'decisiones',sucursales:'sucursales'}[module]||module);
+const billingCompanyNotice='El plan de la empresa está pendiente de renovación. Avisa al dueño o administrador.';
+function billingCanManage(){return CO?.owner===true&&!CO.support&&BILLING?.canManageBilling!==false}
 function billingCan(module){return !CO?.billingPlan?.blockedModules?.includes(billingModule(module))}
 async function refreshBilling(){
  if(!U)return;
  if(CO?.support){try{await api('data?c='+CO.id)}catch(error){if([402,403,404].includes(error.status)){const account=await api('me');COS=account.companies;CO=null;S=null;await openCompany(COS.find(c=>c.owner)?.id);return}throw error}}
- BILLING=await api('billing/me');
+ const companyId=CO?.id;
+ const data=await api('billing/me'+(companyId?'?c='+encodeURIComponent(companyId):''));
+ if(CO?.id!==companyId)return;
+ if(CO){CO.billingPlan=data.plan;CO.entitlement=data.entitlement}
+ BILLING=CO&&!CO.owner?{...data,plan:CO.billingPlan,entitlement:CO.entitlement}:data;
  billingTrialOffer();
  if(!BILLING.entitlement.access){BILLING_LOCKED=true;await showPlans(true);return}
+ if(BILLING_LOCKED)$('#billing-overlay')?.remove();
  BILLING_LOCKED=false;
  if(CO){CO.billingPlan=BILLING.plan;CO.entitlement=BILLING.entitlement}
  const target=$('#billing-status');if(target)target.textContent=billingStatus();
 }
-function billingStatus(){const ent=BILLING?.entitlement||CO?.entitlement;if(!ent)return 'Mi suscripción';if(ent.state==='prueba'){const seconds=Math.max(0,Math.floor((Date.parse(ent.trialEndsAt)-Date.now())/1000));return `Prueba gratuita · quedan ${String(Math.floor(seconds/3600)).padStart(2,'0')}:${String(Math.floor(seconds/60)%60).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`}if(ent.state==='en_gracia')return 'Tu pago venció · regulariza tu suscripción';return ent.state==='admin'?'Administración de plataforma':`Plan ${BILLING?.plan?.name||ent.plan} · hasta ${shortDate(ent.paidUntil)}`}
+function billingStatus(){const ent=BILLING?.entitlement||CO?.entitlement;if(!ent)return 'Mi suscripción';if(CO&&!CO.owner){if(!ent.access||ent.state==='en_gracia')return billingCompanyNotice;return 'Plan de la empresa · '+(CO.billingPlan?.name||ent.plan||'vigente')}if(ent.state==='prueba'){const seconds=Math.max(0,Math.floor((Date.parse(ent.trialEndsAt)-Date.now())/1000));return `Prueba gratuita · quedan ${String(Math.floor(seconds/3600)).padStart(2,'0')}:${String(Math.floor(seconds/60)%60).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`}if(ent.state==='en_gracia')return 'Tu pago venció · regulariza tu suscripción';return ent.state==='admin'?'Administración de plataforma':`Plan ${BILLING?.plan?.name||ent.plan} · hasta ${shortDate(ent.paidUntil)}`}
 function billingTrialOffer(){
  const ent=BILLING?.entitlement||CO?.entitlement;
- const visible=CO?.owner&&!CO.support&&ent?.state==='prueba';
+ const visible=billingCanManage()&&ent?.state==='prueba';
  if(!visible){$('#billing-trial-offer')?.remove();return}
  if($('#billing-trial-offer'))return;
  $('#main')?.insertAdjacentHTML('beforebegin','<aside id="billing-trial-offer" class="access-status billing-trial-offer noprint" aria-label="Contratar un plan"><div><strong>Puedes contratar tu plan desde ahora</strong><p>No necesitas esperar a que termine tu prueba gratuita. Tu plan comienza cuando se confirma el pago.</p></div><button class="btn" data-a="mySubscription">Elegir plan y pagar</button></aside>');
 }
 async function showPlans(locked=false){
  BILLING_LOCKED=locked;
+ if(!billingCanManage()){
+  let root=$('#billing-overlay');if(!root){root=document.createElement('section');root.id='billing-overlay';root.className='billing-overlay';root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label','Plan de la empresa');document.body.append(root)}
+  root.innerHTML=`<div class="billing-sheet"><h1>Plan de la empresa</h1><p>${esc(locked||CO?.entitlement?.state==='en_gracia'?billingCompanyNotice:'El acceso a esta empresa depende de la suscripción de su dueño.')}</p><p>${esc(billingStatus())}</p><button id="billing-close" class="btn ghost">${locked?'Elegir otra empresa':'Volver a mi empresa'}</button> <button id="billing-logout" class="btn ghost">Salir</button></div>`;
+  root.querySelector('#billing-close').onclick=()=>{root.remove();if(locked)ACT.switch()};
+  root.querySelector('#billing-logout').onclick=async()=>{await ACT.logout();root.remove()};
+  return;
+ }
  if(!BILLING_PLANS.length)BILLING_PLANS=(await api('plans')).plans;
  let root=$('#billing-overlay');if(!root){root=document.createElement('section');root.id='billing-overlay';root.className='billing-overlay';root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label','Planes y suscripción');document.body.append(root)}
  const annual=BILLING_INTERVAL==='anual';
@@ -35,6 +49,7 @@ async function showPlans(locked=false){
  root.querySelector('#billing-check').onclick=async()=>{const b=root.querySelector('#billing-check');b.disabled=true;try{const result=await api('billing/confirm','POST',{});await refreshBilling();if(result.status==='active'){root.remove();await openCompany(CO?.id||COS[0]?.id);alert('¡Pago confirmado!')}else root.querySelector('#billing-error').textContent='El pago sigue en verificación.'}catch(e){root.querySelector('#billing-error').textContent=e.message}finally{b.disabled=false}};
 }
 function billingSummary(id,locked){
+ if(!billingCanManage())return showPlans(locked);
  const p=BILLING_PLANS.find(p=>p.id===id);if(!p)return;
  const interval=BILLING_INTERVAL,annual=interval==='anual',amount=annual?p.annualCents:p.monthlyCents,root=$('#billing-overlay');
  let details=null,busy=false;
@@ -56,12 +71,12 @@ openCompany=async function(id){
   const returned=params.get('pago')==='retorno'||params.has('token')||params.has('ern');
   let result;
   if(returned){const payload=params.has('token')||params.has('ern')?{token:params.get('token'),ern:params.get('ern')}:{};history.replaceState(null,'',location.pathname);result=await api('billing/confirm','POST',payload)}
-  await billingOpenCompany(id);await refreshBilling();
+  BILLING=null;$('#billing-trial-offer')?.remove();await billingOpenCompany(id);await refreshBilling();
   if(returned&&result.status!=='active'){await showPlans(BILLING_LOCKED);const message=$('#billing-error');if(message)message.textContent=['failed','expired','abandoned'].includes(result.status)?'El intento terminó sin pago confirmado. Puedes iniciar otro pago.':'Pagadito todavía está procesando tu pago. La confirmación es automática.'}
- }catch(error){if(error.status===402){await refreshBilling();return}throw error}
+ }catch(error){if(error.status===402){const company=COS.find(c=>c.id===id)||COS[0];if(company){CO={...company};BILLING=null;billingTrialOffer()}await refreshBilling();return}throw error}
 };
 const billingChrome=chrome;
-chrome=function(){billingChrome();$('#drawer .bot')?.insertAdjacentHTML('afterbegin','<button data-a="mySubscription"><span>◷</span><span>Mi suscripción y pagos<br><small id="billing-status">'+esc(billingStatus())+'</small></span></button>');billingTrialOffer();if(CO.support)$('#main')?.insertAdjacentHTML('beforebegin',`<p class="access-status">Soporte temporal · solo lectura · vence ${esc(shortDate(CO.supportExpiresAt))}</p>`)};
+chrome=function(){billingChrome();$('#drawer .bot')?.insertAdjacentHTML('afterbegin','<button data-a="mySubscription"><span>◷</span><span>'+(CO?.owner?'Mi suscripción y pagos':'Plan de la empresa')+'<br><small id="billing-status">'+esc(billingStatus())+'</small></span></button>');billingTrialOffer();if(CO.support)$('#main')?.insertAdjacentHTML('beforebegin',`<p class="access-status">Soporte temporal · solo lectura · vence ${esc(shortDate(CO.supportExpiresAt))}</p>`)};
 READ_ACTIONS.add('mySubscription');ACT.mySubscription=()=>{menu(false);showPlans(BILLING_LOCKED)};
 setInterval(()=>{if(!U)return;const status=$('#billing-status');if(status)status.textContent=billingStatus();const ent=BILLING?.entitlement||CO?.entitlement;if(ent?.state==='prueba'&&ent.trialEndsAt&&Date.now()>=Date.parse(ent.trialEndsAt)&&!BILLING_LOCKED){BILLING_LOCKED=true;refreshBilling().catch(()=>{});}},1000);
 setInterval(()=>{if(U&&!document.hidden)refreshBilling().catch(()=>{})},240000);
