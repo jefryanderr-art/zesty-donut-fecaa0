@@ -66,7 +66,7 @@ export async function customerAdmin(method, body, url, session) {
     return { clients, totals, expected, churn, truncated, legal: await legalDocument() };
   }
   if (body.operation === 'legal') {
-    const document = { approved: body.approved === true, revision: 0, version: clean(body.version, 80), terms: clean(body.terms, 30000), privacy: clean(body.privacy, 30000), refunds:clean(body.refunds,30000), approvedAt: body.approved ? new Date().toISOString() : null, approvedBy: session.email };
+    const document = { approved: body.approved === true, revision: 0, version: clean(body.version, 80), terms: clean(body.terms, 30000), privacy: clean(body.privacy, 30000), refunds:clean(body.refunds,30000), cookies:clean(body.cookies,30000), approvedAt: body.approved ? new Date().toISOString() : null, approvedBy: session.email };
     if (!document.version || !document.terms || !document.privacy || !document.refunds) accessError('Completa versión, términos y privacidad.', 400);
     await db.transaction(async client => {
       await client.insert(siteContent).values({ id: 'legal', content: legalDraft }).onConflictDoNothing();

@@ -11,7 +11,7 @@ for(const name of ['analytics.js','access.js','imports.js','barcodes.js']){
   const asset=resolve(root,'.'+url);return existsSync(asset)?quote+url+'?v='+hash(asset)+quote:all;
  }));
 }
-for(const name of ['index.html','configurar-google.html','privacidad.html','terminos.html','reembolsos.html']){
+for(const name of ['index.html','configurar-google.html','privacidad.html','terminos.html','reembolsos.html','cookies.html']){
  const file=resolve(root,name),source=readFileSync(file,'utf8');
  writeFileSync(file,source.replace(/((?:src|href)=")((?:\/)?[\w./-]+\.(?:css|m?js))(?:\?v=[\w.-]+)?(")/g,(all,start,url,end)=>{
   const asset=resolve(root,url.replace(/^\//,''));return existsSync(asset)?start+url+'?v='+hash(asset)+end:all;
