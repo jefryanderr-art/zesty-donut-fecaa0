@@ -9,7 +9,20 @@ import {readAccounting,syncAccounting} from './accounting-storage.mjs';
 import {guardPeriods} from './period-controls.mjs';
 import {normalizeDocument} from './accounting-codec.mjs';
 
-export async function plans(client=db){const existing=await client.select().from(servicePlans);if(DEFAULT_PLANS.every(p=>existing.some(row=>row.id===p.id)))return existing;for(const p of DEFAULT_PLANS)await client.insert(servicePlans).values(p).onConflictDoNothing();return client.select().from(servicePlans)}
+export async function plans(client=db){
+ // La política se aplica una sola vez: precios, límites y futuras ediciones se conservan.
+ const initialize=async tx=>{
+  const [policy]=await tx.select({id:siteContent.id}).from(siteContent).where(eq(siteContent.id,'basic-fiscal-included-v1'));
+  if(!policy){
+   const inserted=await tx.insert(siteContent).values({id:'basic-fiscal-included-v1',content:{applied:true}}).onConflictDoNothing().returning({id:siteContent.id});
+   if(inserted.length)await tx.update(servicePlans).set({blockedModules:sql`coalesce((select jsonb_agg(value) from jsonb_array_elements(${servicePlans.blockedModules}) where value <> '"fiscal"'::jsonb), '[]'::jsonb)`,version:sql`${servicePlans.version}+1`}).where(eq(servicePlans.id,'basico'));
+  }
+  let existing=await tx.select().from(servicePlans);
+  if(!DEFAULT_PLANS.every(p=>existing.some(row=>row.id===p.id))){for(const p of DEFAULT_PLANS)await tx.insert(servicePlans).values(p).onConflictDoNothing();existing=await tx.select().from(servicePlans)}
+  return existing.sort((a,b)=>a.monthlyCents-b.monthlyCents||a.id.localeCompare(b.id));
+ };
+ return client===db?db.transaction(initialize):initialize(client);
+}
 export async function event(client,email,actor,action,details={}){await client.insert(customerEvents).values({email,actor,action,details})}
 export async function subscription(email,client=db){
  let [sub]=await client.select().from(subscriptions).where(eq(subscriptions.email,email));if(sub)return sub;if(client===db)return db.transaction(tx=>subscription(email,tx));

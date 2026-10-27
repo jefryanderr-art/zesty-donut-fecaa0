@@ -4,6 +4,7 @@ import { scopeBranch, branchStock, recordBranch } from './branches.mjs';
 export const CROSS_BRANCH_OPS=['stockTransfer','stockReceive','moneyTransfer'];
 export function transferOperation(data,access,session,body,h){
  const {requireValue:check,requirePermission:permit,appendEntry:append,dateValue:date,amount,ledgerBalance}=h,round=n=>Math.round((n+Number.EPSILON)*100)/100,when=date(body.date);
+ permit(access,'sucursales');
  const source=access.branchId;check(source,'Selecciona una sucursal.');
  const posting=(branchId,record)=>append(data,session,{branchId,...record});
  if(body.operation==='moneyTransfer'){

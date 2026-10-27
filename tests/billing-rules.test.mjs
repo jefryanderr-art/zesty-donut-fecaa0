@@ -1,6 +1,7 @@
+import { fiscalAnnualTotals } from '../netlify/lib/fiscal-projection.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {addMonths,dayEnd,entitlement,DEFAULT_PLANS,moduleIncluded,platformContextAllowed,supportGrantActive,servicePaymentKey,validatePlan} from '../netlify/lib/billing-rules.mjs';
+import {addMonths,dayEnd,entitlement,DEFAULT_PLANS,moduleIncluded,requirePlanModule,planModule,BLOCKABLE_MODULES,platformContextAllowed,supportGrantActive,servicePaymentKey,validatePlan} from '../netlify/lib/billing-rules.mjs';
 
 test('la prueba vence a las 24 horas y no se reinicia por consultar',()=>{
  const sub={trialEndsAt:'2026-10-23T12:00:00Z',state:'prueba'};
@@ -55,12 +56,40 @@ test('la referencia idempotente distingue entornos y es estable en reintentos',(
  assert.notEqual(servicePaymentKey('sandbox',ern),servicePaymentKey('production',ern));
  assert.throws(()=>servicePaymentKey('sandbox','externa'));
 });
-test('planes mantienen los precios anuales, exclusiones y centavos enteros',()=>{
- assert.deepEqual(DEFAULT_PLANS.map(p=>p.annualCents),[31400,63000,190000]);
- assert.equal(moduleIncluded(DEFAULT_PLANS[0],'personal'),false);
- assert.equal(moduleIncluded(DEFAULT_PLANS[0],'ventas'),true);
- assert.equal(moduleIncluded(DEFAULT_PLANS[1],'sucursales'),false);
- assert.equal(moduleIncluded(DEFAULT_PLANS[2],'sucursales'),true);
- assert.throws(()=>validatePlan({...DEFAULT_PLANS[0],monthlyCents:3500.5,active:true}));
- assert.equal(validatePlan({...DEFAULT_PLANS[0],active:true}).monthlyCents,3500);
+test('los planes existentes conservan precios y límites; Básico incorpora Fiscal',()=>{
+ const basic=DEFAULT_PLANS.find(p=>p.id==='basico'),standard=DEFAULT_PLANS.find(p=>p.id==='estandar'),pro=DEFAULT_PLANS.find(p=>p.id==='pro');
+ assert.deepEqual([basic,standard,pro].map(p=>[p.monthlyCents,p.annualCents]),[[3500,31400],[7000,63000],[20000,190000]]);
+ assert.deepEqual(basic.blockedModules,['personal','control_personal','decisiones','sucursales']);
+ assert.equal(moduleIncluded(basic,'fiscal'),true);
+ assert.deepEqual(standard.blockedModules,['sucursales']);assert.deepEqual(pro.blockedModules,[]);
+ assert.deepEqual([basic,standard].map(p=>p.limits),[{companies:1,branches:1},{companies:1,branches:1}]);assert.deepEqual(pro.limits,{companies:null,branches:null});
+ assert.throws(()=>validatePlan({...basic,monthlyCents:3500.5,active:true}));assert.equal(validatePlan({...basic,active:true}).monthlyCents,3500);
+});
+test('Facturación ocupa el primer lugar con precios confirmados y bloqueos precisos',()=>{
+ const p=DEFAULT_PLANS[0];assert.equal(p.id,'facturacion');assert.equal(p.name,'Facturación');assert.equal(p.monthlyCents,3000);assert.equal(p.annualCents,31000);assert.equal(p.currency,'USD');assert.deepEqual(p.limits,{companies:1,branches:1});
+ assert.deepEqual(p.blockedModules,['contabilidad','finanzas','cajas','personal','control_personal','decisiones','sucursales']);
+ assert.deepEqual(DEFAULT_PLANS.map(p=>p.id),['facturacion','basico','estandar','pro']);
+});
+test('el editor acepta todos los módulos configurables y rechaza módulos desconocidos',()=>{
+ const p={...DEFAULT_PLANS[0],active:true};
+ assert.deepEqual(validatePlan({...p,blockedModules:BLOCKABLE_MODULES}).blockedModules,BLOCKABLE_MODULES);
+ assert.throws(()=>validatePlan({...p,blockedModules:['desconocido']}));
+});
+test('el servidor rechaza cada módulo excluido y permite la operación y las deudas',()=>{
+ const p=DEFAULT_PLANS[0];
+ for(const module of p.blockedModules){assert.equal(moduleIncluded(p,module),false);assert.throws(()=>requirePlanModule(p,module),error=>error.status===403&&error.publicMessage.startsWith('Tu plan no incluye '));}
+ for(const module of ['cobrar','pagar','ventas','compras','gastos','costos','inventario','facturacion','fiscal','accesibilidad','ajustes','auditoria']){assert.equal(moduleIncluded(p,module),true,module);assert.doesNotThrow(()=>requirePlanModule(p,module));}
+ assert.equal(planModule('cobrar'),'ventas');assert.equal(planModule('pagar'),'compras');
+ for(const route of ['traslados','compararsucursales','asistencia','simuladores','rentabilidad','pronostico'])assert.equal(moduleIncluded(p,route),false,route);
+});
+test('marcar Incluir cambia efectivamente el permiso y no elimina los demás bloqueos',()=>{
+ const p=DEFAULT_PLANS[0],edited=validatePlan({...p,active:true,blockedModules:p.blockedModules.filter(m=>m!=='contabilidad')});
+ assert.equal(moduleIncluded(edited,'contabilidad'),true);assert.doesNotThrow(()=>requirePlanModule(edited,'contabilidad'));assert.equal(moduleIncluded(edited,'cajas'),false);
+ const denyDebts={...p,blockedModules:[...p.blockedModules,'ventas','compras']};assert.equal(moduleIncluded(denyDebts,'cobrar'),false);assert.equal(moduleIncluded(denyDebts,'pagar'),false);
+});
+
+test('Fiscal conserva bases anuales históricas sin exponer asientos ni empleados',()=>{
+ const totals=fiscalAnnualTotals({accounts:[{code:'4101',tipo:'ingreso'},{code:'6101',tipo:'gasto'},{code:'6108',tipo:'gasto'}],entries:[{id:'venta',date:'2026-10-01',lines:[{a:'4101',d:0,c:100}]},{id:'nomina-privada',employeeName:'Privado',date:'2026-10-02',lines:[{a:'6101',d:20,c:0}]},{id:'renta',date:'2026-10-03',lines:[{a:'6108',d:5,c:0}]}]});
+ assert.deepEqual(totals,{'2026':{incomeCents:10000,costCents:0,expenseCents:2000}});
+ assert.equal(JSON.stringify(totals).includes('Privado'),false);
 });

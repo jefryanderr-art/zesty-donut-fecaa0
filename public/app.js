@@ -394,7 +394,7 @@ const ACT={
      alert(res.message||'Si el correo está registrado, recibirás un enlace para restablecer tu contraseña. Revisa también tu bandeja de spam.');
    },'Enviar enlace');
  },
- logout:async()=>{if(!await flush()){alert('Hay cambios sin guardar. Descarga un respaldo e intenta guardar de nuevo antes de salir.');return}await api('logout','POST',{});localStorage.removeItem('co');for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i);if(key?.startsWith('acontec.catalog.'))localStorage.removeItem(key)}location.reload()},print:()=>print(),
+ logout:async()=>{if(!await flush()){alert('Hay cambios sin guardar. Descarga un respaldo e intenta guardar de nuevo antes de salir.');return}await api('logout','POST',{});localStorage.removeItem('co');for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i);if(key?.startsWith('acontec.catalog.'))localStorage.removeItem(key)}location.reload()},print:()=>choosePrintOptions(options=>printWithOptions(options)),
  per:(d)=>{P.k=d.k;view()},
  delentry:(d)=>{if(confirm('¿Eliminar este registro? Se revertirá el inventario si aplica.')){delEntry(d.id);view()}},
  printSale:(d,b)=>{const ff=b.closest('form'),items=readItems();if(!items.length){ff.querySelector('.err').textContent='Agrega al menos un producto para imprimir';return}

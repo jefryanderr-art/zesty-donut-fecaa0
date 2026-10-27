@@ -1,3 +1,4 @@
+import { plans } from './billing.mjs';
 import {legalTemplates,legalHash} from './legal-templates.mjs';
 import {providerConfig} from './billing-rules.mjs';
 import { createHash,randomUUID } from 'node:crypto';
@@ -96,7 +97,7 @@ export async function customerAdmin(method, body, url, session) {
     } else if (body.operation === 'payment') {
       const amount = Number(body.amount), date = clean(body.date, 10), reference = clean(body.reference), method = clean(body.method, 80), currency = clean(body.currency, 20);
       if (!Number.isFinite(amount) || amount <= 0 || amount > 9999999 || Math.abs(amount * 100 - Math.round(amount * 100)) > 0.00001 || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date)) || !reference || !method || !currency) accessError('Completa monto, fecha, moneda, método y referencia del pago.', 400);
-      if(!['basico','estandar','pro'].includes(body.plan))accessError('Elige un plan para el pago.',400);
+      if(!(await plans(client)).some(plan=>plan.id===body.plan&&plan.active))accessError('Elige un plan para el pago.',400);
       if(currency!=='USD')accessError('Los nuevos pagos del servicio se registran en USD.',400);
       const [payment] = await client.insert(customerPayments).values({ email, amountCents: Math.round(amount * 100), currency, date, reference, method, providerKey:providerConfig().environment==='sandbox'?'sandbox:manual-'+randomUUID():null, status:'por_verificar', plan:clean(body.plan,40)||null, interval:body.interval==='anual'?'anual':'mensual', actor: session.email }).returning({ id: customerPayments.id });
       await client.update(users).set({ version: user.version + 1 }).where(eq(users.email, email));

@@ -303,7 +303,7 @@ ACT.operatingSettings=()=>{
     const series=v(form,'series').split('\n').filter(line=>line.trim()).map(line=>{const [code,name,next]=line.split('|').map(value=>value.trim());return {code:code.toUpperCase(),name,next:Number(next)}});
     const file=form.elements.logoFile.files[0];let logo=form.elements.removeLogo.checked?'':pos.logo||'';
     if(file){const image=await shrink(file,700);const result=await api('company-logo?c='+CO.id,'POST',{image,revision:REV});logo=result.logo}
-    await operate('settings',{pos:{series,discountLimits:pos.discountLimits||{},packagingCostId:v(form,'packagingCostId'),packagingPay:v(form,'packagingPay'),logo},cash:{receiptsEnabled:form.elements.receiptsEnabled.checked}});view();
+    await operate('settings',{pos:{series,discountLimits:pos.discountLimits||{},packagingCostId:v(form,'packagingCostId'),packagingPay:v(form,'packagingPay'),logo},...(billingCan('cajas')?{cash:{receiptsEnabled:form.elements.receiptsEnabled.checked}}:{})});view();
   });
 };
 let ADVANCE_MONTH=today().slice(0,7),ADVANCE_WITHHOLDINGS=0;

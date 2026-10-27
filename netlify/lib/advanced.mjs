@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { amortization, monthlyDepreciation, balancedLines, yearClosing, moneyCents } from './accounting-engine.mjs';
 const round=n=>Math.round((n+Number.EPSILON)*100)/100;
 const text=(s,n=200)=>String(s||'').trim().slice(0,n);
-export const ADVANCED_ARRAYS={assets:'contabilidad',loans:'contabilidad',recurringEntries:'contabilidad',exchangeRates:'finanzas',foreignDocuments:'contabilidad',budgets:'finanzas',quotations:'facturacion',purchaseOrders:'compras',attendance:'personal',vacationRequests:'personal',employeeAdvances:'personal'};
+export const ADVANCED_ARRAYS={assets:'contabilidad',loans:'contabilidad',recurringEntries:'contabilidad',exchangeRates:'contabilidad',foreignDocuments:'contabilidad',budgets:'finanzas',quotations:'facturacion',purchaseOrders:'compras',attendance:'control_personal',vacationRequests:'control_personal',employeeAdvances:'control_personal'};
 const EXTRA_ACCOUNTS=[['1204','Gastos pagados por adelantado','activo','D',''],['1205','Anticipos a proveedores','activo','D',''],['2108','Anticipos de clientes','pasivo','C',''],['2109','Ingresos diferidos','pasivo','C',''],['2110','Provisiones laborales','pasivo','C',''],['2202','Préstamos bancarios corto plazo','pasivo','C','fin'],['3104','Reserva legal','patrimonio','C',''],['4103','Intereses ganados','ingreso','C',''],['4104','Ganancia cambiaria','ingreso','C',''],['6110','Intereses y gastos financieros','gasto','D',''],['6111','Pérdida cambiaria','gasto','D','']];
 export function initializeAdvanced(data){for(const name of Object.keys(ADVANCED_ARRAYS))data[name]||=[];for(const [code,name,tipo,nat,sub]of EXTRA_ACCOUNTS)if(!data.accounts.some(a=>a.code===code))data.accounts.push({code,name,tipo,nat,sub});return data}
 const OPS=new Set(['closePeriod','reopenPeriod','closeYear','asset','depreciate','disposeAsset','loan','loanPay','exchangeRate','foreignDocument','settleForeign','recurring','postRecurring','provision','budget','quotation','purchaseOrder','attendance','vacation','employeeAdvance','purchaseOrderConvert']);
@@ -11,7 +11,7 @@ export function handlesAdvanced(operation){return OPS.has(operation)}
 export function advancedOperation(data,access,session,body,helpers){
  const {requireValue:check,requirePermission:permit,appendEntry:append,dateValue:date,amount,actorName}=helpers;const op=body.operation;
  initializeAdvanced(data);
- const module=['attendance','vacation','employeeAdvance','provision'].includes(op)?'personal':op==='budget'||op==='exchangeRate'?'finanzas':op==='quotation'?'facturacion':['purchaseOrder','purchaseOrderConvert'].includes(op)?'compras':'contabilidad';permit(access,module);
+ const module=['attendance','vacation','employeeAdvance'].includes(op)?'control_personal':op==='provision'?'personal':op==='budget'?'finanzas':op==='quotation'?'facturacion':['purchaseOrder','purchaseOrderConvert'].includes(op)?'compras':'contabilidad';permit(access,module);
  const entry=record=>append(data,session,record),between=(a,b,total)=>[{a,d:total,c:0},{a:b,d:0,c:total}],find=(name,id)=>{const row=data[name].find(r=>r.id===id);check(row,'Registro no encontrado en esta sucursal.');return row};
  if(['closePeriod','reopenPeriod','closeYear'].includes(op)){
   check(access.owner,'Solo el dueño cierra o reabre períodos.');check(access.branchId,'Selecciona una sucursal.');check(text(body.reason),'Escribe el motivo para la bitácora.');data.cfg.periodLocks||={};
