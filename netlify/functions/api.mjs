@@ -646,6 +646,16 @@ const handleRequest = async (request, context, metrics) => {
       for (const key of ['brand', 'eyebrow', 'title', 'sub', 'note', 'caption', 'footer', 'tagline']) {
         if (typeof body[key] === 'string') content[key] = body[key].trim().slice(0, ['sub', 'caption'].includes(key) ? 2000 : 200);
       }
+      content.policyNotes = {devoluciones: String(body.policyNotes?.devoluciones ?? previous?.content?.policyNotes?.devoluciones ?? '').trim().slice(0,10000)};
+      content.moduleLabels = {};
+      if (body.moduleLabels && (typeof body.moduleLabels !== 'object' || Array.isArray(body.moduleLabels))) return fail('Nombres de módulos inválidos');
+      for (const [key, value] of Object.entries(body.moduleLabels || {}).slice(0, 100)) {
+        if (!/^[a-z][a-z0-9-]{0,59}$/.test(key) || typeof value !== 'string' || value.length > 80) return fail('Nombre de módulo inválido');
+        if (value.trim()) content.moduleLabels[key] = value.trim();
+      }
+      for (const key of ['panelTitle', 'panelDescription', 'cookieNotice']) {
+        if (typeof body[key] === 'string') content[key] = body[key].trim().slice(0, 2000);
+      }
       if (Object.values(content).some(value => /el\s+amanecer/i.test(value))) return fail('Utiliza la marca Acontec o el nombre de la empresa');
       try { content.contacts = siteContacts(body.contacts); } catch (error) { return fail(error.message); }
       for (const key of ['green', 'gold']) {
