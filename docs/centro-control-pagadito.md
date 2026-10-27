@@ -228,3 +228,32 @@ La revisión de esta entrega fue estática; no se ejecutaron pruebas, servidores
 - `.netlify/`
 - `netlify/lib/fiscal-projection.mjs`
 - `public/printing.js`
+
+
+## Empresas de prueba de plan
+
+El Centro de control incluye empresas propias de prueba interna sin cobro. Desde Acontec activa en la sesión, el super administrador puede crear «Prueba · <nombre del plan>» (con número si se repite), abrirla con el selector existente, cambiar su plan mediante selector y motivo confirmado, o quitar la prueba. No se crea una empresa automáticamente al desplegar. La interfaz normal muestra una franja permanente «MODO DE PRUEBA INTERNA · Plan <nombre> · sin cobro» y la insignia del selector; Mi suscripción explica el modo sin ofrecer contratación. La matriz utiliza los módulos y límites actuales guardados de los cuatro planes.
+
+La columna nullable `acontec_companies.test_plan` se añadió mediante `20261027233847_add_company_test_plan`. El servidor solo la aplica cuando el dueño conserva el rol real platform_admin y la empresa no es la de plataforma. Se consulta directamente el plan guardado, sin sustituirlo por DEFAULT_PLANS ni inicializar una suscripción. Colaboradores heredan estas restricciones junto con sus permisos individuales. El navegador solo solicita cambios por las rutas administrativas protegidas; no concede permisos al enviar un plan en una operación contable.
+
+GET `/api/platform/test-companies` devuelve únicamente las empresas propias activas con prueba. POST `/api/platform/test-companies/create` y `/set` exigen sesión administrativa en la empresa de plataforma, sin colaborador, mismo origen, JSON, `confirmed: true` y motivo de al menos tres caracteres. El cambio incluye `previousPlan` para detectar ediciones simultáneas. La creación comparte la función normal y su bloqueo por usuario; los cambios bloquean la empresa, incrementan revisión y registran motivo y valores en auditoría. Nunca se marca una empresa de prueba como plataforma. Se rechazan empresas ajenas, archivadas, de plataforma y planes desconocidos.
+
+No se consultan ni modifican pagos, autorizaciones o suscripciones desde estas rutas, ni se crean asientos o ingresos. La contratación, confirmación y cancelación comercial desde una empresa de prueba se rechazan. No se cambian precios, vigencias, variables ni datos de clientes. El límite de empresas se muestra como referencia: las empresas de prueba no se vuelven de consulta ni limitan la excepción administrativa de creación. Los límites de sucursales y módulos sí se aplican a lecturas, operaciones y guardados; los planes de una sucursal quedan en principal. Sin test_plan se conserva el comportamiento administrativo anterior.
+
+Para revertir una prueba, quitar su plan desde Acontec con motivo y confirmación; conserva empresa, documentos y auditoría. No borrar tablas, columnas, datos ni migraciones.
+
+### Lista de verificación — pendiente tras el despliegue
+
+No se ejecutaron compilaciones, servidores ni pruebas locales. Las pruebas de reglas quedaron preparadas, no aprobadas. La revisión fue estática y no acredita funcionamiento al 100 % ni validación visual.
+
+- [ ] Aplicar la migración durante el despliegue y comprobar rol real de Functions/RLS. Ejecutar las pruebas preparadas mediante la plataforma.
+- [ ] Para cada plan, crear o abrir una empresa de prueba, cambiar el plan, volver a abrirla y comprobar menú lateral, barra inferior, panel, URL directa, API y guardados. Repetir con colaboradores y dos pestañas; verificar conflicto de revisión y previousPlan.
+- [ ] Facturación: visibles ventas, clientes, compras, proveedores, gastos, costos, inventario, facturación y turnos, cobrar/pagar, Fiscal, Accesibilidad, ajustes y auditoría. Bloqueados contabilidad formal (diario, mayor, estados), Tesorería, Personal, Control del personal, Decisiones y Sucursales/traslados/comparar.
+- [ ] Básico: como Facturación, además contabilidad formal, estados financieros y Tesorería, conservando Fiscal. Bloqueados Personal, Control del personal, Decisiones y Sucursales.
+- [ ] Estándar: todo menos Sucursales; límite del plan de una empresa y solo principal. Las empresas de prueba conservan escritura por la excepción administrativa documentada.
+- [ ] Pro: todos los módulos, sin límite del plan de empresas ni sucursales.
+- [ ] En los tres primeros, intentar módulos bloqueados por URL/ruta y operaciones API: confirmar 403 «Tu plan no incluye…» en servidor y denegación de navegación en interfaz. Estándar solo bloquea Sucursales según su configuración inicial. Comparar siempre con la matriz guardada si se editaron los planes.
+- [ ] Confirmar franja visible en cada pantalla, móvil y modo oscuro; insignia en Mis empresas y Mi suscripción sin botón «Elegir plan y pagar».
+- [ ] Confirmar que crear/cambiar/quitar no genera cobro, pago, autorización, suscripción ni asiento en ninguna empresa. Revisar auditoría y ausencia de cambios en Acontec y clientes.
+- [ ] Quitar el plan de prueba y comprobar acceso administrativo completo, conservando datos. Verificar también una empresa administrativa sin test_plan.
+- [ ] Visitante 401; cliente real y colaborador 403 en todas las rutas de prueba; administrador fuera de Acontec 403. Rechazar empresa ajena/de plataforma, plan inválido, falta de motivo/confirmación, JSON incorrecto y origen ajeno.

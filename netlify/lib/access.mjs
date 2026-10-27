@@ -1,8 +1,8 @@
 import { fiscalAnnualTotals } from './fiscal-projection.mjs';
 import { normalizeItemQuantity } from './accounting-engine.mjs';
 import { requireBilling } from './billing.mjs';
-import { moduleIncluded,requirePlanModule,supportGrantActive } from './billing-rules.mjs';
-import { users, supportGrants } from '../../db/schema.ts';
+import { internalTestApplies,internalTestEntitlement,moduleIncluded,requirePlanModule,supportGrantActive } from './billing-rules.mjs';
+import { users, servicePlans, supportGrants } from '../../db/schema.ts';
 import { TRADE_ARRAYS } from './trade.mjs';
 import { CROSS_BRANCH_OPS } from './transfers.mjs';
 import { ADVANCED_ARRAYS } from './advanced.mjs';
@@ -57,7 +57,7 @@ export async function verifyPassword(password, digest) {
   return expected.length === key.length && timingSafeEqual(expected, key) && String(password).length <= 128;
 }
 export async function accessibleCompanies(session) {
-  const summary = { isPlatformCompany: companies.isPlatformCompany, id: companies.id, name: companies.name, description: companies.description };
+  const summary = { testPlan: companies.testPlan, isPlatformCompany: companies.isPlatformCompany, id: companies.id, name: companies.name, description: companies.description };
   const rows = session.member ? [] : await db.select(summary).from(companies).where(and(eq(companies.ownerEmail, session.email), isNull(companies.archivedAt)));
   const memberships = await db.select({ member: { id: companyMembers.id, permissions: companyMembers.permissions, role: companyMembers.role }, company: summary }).from(companyMembers)
     .innerJoin(companies, eq(companies.id, companyMembers.companyId))
@@ -66,7 +66,7 @@ export async function accessibleCompanies(session) {
   const [viewer]=await db.select({platformAdmin:users.platformAdmin}).from(users).where(eq(users.email,session.email));
   const supportCompanies=grants.filter(({company})=>!rows.some(c=>c.id===company.id)&&!memberships.some(m=>m.company.id===company.id)).map(({company})=>({...company,owner:false,permissions:Object.fromEntries(MODULES.map(m=>[m,'lectura'])),role:'Soporte temporal'}));
   return [...supportCompanies,...rows.map(company => ({ ...company, owner: true, permissions: {} })), ...memberships.filter(row => !rows.some(company => company.id === row.company.id)&&(!viewer?.platformAdmin||grants.some(g=>g.company.id===row.company.id))).map(({ company, member }) => ({ ...company, owner: false, permissions: member.permissions, memberId: member.id, role: member.role }))]
-    .map(({ isPlatformCompany, id, name, description, owner, permissions, memberId, role }) => ({ isPlatformCompany, id, name, description, owner, permissions, memberId, role: owner ? 'Dueño' : role }));
+    .map(({ testPlan, isPlatformCompany, id, name, description, owner, permissions, memberId, role }) => ({ testPlan, isPlatformCompany, id, name, description, owner, permissions, memberId, role: owner ? 'Dueño' : role }));
 }
 export async function companyAccess(client, companyId, session, lock = false, loadAccounting = true) {
   if (!/^[a-f0-9-]{36}$/.test(companyId || '')) accessError('Empresa no encontrada.', 404);
@@ -76,10 +76,12 @@ export async function companyAccess(client, companyId, session, lock = false, lo
   if (!company || company.archivedAt) accessError('Empresa no encontrada.', 404);
   const finish=async access=>{
     const [ownerUser]=await client.select({platformAdmin:users.platformAdmin}).from(users).where(eq(users.email,company.ownerEmail));
-    const billing=await requireBilling(company.ownerEmail,ownerUser?.platformAdmin===true,client);
-    const result=await branchAccess(access,session);result.billingPlan=billing.plan;result.entitlement=billing.ent;
+    const internalTest=internalTestApplies({testPlan:company.testPlan,isPlatformCompany:company.isPlatformCompany,ownerPlatformAdmin:ownerUser?.platformAdmin});
+    let billing;
+    if(internalTest){const [plan]=await client.select().from(servicePlans).where(eq(servicePlans.id,company.testPlan));if(!plan)accessError('Plan de prueba no disponible.',403);billing={plan,ent:internalTestEntitlement(plan.id)}}else billing=await requireBilling(company.ownerEmail,ownerUser?.platformAdmin===true,client);
+    const result=await branchAccess(access,session);result.billingPlan=billing.plan;result.entitlement=billing.ent;result.internalTestPlan=internalTest?billing.plan.id:null;
     const ownedRows=await client.select({id:companies.id}).from(companies).where(and(eq(companies.ownerEmail,company.ownerEmail),isNull(companies.archivedAt))).orderBy(companies.id);
-    const limit=billing.plan?.limits?.companies;result.readOnlyLimit=limit!=null&&ownedRows.findIndex(c=>c.id===company.id)>=limit;
+    const limit=billing.plan?.limits?.companies;result.readOnlyLimit=!internalTest&&limit!=null&&ownedRows.findIndex(c=>c.id===company.id)>=limit;
     if(result.billingPlan?.blockedModules?.includes('sucursales')||result.billingPlan?.limits?.branches===1){result.branchId='principal';result.branches=result.branches.filter(b=>b.id==='principal');result.unrestrictedBranches=companyBranches(company.data).length===1}
     return result;};
   if (!session.member && company.ownerEmail === session.email) {
@@ -491,4 +493,17 @@ export async function migrateAccountingStorage(companyId, session, body) {
     await audit(client, companyId, session, mode === 'apply' ? 'Almacenamiento relacional activado y verificado' : 'Lectura JSON recuperada sin borrar tablas', [{ area: 'almacenamiento', after: result }], company.revision);
     return { ...result, verified: true, persisted: true };
   });
+}
+
+// Shared creation path: caller supplies the server-resolved limit, never browser authority.
+export async function createOwnedCompany(client,session,{name,description='',companyLimit=null,testPlan=null,uniqueName=false}){
+ if(session.member)accessError('Los colaboradores no pueden crear empresas.');
+ await client.select({email:users.email}).from(users).where(eq(users.email,session.email)).for('update');
+ const current=await client.select({id:companies.id,name:companies.name}).from(companies).where(and(eq(companies.ownerEmail,session.email),isNull(companies.archivedAt)));
+ if(companyLimit!=null&&current.length>=companyLimit)accessError('Se alcanzó el límite de empresas del plan.',403);
+ const base=String(name||'').trim().slice(0,80);if(!base)accessError('Escribe un nombre de empresa',400);
+ name=base;if(uniqueName){let n=2;while(current.some(c=>c.name===name))name=base.slice(0,70)+' '+n++}
+ const [created]=await client.insert(companies).values({ownerEmail:session.email,name,description:String(description).trim().slice(0,2000),testPlan,isPlatformCompany:false}).returning({id:companies.id});
+ await audit(client,created.id,session,'Empresa creada',[{area:'name',before:null,after:name}],0);
+ return created;
 }

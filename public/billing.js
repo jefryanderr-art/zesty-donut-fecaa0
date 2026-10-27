@@ -24,9 +24,11 @@ async function refreshBilling(){
  if(companyId&&previousPlan!==JSON.stringify(data.plan)){if(await flush()){const route=R;await billingOpenCompany(companyId);if(routeAllowed(route)){R=route;view()}}else{chrome();view();setSt('El plan cambió. Hay cambios pendientes: revísalos antes de recargar.')}}
  const target=$('#billing-status');if(target)target.textContent=billingStatus();
 }
-function billingStatus(){const ent=BILLING?.entitlement||CO?.entitlement;if(!ent)return 'Mi suscripción';if(CO&&!CO.owner){if(!ent.access||ent.state==='en_gracia')return billingCompanyNotice;return 'Plan de la empresa · '+(CO.billingPlan?.name||ent.plan||'vigente')}if(ent.state==='prueba'){const seconds=Math.max(0,Math.floor((Date.parse(ent.trialEndsAt)-Date.now())/1000));return `Prueba gratuita · quedan ${String(Math.floor(seconds/3600)).padStart(2,'0')}:${String(Math.floor(seconds/60)%60).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`}if(ent.state==='en_gracia')return 'Tu pago venció · regulariza tu suscripción';return ent.state==='admin'?'Administración de plataforma':`Plan ${BILLING?.plan?.name||ent.plan} · hasta ${shortDate(ent.paidUntil)}`}
+function billingStatus(){const ent=BILLING?.entitlement||CO?.entitlement;if(!ent)return 'Mi suscripción';if(ent.internalTest)return 'Prueba interna · '+(CO?.billingPlan?.name||BILLING?.plan?.name||ent.plan);if(CO&&!CO.owner){if(!ent.access||ent.state==='en_gracia')return billingCompanyNotice;return 'Plan de la empresa · '+(CO.billingPlan?.name||ent.plan||'vigente')}if(ent.state==='prueba'){const seconds=Math.max(0,Math.floor((Date.parse(ent.trialEndsAt)-Date.now())/1000));return `Prueba gratuita · quedan ${String(Math.floor(seconds/3600)).padStart(2,'0')}:${String(Math.floor(seconds/60)%60).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`}if(ent.state==='en_gracia')return 'Tu pago venció · regulariza tu suscripción';return ent.state==='admin'?'Administración de plataforma':`Plan ${BILLING?.plan?.name||ent.plan} · hasta ${shortDate(ent.paidUntil)}`}
 function billingTrialOffer(){
  const ent=BILLING?.entitlement||CO?.entitlement;
+ $('#internal-test-banner')?.remove();
+ if(ent?.internalTest)$('#main')?.insertAdjacentHTML('beforebegin',`<aside id="internal-test-banner" class="internal-test-banner noprint" role="status">MODO DE PRUEBA INTERNA · Plan ${esc(CO?.billingPlan?.name||BILLING?.plan?.name||ent.plan)} · sin cobro</aside>`);
  const visible=billingCanManage()&&ent?.state==='prueba';
  if(!visible){$('#billing-trial-offer')?.remove();return}
  if($('#billing-trial-offer'))return;
@@ -34,6 +36,7 @@ function billingTrialOffer(){
 }
 async function showPlans(locked=false){
  BILLING_LOCKED=locked;
+ if((CO?.entitlement||BILLING?.entitlement)?.internalTest){modal('Mi suscripción · prueba interna',notice(billingStatus())+'<p>Esta empresa utiliza los módulos y límites actuales del plan elegido, sin cobro ni suscripción comercial. Cambia o retira el plan desde Empresas de prueba de plan en el Centro de control de Acontec.</p>',()=>{},'Cerrar');return}
  if(!billingCanManage()){
   let root=$('#billing-overlay');if(!root){root=document.createElement('section');root.id='billing-overlay';root.className='billing-overlay';root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label','Plan de la empresa');document.body.append(root)}
   root.innerHTML=`<div class="billing-sheet"><h1>Plan de la empresa</h1><p>${esc(locked||CO?.entitlement?.state==='en_gracia'?billingCompanyNotice:'El acceso a esta empresa depende de la suscripción de su dueño.')}</p><p>${esc(billingStatus())}</p><button id="billing-close" class="btn ghost">${locked?'Elegir otra empresa':'Volver a mi empresa'}</button> <button id="billing-logout" class="btn ghost">Salir</button></div>`;

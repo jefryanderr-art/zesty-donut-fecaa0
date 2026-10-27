@@ -1,7 +1,7 @@
 import { fiscalAnnualTotals } from '../netlify/lib/fiscal-projection.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {addMonths,dayEnd,entitlement,DEFAULT_PLANS,moduleIncluded,requirePlanModule,planModule,BLOCKABLE_MODULES,platformContextAllowed,supportGrantActive,servicePaymentKey,validatePlan} from '../netlify/lib/billing-rules.mjs';
+import {internalTestApplies,internalTestEntitlement,addMonths,dayEnd,entitlement,DEFAULT_PLANS,moduleIncluded,requirePlanModule,planModule,BLOCKABLE_MODULES,platformContextAllowed,supportGrantActive,servicePaymentKey,validatePlan} from '../netlify/lib/billing-rules.mjs';
 
 test('la prueba vence a las 24 horas y no se reinicia por consultar',()=>{
  const sub={trialEndsAt:'2026-10-23T12:00:00Z',state:'prueba'};
@@ -92,4 +92,16 @@ test('Fiscal conserva bases anuales históricas sin exponer asientos ni empleado
  const totals=fiscalAnnualTotals({accounts:[{code:'4101',tipo:'ingreso'},{code:'6101',tipo:'gasto'},{code:'6108',tipo:'gasto'}],entries:[{id:'venta',date:'2026-10-01',lines:[{a:'4101',d:0,c:100}]},{id:'nomina-privada',employeeName:'Privado',date:'2026-10-02',lines:[{a:'6101',d:20,c:0}]},{id:'renta',date:'2026-10-03',lines:[{a:'6108',d:5,c:0}]}]});
  assert.deepEqual(totals,{'2026':{incomeCents:10000,costCents:0,expenseCents:2000}});
  assert.equal(JSON.stringify(totals).includes('Privado'),false);
+});
+
+test('prueba interna exige dueño administrador, plan y empresa ajena a plataforma',()=>{
+ const context={testPlan:'basico',isPlatformCompany:false,ownerPlatformAdmin:true};
+ assert.equal(internalTestApplies({...context,ownerPlatformAdmin:false}),false);
+ assert.equal(internalTestApplies({...context,isPlatformCompany:true}),false);
+ assert.equal(internalTestApplies({...context,testPlan:null}),false);
+ assert.equal(internalTestApplies(context),true);
+ assert.equal(internalTestApplies({...context,isPlatformCompany:undefined}),false);
+});
+test('el entitlement interno no concede una suscripción comercial',()=>{
+ for(const plan of DEFAULT_PLANS)assert.deepEqual(internalTestEntitlement(plan.id),{access:true,state:'prueba_interna',plan:plan.id,internalTest:true});
 });

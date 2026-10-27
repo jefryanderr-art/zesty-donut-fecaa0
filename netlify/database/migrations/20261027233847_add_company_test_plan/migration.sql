@@ -1,0 +1,1 @@
+ALTER TABLE "acontec_companies" ADD COLUMN "test_plan" text;

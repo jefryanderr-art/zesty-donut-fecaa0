@@ -3,7 +3,7 @@ import '../../public/cloud-sync.js';
 import {deliverMessages} from '../lib/service-mail.mjs';
 import {serviceReceipt} from '../lib/service-receipts.mjs';
 import {plans, billingRoute, subscription, requireBilling} from '../lib/billing.mjs';
-import {requirePlatform,platformSummary,platformAction,supportAction} from '../lib/platform.mjs';
+import {testCompaniesRoute,requirePlatform,platformSummary,platformAction,supportAction} from '../lib/platform.mjs';
 import { gunzipSync } from 'node:zlib';
 import { statement } from '../lib/reporting.mjs';
 import { integrityReport } from '../lib/accounting-engine.mjs';
@@ -16,7 +16,7 @@ import { timingSafeEqual, createHash, randomBytes, randomUUID } from 'node:crypt
 import { and, desc, eq, gt, lt, or, sql, isNull } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
 import { users, companies, siteContent, loginAttempts, sessions, companyMembers, auditEvents, companyBackups, saveFailures } from '../../db/schema.ts';
-import { MODULES, allowed, requireModule, allData, equal, accessError, accessibleCompanies, companyAccess, projectData, mergeData, safeMember, manageMember, verifyPassword, updateCompany, audit, migrateAccountingStorage } from '../lib/access.mjs';
+import { createOwnedCompany, MODULES, allowed, requireModule, allData, equal, accessError, accessibleCompanies, companyAccess, projectData, mergeData, safeMember, manageMember, verifyPassword, updateCompany, audit, migrateAccountingStorage } from '../lib/access.mjs';
 import { runOperation, guardLedgerMutation } from '../lib/operations.mjs';
 import { PLATFORM_OWNER, receiptRecords, cashAdministrator, operatorId } from '../lib/policies.mjs';
 import { customerAdmin, isPlatformAdmin, ensureAcontecCompany, legalDocument, legalState, acceptLegal } from '../lib/customer-admin.mjs';
@@ -335,6 +335,7 @@ const handleRequest = async (request, context, metrics) => {
     if(['billing/me','checkout','billing/confirm','cancel'].includes(path))return json(await billingRoute(path,method,body,session,request,isAdmin));
     if(path==='support-grant')return json(await supportAction(session,url.searchParams.get('c'),method,body));
     if(path==='service-receipt'){await requirePlatform(session,url.searchParams.get('c'));return json(await serviceReceipt(method,url.searchParams.get('id'),body,session));}
+    if(path==='platform/test-companies'||path.startsWith('platform/test-companies/'))return json(await testCompaniesRoute(session,method,path.split('/')[2]||body.operation,body));
     if(path==='platform'){await requirePlatform(session,url.searchParams.get('c'));if(method==='GET')return json(await platformSummary(url));if(method==='POST'){const result=await platformAction(session,body);if(['message','verifyPayment'].includes(body.operation))context.waitUntil(deliverMessages(20));return json(result);}return fail('Método no permitido.',405);}
     if (path === 'customers-admin') {await requirePlatform(session,url.searchParams.get('c'));return json(await customerAdmin(method, body, url, session));}
     if (consent.required && !isAdmin && path !== 'me') return fail('Debes aceptar los términos de uso y la política de privacidad vigentes.', 428);
@@ -547,14 +548,7 @@ const handleRequest = async (request, context, metrics) => {
       const companyLimit=isAdmin?null:billing.plan?.limits?.companies;
       if(companyLimit!=null&&owned.filter(c=>c.owner).length>=companyLimit)return fail('Se alcanzó el límite de empresas del plan.',403);
       if (!companyName(body.name)) return fail('Escribe un nombre de empresa');
-      const company = await db.transaction(async client => {
-        await client.select({email:users.email}).from(users).where(eq(users.email,session.email)).for('update');
-        const current = await client.select({id:companies.id}).from(companies).where(and(eq(companies.ownerEmail,session.email),isNull(companies.archivedAt)));
-        if(companyLimit!=null&&current.length>=companyLimit) accessError('Se alcanzó el límite de empresas del plan.',403);
-        const [created] = await client.insert(companies).values({ownerEmail:session.email,name:companyName(body.name),description:String(body.description||'').trim().slice(0,2000)}).returning({id:companies.id});
-        await audit(client,created.id,session,'Empresa creada',[{area:'name',before:null,after:companyName(body.name)}],0);
-        return created;
-      });
+      const company = await db.transaction(client => createOwnedCompany(client,session,{name:body.name,description:body.description,companyLimit}));
       return json({ id: company.id, companies: await accessibleCompanies(session) });
     }
     if (path === 'company' && method === 'DELETE') {
@@ -605,7 +599,7 @@ const handleRequest = async (request, context, metrics) => {
           const access = await companyAccess(client, companyId, session, true);
           const { id, name, description } = access.company;
           await client.update(sessions).set({activeCompanyId:id}).where(eq(sessions.tokenHash,hashToken(sessionToken(request))));
-          const company = { isPlatformCompany:access.company.isPlatformCompany, billingPlan:access.billingPlan, entitlement:access.entitlement, readOnlyLimit:access.readOnlyLimit, support:access.support||false,supportExpiresAt:access.supportExpiresAt, id, name, description, owner: access.owner, permissions: access.permissions, memberId: access.member?.id, role: access.owner ? 'Dueño' : access.member?.role, branches: access.branches, branchId: access.branchId, unrestrictedBranches: access.unrestrictedBranches };
+          const company = { testPlan:access.company.testPlan, internalTestPlan:access.internalTestPlan, isPlatformCompany:access.company.isPlatformCompany, billingPlan:access.billingPlan, entitlement:access.entitlement, readOnlyLimit:access.readOnlyLimit, support:access.support||false,supportExpiresAt:access.supportExpiresAt, id, name, description, owner: access.owner, permissions: access.permissions, memberId: access.member?.id, role: access.owner ? 'Dueño' : access.member?.role, branches: access.branches, branchId: access.branchId, unrestrictedBranches: access.unrestrictedBranches };
           return json({ data: projectData(access.company.data, access), revision: access.company.revision, company });
         });}catch(error){
           // companyAccess checks ownership/membership before checking the owner's plan.

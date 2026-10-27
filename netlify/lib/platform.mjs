@@ -1,3 +1,4 @@
+import {createOwnedCompany,audit} from './access.mjs';
 import {and,eq,desc,sql,isNull} from 'drizzle-orm';
 import {db} from '../../db/index.ts';
 import {users,companies,subscriptions,customerPayments,customerEvents,servicePlans,serviceMessages,siteContent,supportGrants,auditEvents} from '../../db/schema.ts';
@@ -89,4 +90,32 @@ export async function supportAction(session,companyId,method,body){
  if(body.confirmed!==true||clean(body.reason,1000).length<3)billingError('Confirma e indica el motivo.');
  const email=clean(body.email,254).toLowerCase();const [admin]=await db.select().from(users).where(and(eq(users.email,email),eq(users.platformAdmin,true)));if(!body.revoke&&!admin)billingError('Elige un super administrador de plataforma.');
  await db.transaction(async client=>{if(body.revoke)await client.delete(supportGrants).where(eq(supportGrants.companyId,companyId));else await client.insert(supportGrants).values({companyId,email,grantedBy:session.email,expiresAt:new Date(Date.now()+24*3600000)}).onConflictDoUpdate({target:supportGrants.companyId,set:{email,grantedBy:session.email,expiresAt:new Date(Date.now()+24*3600000),createdAt:new Date()}});await client.insert(auditEvents).values({companyId,actor:session.email,action:body.revoke?'Soporte revocado':'Soporte autorizado por 24 horas · solo lectura',changes:[{area:'support',email,reason:clean(body.reason,1000)}]})});return {ok:true};
+}
+
+export async function testCompaniesRoute(session,method,operation,body={}){
+ await requirePlatform(session,session.activeCompanyId);
+ if(method==='GET'&&operation)billingError('Ruta no encontrada.',404);
+ if(method==='GET')return {companies:await db.select({id:companies.id,name:companies.name,plan:companies.testPlan,date:companies.updatedAt}).from(companies).where(and(eq(companies.ownerEmail,session.email),eq(companies.isPlatformCompany,false),isNull(companies.archivedAt),sql`${companies.testPlan} IS NOT NULL`)).orderBy(desc(companies.updatedAt))};
+ if(method!=='POST')billingError('Método no permitido.',405);
+ const reason=clean(body.reason,1000);if(body.confirmed!==true||reason.length<3)billingError('Confirma la acción e indica el motivo.');
+ if(!['create','set'].includes(operation))billingError('Operación no encontrada.',404);
+ return db.transaction(async client=>{
+  await requirePlatform(session,session.activeCompanyId,client);
+  let plan=null;
+  if(body.plan!==null){if(!['facturacion','basico','estandar','pro'].includes(body.plan))billingError('Plan inválido.');[plan]=await client.select().from(servicePlans).where(eq(servicePlans.id,body.plan));if(!plan)billingError('Plan no encontrado.');}
+  let company;
+  if(operation==='create'){
+   if(!plan)billingError('Elige un plan de prueba.');
+   // Same unlimited administrator creation policy as the ordinary company endpoint.
+   company=await createOwnedCompany(client,session,{name:'Prueba · '+plan.name,testPlan:plan.id,uniqueName:true});
+  }else{
+   if(!/^[a-f0-9-]{36}$/.test(body.companyId||''))billingError('Empresa inválida.');
+   [company]=await client.select().from(companies).where(eq(companies.id,body.companyId)).for('update');
+   if(!company||company.archivedAt||company.ownerEmail!==session.email||company.isPlatformCompany)billingError('Solo puedes cambiar tus empresas propias ajenas a la plataforma.',403);
+   if(body.previousPlan!==company.testPlan)billingError('La prueba cambió. Recarga antes de continuar.',409);
+   await client.update(companies).set({testPlan:plan?.id||null,revision:company.revision+1,updatedAt:new Date()}).where(eq(companies.id,company.id));
+  }
+  await audit(client,company.id,session,plan?'Plan de prueba interna asignado':'Plan de prueba interna retirado',[{area:'testPlan',before:company.testPlan||null,after:plan?.id||null,reason}],company.revision||0);
+  return {ok:true,id:company.id};
+ });
 }

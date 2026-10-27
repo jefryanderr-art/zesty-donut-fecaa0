@@ -52,6 +52,7 @@ export const legalAcceptances = pgTable('acontec_legal_acceptances', {
 export const companies = pgTable('acontec_companies', {
   id: uuid().defaultRandom().primaryKey(),
   archivedAt: timestamp('archived_at'),
+  testPlan: text('test_plan'),
   isPlatformCompany: boolean('is_platform_company').default(false).notNull(),
   ownerEmail: text('owner_email').notNull().references(() => users.email),
   name: text().notNull(),
