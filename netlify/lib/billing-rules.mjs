@@ -45,3 +45,6 @@ export function validatePlan(body){
 export function platformContextAllowed({platformAdmin,member,platformCompany,companyId,activeCompanyId}){return platformAdmin===true&&!member&&platformCompany===true&&!!companyId&&companyId===activeCompanyId}
 export function supportGrantActive(grant,email,platformAdmin,member=false,now=Date.now()){return !member&&platformAdmin===true&&grant?.email===email&&Number.isFinite(new Date(grant.expiresAt).getTime())&&new Date(grant.expiresAt).getTime()>now}
 export function servicePaymentKey(environment,ern){if(!['sandbox','production'].includes(environment)||!/^ACT-[a-f0-9]{16}-\d{2}$/.test(ern))billingError('Referencia de pago inválida.');return environment+':'+ern}
+
+export const internalTestApplies = ({testPlan,isPlatformCompany,ownerPlatformAdmin}) => !!testPlan && ownerPlatformAdmin===true && isPlatformCompany===false;
+export const internalTestEntitlement = planId => ({access:true,state:'prueba_interna',plan:planId,internalTest:true});

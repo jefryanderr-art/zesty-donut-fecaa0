@@ -3,7 +3,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {and,eq,desc,sql,isNull} from 'drizzle-orm';
 import {db} from '../../db/index.ts';
 import {users,companies,subscriptions,servicePlans,billingCheckouts,customerPayments,customerEvents,serviceMessages,siteContent,legalAcceptances,auditEvents,companyBackups} from '../../db/schema.ts';
-import {servicePaymentKey,DEFAULT_PLANS,entitlement,moduleIncluded,providerConfig,billingError,managuaDay,addMonths,dayEnd,env} from './billing-rules.mjs';
+import {internalTestApplies,internalTestEntitlement,servicePaymentKey,DEFAULT_PLANS,entitlement,moduleIncluded,providerConfig,billingError,managuaDay,addMonths,dayEnd,env} from './billing-rules.mjs';
 import {pagadito,safePaymentUrl} from './pagadito.mjs';
 import {readAccounting,syncAccounting} from './accounting-storage.mjs';
 import {guardPeriods} from './period-controls.mjs';
@@ -41,18 +41,20 @@ async function billingContext(session,companyId=session.activeCompanyId||session
  const available=await accessibleCompanies(session);
  const selected=companyId?available.find(c=>c.id===companyId):available.find(c=>c.owner)||available[0];
  if(!selected)billingError('Empresa no encontrada o sin acceso.',403);
- const [company]=await db.select({ownerEmail:companies.ownerEmail}).from(companies).where(and(eq(companies.id,selected.id),isNull(companies.archivedAt)));
+ const [company]=await db.select({ownerEmail:companies.ownerEmail,testPlan:companies.testPlan,isPlatformCompany:companies.isPlatformCompany}).from(companies).where(and(eq(companies.id,selected.id),isNull(companies.archivedAt)));
  if(!company)billingError('Empresa no encontrada.',404);
  const [owner]=await db.select({platformAdmin:users.platformAdmin}).from(users).where(eq(users.email,company.ownerEmail));
- return {email:company.ownerEmail,admin:owner?.platformAdmin===true,canManageBilling:selected.owner===true&&!session.member};
+ return {internalTestPlan:internalTestApplies({testPlan:company.testPlan,isPlatformCompany:company.isPlatformCompany,ownerPlatformAdmin:owner?.platformAdmin})?company.testPlan:null,email:company.ownerEmail,admin:owner?.platformAdmin===true,canManageBilling:selected.owner===true&&!session.member};
 }
 async function requireBillingOwner(session){
  const context=await billingContext(session);
+ if(context.internalTestPlan)billingError('La prueba interna no admite cobros ni cambios de suscripción.',403);
  if(!context.canManageBilling)billingError('Solo el dueño de la empresa activa puede gestionar su suscripción.',403);
  return context;
 }
 export async function billingMe(session,admin,companyId){
  const context=await billingContext(session,companyId);
+ if(context.internalTestPlan){const [plan]=await db.select().from(servicePlans).where(eq(servicePlans.id,context.internalTestPlan));if(!plan)billingError('Plan de prueba no disponible.',403);return {canManageBilling:false,checkoutReady:false,entitlement:internalTestEntitlement(plan.id),plan,serverNow:new Date().toISOString()}}
  const a=await accountAccess(context.email,context.admin);
  if(!context.canManageBilling)return {canManageBilling:false,checkoutReady:false,checkoutReason:'Solo el dueño de la empresa puede contratar el plan.',entitlement:a.ent,plan:a.plan,version:a.sub.version,serverNow:new Date().toISOString()};
  const [legal]=await db.select().from(siteContent).where(eq(siteContent.id,'legal'));
