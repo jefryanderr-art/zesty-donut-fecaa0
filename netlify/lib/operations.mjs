@@ -1,3 +1,4 @@
+import { normalizeItemQuantity } from './accounting-engine.mjs';
 import { consumeDiscount } from './discounts.mjs';
 import { tradeOperation, TRADE_OPS } from './trade.mjs';
 import { countryTemplate } from './country.mjs';
@@ -242,8 +243,8 @@ async function makeSale(data, access, session, body, client, companyId) {
   requireValue(Array.isArray(body.items) && body.items.length && body.items.length <= 200, 'Agrega productos a la factura.');
   const quantities = new Map();
   const items = body.items.map(item => {
-    const product = data.products.find(record => record.id === item.p), quantity = Number(item.q);
-    requireValue(product && Number.isFinite(quantity) && quantity > 0 && quantity <= 1000000 && Math.abs(quantity - Math.round(quantity * 1e6) / 1e6) < 1e-9, 'Producto o cantidad inválida.');
+    const product = data.products.find(record => record.id === item.p), quantity = normalizeItemQuantity(item.q);
+    requireValue(product && Number.isFinite(quantity) && quantity > 0 && quantity <= 1000000, 'Producto o cantidad inválida.');
     quantities.set(product.id, (quantities.get(product.id) || 0) + quantity);
     const price = amount(item.u ?? product.price, true), unit = round(price * (1 - discount / 100)), vatRate = Number(product.vatRate || 0);
     requireValue(Number.isFinite(price) && price >= 0 && Number.isFinite(vatRate) && vatRate >= 0 && vatRate <= 100, 'Precio o IVA de producto inválido.');
