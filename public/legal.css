@@ -14,3 +14,12 @@ body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.65 Inter,system-u
 .lg-box{background:var(--soft);border:1px solid var(--bd);border-radius:14px;padding:14px 16px;margin:16px 0;font-size:15px}
 .lg-foot{max-width:780px;margin:0 auto;padding:18px;border-top:1px solid var(--bd);text-align:center;color:var(--mut);font-size:13px;line-height:1.9}
 .lg-foot a{color:var(--mut)}
+
+/* Impresión por modo de color y tamaño */
+@media print {
+ :root{--bg:#fff;--tx:#000;--mut:#000;--bd:#000;--ac:#000;--soft:#fff}
+ body{background:#fff;color:#000;font:600 9pt/1.5 Arial,Helvetica,sans-serif}
+ .lg{max-width:none;padding:0}.lg-back,.lg-foot{display:none}
+ .lg-box{background:#fff;border:1px solid #000;box-shadow:none}
+ h1,h2,h3{break-after:avoid}thead{display:table-header-group}tr{break-inside:avoid}
+}

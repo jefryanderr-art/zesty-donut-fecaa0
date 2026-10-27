@@ -1,6 +1,7 @@
+import { fiscalAnnualTotals } from './fiscal-projection.mjs';
 import { normalizeItemQuantity } from './accounting-engine.mjs';
 import { requireBilling } from './billing.mjs';
-import { moduleIncluded,supportGrantActive } from './billing-rules.mjs';
+import { moduleIncluded,requirePlanModule,supportGrantActive } from './billing-rules.mjs';
 import { users, supportGrants } from '../../db/schema.ts';
 import { TRADE_ARRAYS } from './trade.mjs';
 import { CROSS_BRANCH_OPS } from './transfers.mjs';
@@ -23,16 +24,18 @@ const deriveKey = promisify(scrypt);
 const round = value => Math.round(value * 100) / 100;
 const canonical = value => JSON.stringify(value, (key, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(name => [name, item[name]])) : item);
 export const equal = (first, second) => canonical(first) === canonical(second);
+export const requireModule = (access,module,write=false) => { requirePlanModule(access.billingPlan,module); if(!allowed(access,module,write))accessError('No tienes permiso para '+module+'.'); };
 export const allowed = (access, module, write = false) => {
   if(access.support && write)return false;
   if(access.billingPlan && !moduleIncluded(access.billingPlan,module))return false;
   if(access.readOnlyLimit && write)return false;
   if (access.owner) return true;
+  module=({control_personal:'personal',sucursales:'ajustes',decisiones:'finanzas'})[module]||module;
   const fallback = { facturacion: 'ventas', cajas: 'contabilidad', costos: 'gastos', proveedores: 'compras' };
   const level = access.permissions?.[module] ?? (access.member?.role?.toLowerCase() === 'contador' ? access.permissions?.[fallback[module]] : undefined);
   return !!roleAllows(access, module) && !(write && roleAllows(access, module) === 'lectura') && (level === 'escritura' || (!write && level === 'lectura'));
 };
-export const allData = (access, write = false) => access.unrestrictedBranches !== false && salesAdministrator(access) && [...DATA_MODULES, 'ventas', 'facturacion', 'cajas', 'costos', 'proveedores'].every(module => allowed(access, module, write));
+export const allData = (access, write = false) => access.unrestrictedBranches !== false && !(access.billingPlan?.blockedModules||[]).some(m=>['control_personal','decisiones'].includes(m)) && salesAdministrator(access) && [...DATA_MODULES, 'ventas', 'facturacion', 'cajas', 'costos', 'proveedores'].every(module => allowed(access, module, write));
 export const actorName = session => session.member ? `${session.member.name} (${session.member.username || session.email})` : session.email;
 export const safeMember = member => ({ id: member.id, email: member.email, username: member.username, name: member.name, role: member.role, permissions: member.permissions, branchIds: member.branchIds, active: member.active, version: member.version });
 export function accessError(message, status = 403) {
@@ -108,22 +111,34 @@ export function entryModule(entry) {
   if (['invini', 'ajuste'].includes(entry.type)) return 'inventario';
   if (['nomina', 'liquidacion'].includes(entry.type)) return 'personal';
   if (String(entry.type).startsWith('fiscal')) return 'fiscal';
-  if (['abono', 'factura'].includes(entry.type)) return 'contabilidad';
+  if (entry.type === 'abono') return 'contabilidad';
+  if (entry.type === 'factura') return entry.pay==='1201'?'ventas':'compras';
   return 'contabilidad';
 }
-const visibleEntry = (access, entry) => allowed(access, entryModule(entry)) || ['contabilidad', 'finanzas', 'fiscal'].some(module => allowed(access, module));
+const paymentModule = (entry,data) => {const invoice=data?.entries?.find(e=>e.id===entry.invoiceId);return invoice?.pay==='1201'?'ventas':invoice?.pay==='2101'?'compras':'contabilidad'};
+const entryAccessModule = (entry,data) => entry.type==='abono'?paymentModule(entry,data):entry.type==='factura'?'contabilidad':entryModule(entry);
+const visibleEntry = (access, entry, data) => {
+ const module=entry.type==='abono'?paymentModule(entry,data):entryModule(entry);
+ // Un libro o estado autorizado conserva todos sus asientos de origen. Fiscal
+ // por sí solo no concede ese acceso al plan operativo.
+ if(allowed(access,'contabilidad')||allowed(access,'finanzas'))return true;
+ if(access.billingPlan&&!moduleIncluded(access.billingPlan,module))return false;
+ return allowed(access,module)||(!access.billingPlan?.blockedModules?.length&&['contabilidad','finanzas','fiscal'].some(m=>allowed(access,m)));
+};
+const restrictedPlan = access => !!access.billingPlan?.blockedModules?.length;
+
 export function projectData(data, access) {
   data = scopeBranch(data, access);
-  if (!data || (access.owner && !(access.billingPlan?.blockedModules||[]).some(m=>['personal','fiscal'].includes(m)))) return data;
+  if (!data || (access.owner && !restrictedPlan(access))) return data;
   const operationalOnly = ['cajero', 'vendedor'].includes(String(access.member?.role).toLowerCase());
   const ownId = access.member?.id;
   const ownShiftIds = new Set((data.shifts || []).filter(shift => shift.operatorId === ownId).map(shift => shift.id));
   const ownFundIds = new Set((data.pettyFunds || []).filter(fund => fund.responsible === ownId).map(fund => fund.id));
   const ownInvoiceIds = new Set((data.entries || []).filter(entry => entry.type === 'venta' && (entry.operatorId === ownId || ownShiftIds.has(entry.shiftId))).map(entry => entry.id));
-  const canSeeEntry = entry => operationalOnly ? (['venta', 'nota-credito'].includes(entry.type) && (entry.operatorId === ownId || ownShiftIds.has(entry.shiftId) || ownInvoiceIds.has(entry.invoiceId))) : visibleEntry(access, entry);
+  const canSeeEntry = entry => operationalOnly ? (allowed(access,'facturacion') && ['venta', 'nota-credito'].includes(entry.type) && (entry.operatorId === ownId || ownShiftIds.has(entry.shiftId) || ownInvoiceIds.has(entry.invoiceId))) : visibleEntry(access, entry, data);
   const visibleIds = new Set((data.entries || []).filter(canSeeEntry).map(entry => entry.id));
-  const entries = (data.entries || []).filter(entry => visibleIds.has(entry.id) || (!operationalOnly && entry.invoiceId && visibleIds.has(entry.invoiceId)) || (!operationalOnly && allowed(access, 'inventario') && entry.stock?.length)).map(entry => {
-    if (visibleIds.has(entry.id) || (entry.invoiceId && visibleIds.has(entry.invoiceId))) {
+  const entries = (data.entries || []).filter(entry => visibleIds.has(entry.id) || (!operationalOnly && entry.invoiceId && visibleIds.has(entry.invoiceId) && visibleEntry(access,entry,data)) || (!operationalOnly && allowed(access, 'inventario') && entry.stock?.length)).map(entry => {
+    if (visibleIds.has(entry.id) || (entry.invoiceId && visibleIds.has(entry.invoiceId) && visibleEntry(access,entry,data))) {
       if (!operationalOnly) return entry;
       const copy = structuredClone(entry); copy.lines = []; copy.stock = [];
       for (const item of copy.items || []) delete item.cost;
@@ -133,25 +148,27 @@ export function projectData(data, access) {
   });
   const cfg = structuredClone(data.cfg || {});
   if(!access.unrestrictedBranches&&cfg.periodLocks)cfg.periodLocks=Object.fromEntries(Object.entries(cfg.periodLocks).filter(([key])=>key.startsWith(access.branchId+':')));
-  if (!['personal', 'fiscal', 'ajustes'].some(module => allowed(access, module))) cfg.fiscal = { vatRate: cfg.fiscal?.vatRate || 0 };
+  if(!allowed(access,'contabilidad'))delete cfg.periodLocks;
+  if (!allowed(access, 'fiscal')) cfg.fiscal = { vatRate: cfg.fiscal?.vatRate || 0 };
   const projected = { branches: access.branches, cfg, accounts: structuredClone(data.accounts || []), entries, products: [] };
+  if(allowed(access,'fiscal')&&!allowed(access,'contabilidad'))projected.fiscalSummary=fiscalAnnualTotals(data);
   projected.customers = allowed(access, 'ventas') || allowed(access, 'facturacion') ? structuredClone(data.customers || []) : [];
   if (['ventas', 'facturacion', 'compras', 'inventario', 'contabilidad', 'finanzas', 'fiscal'].some(module => allowed(access, module))) projected.products = structuredClone(data.products || []).map(product => operationalOnly ? { ...product, cost: 0 } : product);
   for (const name of OPERATION_ARRAYS) {
     const module = name === 'suppliers' ? 'proveedores' : ['costCatalog', 'costs'].includes(name) ? 'costos' : name === 'shifts' ? 'facturacion' : 'cajas';
-    projected[name] = allowed(access, module) || (name === 'suppliers' && allowed(access, 'compras')) ? structuredClone(data[name] || []) : [];
+    projected[name] = allowed(access, module) ? structuredClone(data[name] || []) : [];
     if (name === 'shifts' && !cashAdministrator(access)) projected[name] = projected[name].filter(shift => shift.operatorId === ownId);
     if (['pettyFunds', 'pettyVouchers', 'cashCounts'].includes(name) && !cashAdministrator(access)) projected[name] = projected[name].filter(record => record.responsible === ownId || ownFundIds.has(record.fundId));
     if (name === 'cashMovements' && !cashAdministrator(access)) projected[name] = [];
     if (name === 'pettyFunds' && !cashAdministrator(access)) for (const fund of projected[name]) fund.ledgerBalance = Math.round((data.entries || []).flatMap(entry => entry.lines || []).filter(line => line.a === fund.account).reduce((sum, line) => sum + line.d - line.c, 0) * 100) / 100;
   }
-  projected.invoiceSequences = {};
-  for (const name of ['employees', 'payrolls', 'settlements']) projected[name] = allowed(access, 'personal') ? structuredClone(data[name] || []) : [];
+  projected.invoiceSequences = access.owner&&allowed(access,'facturacion')?structuredClone(data.invoiceSequences||{}):{};
+  for (const name of ['employees', 'payrolls', 'settlements']) projected[name] = (allowed(access, 'personal')||(name==='employees'&&allowed(access,'control_personal'))) ? structuredClone(data[name] || []) : [];
   for (const name of ['taxes', 'properties']) projected[name] = allowed(access, 'fiscal') ? structuredClone(data[name] || []).map(record => {
-    const copy = { ...record }; delete copy.receipt; return copy;
+    const copy = { ...record }; if(!access.owner)delete copy.receipt; return copy;
   }) : [];
   for(const [name,module] of Object.entries({...ADVANCED_ARRAYS,...TRADE_ARRAYS})) projected[name]=allowed(access,module)?structuredClone(data[name]||[]):[];
-  projected.stockTransfers=allowed(access,'inventario')?structuredClone(data.stockTransfers||[]):[];
+  projected.stockTransfers=moduleIncluded(access.billingPlan||{blockedModules:[]},'sucursales')&&allowed(access,'inventario')?structuredClone(data.stockTransfers||[]):[];
   return projected;
 }
 function validateEntries(data) {
@@ -215,20 +232,26 @@ function validateCustomers(data) {
 }
 export function mergeData(current, incoming, access) {
   if (!incoming || !['accounts', 'entries', 'products'].every(name => Array.isArray(incoming[name]))) accessError('Datos contables inválidos.', 400);
+  delete incoming.fiscalSummary;
   if (incoming.customers === undefined) incoming.customers = allowed(access, 'ventas') ? structuredClone(current?.customers || []) : [];
   for (const name of ['employees', 'payrolls', 'taxes', 'properties', 'settlements']) if (incoming[name] !== undefined && !Array.isArray(incoming[name])) accessError('Datos contables inválidos.', 400);
   if (!Array.isArray(incoming.customers)) accessError('Cartera de clientes inválida.', 400);
   if(access.support||access.readOnlyLimit)accessError('Este acceso es de solo lectura.');
-  if (access.owner && !(access.billingPlan?.blockedModules||[]).some(m=>['personal','fiscal'].includes(m))) { validateEntries(incoming); validateCustomers(incoming); return incoming; }
-  if (!DATA_MODULES.some(module => allowed(access, module, true))) accessError('Tu acceso es de solo lectura.');
+  if (access.owner && !restrictedPlan(access)) { validateEntries(incoming); validateCustomers(incoming); return incoming; }
+  if (!MODULES.some(module => allowed(access, module, true))) accessError('Tu acceso es de solo lectura.');
+  if(!current){
+    if(!access.owner||incoming.entries.length)accessError('Inicializa la empresa sin movimientos.',400);
+    current={cfg:structuredClone(incoming.cfg||{}),accounts:structuredClone(incoming.accounts),entries:[],products:[],customers:[]};
+  }
   const projected = projectData(current, { ...access, branchId: null });
   const merged = structuredClone(current);
+  merged.cfg ||= {};
   merged.customers = merged.customers || [];
   for (const [name, module] of Object.entries({ customers: 'ventas', accounts: 'contabilidad', employees: 'personal', payrolls: 'personal', settlements: 'personal', taxes: 'fiscal', properties: 'fiscal' })) {
     if (allowed(access, module, true)) merged[name] = structuredClone(incoming[name] || []);
-    else if (!equal(incoming[name] || [], projected[name] || [])) accessError('No tienes permiso para modificar ' + module + '.');
+    else if (!equal(incoming[name] || [], projected[name] || [])) {requirePlanModule(access.billingPlan,module);accessError('No tienes permiso para modificar ' + module + '.');}
   }
-  if (allowed(access, 'ajustes', true) && allData(access, true)) merged.cfg = incoming.cfg;
+  if (allowed(access, 'ajustes', true)) {merged.cfg={...merged.cfg,...incoming.cfg};merged.cfg.periodLocks=current.cfg?.periodLocks;if(!allowed(access,'fiscal',true))merged.cfg.fiscal=current.cfg?.fiscal;}
   else if (allowed(access, 'fiscal', true)) merged.cfg.fiscal = incoming.cfg?.fiscal;
   const currentById = new Map((current.entries || []).map(entry => [entry.id, entry]));
   const incomingById = new Map(incoming.entries.map(entry => [entry.id, entry]));
@@ -237,12 +260,14 @@ export function mergeData(current, incoming, access) {
   for (const previous of projected.entries) {
     const next = incomingById.get(previous.id);
     if (!equal(next, previous)) {
-      if (!allowed(access, entryModule(previous), true) || (next && entryModule(next) !== entryModule(previous))) accessError('No tienes permiso para cambiar este asiento.');
+      requirePlanModule(access.billingPlan,entryAccessModule(previous,current));
+      if (!allowed(access, entryAccessModule(previous,current), true) || (next && entryAccessModule(next,current) !== entryAccessModule(previous,current))) accessError('No tienes permiso para cambiar este asiento.');
       changes.push({ previous, next });
     }
   }
   for (const next of incoming.entries) if (!currentById.has(next.id)) {
-    if (!allowed(access, entryModule(next), true)) accessError('No tienes permiso para crear este asiento.');
+    requirePlanModule(access.billingPlan,entryAccessModule(next,current));
+    if (!allowed(access, entryAccessModule(next,current), true)) accessError('No tienes permiso para crear este asiento.');
     changes.push({ next });
   } else if (!projected.entries.some(entry => entry.id === next.id)) accessError('No puedes modificar registros ocultos.');
   merged.entries = (current.entries || []).filter(entry => !changes.some(change => change.previous?.id === entry.id)).concat(changes.filter(change => change.next).map(change => change.next));
@@ -393,9 +418,11 @@ export function validatePermissions(permissions, access, role) {
     result[module] = level;
   }
   const prospective = { owner: false, permissions: result, member: { role } };
-  if (['ajustes', 'auditoria'].some(module => result[module] !== 'ninguno') && !allData(prospective)) accessError('Ajustes y auditoría requieren lectura de todos los módulos por contener información completa.', 400);
+  const availableData=write=>MODULES.filter(m=>!['ajustes','auditoria','accesibilidad'].includes(m)&&(!access.billingPlan||moduleIncluded(access.billingPlan,m))).every(m=>allowed(prospective,m,write));
+  if (result.ajustes !== 'ninguno' && !allData(prospective)) accessError('Los respaldos de Ajustes requieren lectura de todos los módulos por contener información completa.', 400);
   if (result.ajustes === 'escritura' && !allData(prospective, true)) accessError('Restaurar respaldos requiere escritura en todos los módulos.', 400);
-  if (result.accesibilidad === 'escritura' && !allData(prospective, true)) accessError('Administrar accesos requiere escritura en todos los módulos.', 400);
+  if(result.auditoria!=='ninguno'&&!availableData(false))accessError('La auditoría requiere lectura de los módulos incluidos.',400);
+  if (result.accesibilidad === 'escritura' && !availableData(true)) accessError('Administrar accesos requiere escritura en todos los módulos incluidos.', 400);
   if (!MODULES.some(module => result[module] !== 'ninguno')) accessError('Selecciona al menos un módulo.', 400);
   return result;
 }
@@ -446,6 +473,7 @@ export async function migrateAccountingStorage(companyId, session, body) {
   return db.transaction(async client => {
     // Evita hidratar para permitir recuperación del JSON cuando falla la proyección.
     const access = await companyAccess(client, companyId, session);
+    requireModule(access,'contabilidad');
     if (!access.owner) accessError('Solo el dueño puede migrar o recuperar el almacenamiento.');
     const [company] = await client.select().from(companies).where(eq(companies.id, companyId)).for('update');
     if (!Number.isInteger(body.revision) || body.revision !== company.revision) accessError('La empresa cambió. Repite la verificación con la revisión vigente.', 409);

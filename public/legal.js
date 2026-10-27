@@ -19,7 +19,7 @@
     document.querySelectorAll('[data-legal-mail]').forEach((a) => { a.href = 'mailto:' + L.email; a.textContent = L.email; });
     document.querySelectorAll('[data-legal-if]').forEach((e) => { if (!L[e.dataset.legalIf]) e.remove(); });
     document.querySelectorAll('[data-legal-footer]').forEach((e) => {
-      e.innerHTML = '<nav class="lg-foot"><a href="/privacidad">Política de Privacidad</a> · <a href="/terminos">Términos y Condiciones</a> · <a href="/reembolsos">Reembolsos y cancelaciones</a> · <a href="/cookies">Política de cookies</a><br><span>© ' + new Date().getFullYear() + ' ' + L.brand + '. Precios en dólares (USD). Pagos procesados por Pagadito.</span></nav>';
+      e.innerHTML = '<nav class="lg-foot"><a href="/privacidad">Política de Privacidad</a> · <a href="/terminos">Términos y Condiciones</a> · <a href="/reembolsos">Reembolsos y cancelaciones</a> · <a href="/cookies">Política de cookies</a><br><span>© ' + new Date().getFullYear() + ' ' + L.brand + '. Precios en dólares (USD).</span></nav>';
     });
   };
   document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', run) : run();

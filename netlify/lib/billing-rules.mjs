@@ -1,6 +1,7 @@
 // Importes de plataforma exclusivamente en centavos enteros.
 export const DEFAULT_PLANS = [
- {id:'basico',name:'Básico',monthlyCents:3500,annualCents:31400,currency:'USD',limits:{companies:1,branches:1},blockedModules:['personal','fiscal','control_personal','decisiones','sucursales']},
+ {id:'facturacion',name:'Facturación',monthlyCents:3000,annualCents:31000,currency:'USD',limits:{companies:1,branches:1},blockedModules:['contabilidad','finanzas','cajas','personal','control_personal','decisiones','sucursales']},
+ {id:'basico',name:'Básico',monthlyCents:3500,annualCents:31400,currency:'USD',limits:{companies:1,branches:1},blockedModules:['personal','control_personal','decisiones','sucursales']},
  {id:'estandar',name:'Estándar',monthlyCents:7000,annualCents:63000,currency:'USD',limits:{companies:1,branches:1},blockedModules:['sucursales']},
  {id:'pro',name:'Pro',monthlyCents:20000,annualCents:190000,currency:'USD',limits:{companies:null,branches:null},blockedModules:[]},
 ];
@@ -29,12 +30,16 @@ export function entitlement(sub,admin=false,now=Date.now()){
  if(!paid&&now<new Date(sub.trialEndsAt).getTime())return {access:true,state:'prueba',plan:'pro',trialEndsAt:new Date(sub.trialEndsAt).toISOString()};
  return {access:false,state:sub.canceledAt?'cancelado':'vencido',plan:sub.plan};
 }
-export function moduleIncluded(plan,module){return !!plan&&!(plan.blockedModules||[]).includes(module)}
+export const BLOCKABLE_MODULES = ['ventas','compras','gastos','inventario','contabilidad','finanzas','cajas','personal','fiscal','control_personal','decisiones','sucursales','facturacion','costos','proveedores','accesibilidad','ajustes','auditoria'];
+// Las deudas operativas no conceden acceso al libro diario ni a asientos manuales.
+export function planModule(module){return ({cobrar:'ventas',pagar:'compras',asistencia:'control_personal',attendance:'control_personal',vacation:'control_personal',employeeAdvance:'control_personal',simuladores:'decisiones',rentabilidad:'decisiones',pronostico:'decisiones',traslados:'sucursales',compararsucursales:'sucursales'})[module]||module}
+export function moduleIncluded(plan,module){return !!plan&&!(plan.blockedModules||[]).includes(planModule(module))}
+export function requirePlanModule(plan,module){const key=planModule(module),label={contabilidad:'contabilidad formal',finanzas:'estados financieros',cajas:'Tesorería',control_personal:'Control del personal',decisiones:'Decisiones',sucursales:'administración de sucursales',accesibilidad:'Administración de accesos',facturacion:'Facturación y turnos'}[key]||key;if(plan&&!moduleIncluded(plan,module))billingError('Tu plan no incluye '+label+'.',403)}
 export function validatePlan(body){
  if(!/^[a-z][a-z0-9_-]{1,40}$/.test(body.id)||!String(body.name||'').trim()||body.currency!=='USD')billingError('Revisa identificador, nombre y moneda USD.');
  for(const key of ['monthlyCents','annualCents'])if(!Number.isSafeInteger(body[key])||body[key]<1||body[key]>999999900)billingError('Usa precios positivos en centavos enteros.');
  for(const key of ['companies','branches'])if(body.limits?.[key]!==null&&(!Number.isInteger(body.limits?.[key])||body.limits[key]<1||body.limits[key]>10000))billingError('Revisa los límites del plan.');
- if(!Array.isArray(body.blockedModules)||body.blockedModules.some(m=>!['personal','fiscal','control_personal','decisiones','sucursales'].includes(m)))billingError('Revisa los módulos del plan.');
+ if(!Array.isArray(body.blockedModules)||body.blockedModules.some(m=>!BLOCKABLE_MODULES.includes(m)))billingError('Revisa los módulos del plan.');
  return {id:body.id,name:String(body.name).trim().slice(0,80),currency:'USD',monthlyCents:body.monthlyCents,annualCents:body.annualCents,limits:body.limits,blockedModules:body.blockedModules,active:body.active===true};
 }
 export function platformContextAllowed({platformAdmin,member,platformCompany,companyId,activeCompanyId}){return platformAdmin===true&&!member&&platformCompany===true&&!!companyId&&companyId===activeCompanyId}

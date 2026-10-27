@@ -368,7 +368,7 @@ function vatReport(month){
   return {from,to:last,output:r2(output),input:r2(input),baseSales:r2(baseSales),basePurchases:r2(basePurchases),net:r2(output-input)};
 }
 function vatCreditAvailable(period){return Math.max(0,r2(S.taxes.filter(tax=>tax.source==='iva'&&tax.period<period).reduce((total,tax)=>total+(tax.credit||0)-(tax.usedCredit||0),0)))}
-function annualReport(year){const balances=bal(year+'-01-01',year+'-12-31'),income=tot(balances,'ingreso'),cost=tot(balances,'costo'),expense=tot(balances,'gasto'),previousTax=balances['6108']?sg(balances['6108']):0,profit=r2(income-cost-expense+previousTax);return {income:r2(income),cost:r2(cost),expense:r2(expense-previousTax),profit,tax:r2(Math.max(0,profit)*S.cfg.fiscal.incomeRate/100)}}
+function annualReport(year){if(S.fiscalSummary){const row=S.fiscalSummary[year]||{},income=(row.incomeCents||0)/100,cost=(row.costCents||0)/100,expense=(row.expenseCents||0)/100,profit=r2(income-cost-expense);return {income,cost,expense,profit,tax:r2(Math.max(0,profit)*S.cfg.fiscal.incomeRate/100)}}const balances=bal(year+'-01-01',year+'-12-31'),income=tot(balances,'ingreso'),cost=tot(balances,'costo'),expense=tot(balances,'gasto'),previousTax=balances['6108']?sg(balances['6108']):0,profit=r2(income-cost-expense+previousTax);return {income:r2(income),cost:r2(cost),expense:r2(expense-previousTax),profit,tax:r2(Math.max(0,profit)*S.cfg.fiscal.incomeRate/100)}}
 V.impuestos=()=>{
   const vat=vatReport(TAX_MONTH),annual=annualReport(TAX_YEAR);
   const savedVAT=S.taxes.find(tax=>tax.source==='iva'&&tax.period===TAX_MONTH),savedIncome=S.taxes.find(tax=>tax.source==='renta'&&tax.period===TAX_YEAR);

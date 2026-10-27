@@ -12,7 +12,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
 import { and, eq } from 'drizzle-orm';
 import { companyMembers, siteContent } from '../../db/schema.ts';
-import { allowed, equal, accessError, updateCompany, actorName, audit } from './access.mjs';
+import { allowed, requireModule, equal, accessError, updateCompany, actorName, audit } from './access.mjs';
 import { OPERATION_ARRAYS, operationalRole, salesAdministrator, supervisor, cashAdministrator, operatorId, receiptRecords } from './policies.mjs';
 
 const round = value => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -30,8 +30,8 @@ const dateValue = value => {
 };
 export const ledgerBalance = (data, account, through = '9999') => round((data.entries || []).filter(entry => entry.date <= through).reduce((total, entry) => total + (entry.lines || []).filter(line => line.a === account).reduce((sum, line) => sum + line.d - line.c, 0), 0));
 const linesBetween = (debit, credit, total) => [{ a: debit, d: total, c: 0 }, { a: credit, d: 0, c: total }];
-const requirePermission = (access, module) => { if (!allowed(access, module, true)) accessError('No tienes permiso para realizar esta operación.'); };
-const financialCash = access => { if (!cashAdministrator(access) || !allowed(access, 'cajas', true)) accessError('Solo un responsable de caja autorizado realiza esta operación.'); };
+const requirePermission = (access, module) => requireModule(access,module,true);
+const financialCash = access => { requirePermission(access,'cajas'); if (!cashAdministrator(access) || !allowed(access, 'cajas', true)) accessError('Solo un responsable de caja autorizado realiza esta operación.'); };
 const accountExists = (data, code, types) => requireValue(data.accounts.some(account => account.code === code && (!types || types.includes(account.tipo))), 'Selecciona una cuenta contable válida.');
 const cashAccounts = data => data.accounts.filter(account => account.code === '1101' || account.code === '1102' || account.code === '1104' || account.code.startsWith('1103-')).map(account => account.code);
 const spentVouchers = (data, fundId) => round(data.pettyVouchers.filter(voucher => voucher.fundId === fundId && !voucher.replenishmentId && !voucher.reversalId).reduce((total, voucher) => total + voucher.total, 0));
@@ -372,7 +372,7 @@ export async function runOperation(companyId, session, body) {
         output=advancedOperation(data,access,operationSession,body,{requireValue,requirePermission,appendEntry,dateValue,amount,actorName});
       } else if (operation === 'branch') {
         if(!access.owner) accessError('Solo el dueño administra sucursales.');
-        if(access.billingPlan?.blockedModules?.includes('sucursales'))accessError('Tu plan no incluye administración de sucursales.');
+        requirePermission(access,'sucursales');
         const branches=companyBranches(company.data),old=branches.find(b=>b.id===body.id);
         const name=text(body.name,100),code=text(body.code,16).toUpperCase();
         requireValue(name && /^[A-Z0-9-]{1,16}$/.test(code), 'Revisa nombre y código de sucursal.');
@@ -386,10 +386,15 @@ export async function runOperation(companyId, session, body) {
         if(!old){ data.cfg.pos||={series:[{code:'A',name:'Principal',branchId:'principal'}]};data.cfg.pos.series||=[{code:'A',name:'Principal',branchId:'principal'}];requireValue(!data.cfg.pos.series.some(s=>s.code===code),'El código coincide con una serie existente. Usa otro código de sucursal.');data.cfg.pos.series.push({code,name,branchId:branch.id});}
         data.branches=old?branches.map(b=>b.id===old.id?branch:b):[...branches,branch];output=branch.id;
       } else if (operation === 'printSettings') {
+        requirePermission(access,'ajustes');
         if (!access.owner) accessError('Solo el dueño configura la impresión.');
         requireValue(['a4','letter','thermal'].includes(body.format), 'Formato inválido.');
         data.cfg.print = Object.fromEntries(['format','address','phone','email','creditTerms','legalText','thanks'].map(key => [key, text(body[key], 2000)]));
       } else if (operation === 'settings') {
+        requirePermission(access,'ajustes');
+        if(body.pos)requirePermission(access,'facturacion');
+        if(body.cash)requirePermission(access,'cajas');
+        if(body.advance)requirePermission(access,'fiscal');
         if (!access.owner) accessError('Solo el dueño configura cajas, series, descuentos y anticipos.');
         if (body.pos) {
           const series = body.pos.series;

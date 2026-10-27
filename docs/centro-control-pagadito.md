@@ -32,6 +32,7 @@ Las variables opcionales `PAGADITO_MONTHS`, `PAGADITO_YEARS` y `PAGADITO_GRACE_D
 
 | Plan | Mensual USD | Anual USD | Límites iniciales |
 |---|---:|---:|---|
+| Facturación | 30 | 310 | Una empresa y la sucursal principal |
 | Básico | 35 | 314 | Una empresa y la sucursal principal |
 | Estándar | 70 | 630 | Una empresa y la sucursal principal |
 | Pro | 200 | 1,900 | Sin límite del plan de empresas o sucursales |
@@ -46,11 +47,14 @@ Mapa de módulos reales:
 | Fiscal | `fiscal`, `impuestos`, `propiedades`, `reglas`; permiso `fiscal` |
 | Control del personal | `asistencia`; permiso `personal` |
 | Decisiones del negocio | `simuladores`, `rentabilidad`, `pronostico`; datos propios de finanzas |
-| Sucursales | `sucursales` y operación de servidor `branch` |
+| Sucursales | `sucursales`, `traslados`, `compararsucursales`; operaciones `branch`, `stockTransfer`, `stockReceive`, `moneyTransfer` |
 | Ventas y facturación | `ventas`, `clientes`, `facturacion` y operaciones correspondientes |
-| Otros | Compras, gastos, inventario, contabilidad, finanzas, cajas, costos, proveedores y controles existentes |
+| Contabilidad formal | Apertura, diario, mayor, cuentas, períodos, activos, préstamos, divisas, plantillas, antigüedad, cheques/letras y socios |
+| Excepción operativa | `cobrar` usa Ventas; `pagar` usa Compras. Los abonos validan la factura de crédito, fecha, dos contrapartidas, importe y deuda pendiente; no conceden asientos manuales ni saldos iniciales |
+| Tesorería | `caja`, `cajachica`, `reportescaja`; no incluye los turnos de Facturación |
+| Otros | Compras, gastos, inventario, costos, proveedores, Accesibilidad, ajustes y auditoría |
 
-El Básico excluye los cuatro conceptos solicitados y la administración de sucursales; Estándar excluye sucursales; Pro incluye todo. Los módulos excluidos aparecen con candado. Se mantienen los permisos de colaboradores y el filtro de sucursal. Los cálculos de Decisiones se ejecutan en el navegador sobre información que el usuario ya tiene derecho a consultar; no son un endpoint adicional de datos privados. No se agregó un asistente de IA: su contador aparece como no disponible.
+Facturación incluye ventas y clientes, compras y devoluciones, proveedores, gastos, costos, inventario e importación, facturación con IVA, notas de crédito, documentos, apertura y cierre de turnos, cuentas por cobrar y pagar, Fiscal, Accesibilidad, ajustes y auditoría. Excluye contabilidad formal, estados financieros, Tesorería, Personal, Control del personal, Decisiones y Sucursales (incluidos traslados y comparación). Básico incluye Fiscal y conserva las exclusiones de Personal, Control del personal, Decisiones y Sucursales. Estándar excluye sucursales; Pro incluye todo. Los módulos excluidos se ocultan del menú y del panel; las rutas y operaciones también se comprueban en el servidor. Se mantienen los permisos de colaboradores y el filtro de sucursal. Los cálculos de Decisiones se ejecutan en el navegador sobre información que el usuario ya tiene derecho a consultar; no son un endpoint adicional de datos privados. No se agregó un asistente de IA: su contador aparece como no disponible.
 
 La prueba única por correo empieza al inicializar la suscripción en el primer acceso a los datos o a Mi suscripción. Dura 24 horas. El dueño puede contratar un plan durante la prueba, sin esperar a su vencimiento, desde el aviso del panel o «Mi suscripción y pagos». El primer cobro se programa para hoy; al confirmarse, el plan elegido y su periodo pagado sustituyen el acceso de prueba. Iniciar el pago sin confirmación conserva la prueba vigente. Las cuentas existentes reciben esa prueba sin borrar su ficha ni una vigencia manual ya registrada. Los administradores de plataforma conservan acceso completo. El servidor comprueba el plan del dueño de la empresa también cuando entra un colaborador. La interfaz consulta la vigencia cada cuatro minutos y al volver a la pestaña. La gracia vence a las 23:59:59 de Managua del segundo día posterior al fin del periodo. Cancelar renovaciones conserva solo el periodo pagado, sin extenderlo mediante gracia.
 
@@ -88,7 +92,7 @@ La administración permite revisar y aprobar los tres textos con una versión nu
 4. Entra con otro correo y comprueba la cuenta regresiva de 24 horas. Sin esperar al vencimiento, usa «Elegir plan y pagar» desde el panel. Elige Mensual, revisa precio y cobros programados y acepta las políticas. El botón permanece deshabilitado hasta aceptar.
 5. Antes de pagar, la dirección de Pagadito debe contener el host exacto `sandbox.pagadito.com`. Si no aparece sandbox, cierra la página. Usa exclusivamente los datos de tarjeta ficticia indicados por Pagadito y por el documento adjunto, nunca una tarjeta real.
 6. Al volver, usa «Verificar mi pago». Comprueba el pago único en el Centro de control, su marca SANDBOX, el plan y la fecha de vigencia. Confirma que el acceso cambia de prueba al plan elegido de inmediato y que el aviso de prueba desaparece. No debe aparecer un ingreso ficticio en la contabilidad de Acontec.
-7. Repite con otro correo y Anual: Básico 314, Estándar 630 o Pro 1,900 USD; primer cobro hoy y siguientes a 12 y 24 meses. Comprueba el ahorro mostrado frente a las mensualidades.
+7. Repite con otro correo y Anual: Facturación 310, Básico 314, Estándar 630 o Pro 1,900 USD; primer cobro hoy y siguientes a 12 y 24 meses. Comprueba el ahorro mostrado frente a las mensualidades.
 8. Cambia mensual/anual y comprueba en el comercio que se cancelaron los cargos pendientes del esquema anterior. Cancela cobros y confirma que la vigencia pagada permanece.
 9. Para simular vencimiento, usa el ajuste normal de Suscripción en el Centro de control, con motivo de prueba: selecciona estado activo, una fecha «pagado hasta» anterior y una prueba ya terminada. Un día vencido permite gracia; más de dos días completos bloquea el servidor con 402. Usa fechas de Managua. No edites Blobs: las suscripciones están en Database y no hay un endpoint temporal que eliminar.
 10. Antes de producción concilia y cancela las autorizaciones sandbox, cambia las tres variables en Netlify, registra retorno/webhook y políticas en el comercio real y redespliega. Los permisos de sandbox no sirven como pago real. Después realiza una verificación real autorizada por el propietario y revisa su recibo y asiento.
@@ -163,3 +167,64 @@ El editor de página permite cambiar los nombres de los módulos del menú later
 Estos campos se guardan en el contenido global existente: no requieren tablas ni migraciones. La configuración ya descargada al abrir la página contiene los textos; no se añadieron sondeos ni guardados automáticos. El módulo de contenido no descarga fichas, pagos ni métricas de clientes. Cada consulta legal verifica la versión vigente; no se almacena una copia contractual en el navegador.
 
 Se comprobó la sintaxis y se actualizaron las huellas de recursos. No se ejecutaron pruebas, servidores ni compilaciones locales. Después del despliegue queda verificar la publicación de una versión nueva con cookies, su aceptación con una cuenta nueva, coincidencia entre páginas públicas y panel, edición desde dos pestañas, rechazo de permisos ajenos a plataforma y visualización móvil de los nombres personalizados. No se midió una reducción de créditos; depende del uso real.
+
+## Configuración efectiva de módulos
+
+El editor de planes muestra todos los módulos con casillas **Incluir**. Una casilla marcada habilita el módulo; una desmarcada lo guarda en las exclusiones. Las exclusiones se aplican al dueño y a sus colaboradores, además de los permisos individuales. Habilitar un módulo no amplía automáticamente los límites de empresas o sucursales. Los cambios se consultan al volver a la pestaña y cada cuatro minutos; con cambios locales pendientes se exige resolver el guardado antes de recargar datos. Las tarjetas describen la configuración guardada en lugar de asumir prestaciones por nombre de plan.
+
+Los precios confirmados iniciales de Facturación son 3,000 y 31,000 centavos USD; el ahorro anual inicial es US$50. Son editables. La inicialización inserta únicamente planes ausentes. Una política identificada en el contenido de configuración retira Fiscal de las exclusiones existentes de Básico una sola vez e incrementa su revisión; conserva los precios, límites y demás exclusiones. Las ediciones posteriores de módulos siguen siendo respetadas. No requiere cambios de esquema ni migraciones y no altera contratos recurrentes ya autorizados.
+
+La respuesta contable conserva el catálogo de cuentas necesario para las operaciones permitidas, sin entregar los asientos de módulos excluidos. Los asientos automáticos se generan en el servidor y se conservan completos en el almacenamiento. Los movimientos de inventario necesarios para Kardex se proyectan sin datos contables ocultos. Las bases anuales de Fiscal se entregan como totales en centavos, incluyendo el historial anterior al cambio de plan sin exponer nóminas ni asientos bloqueados. Los respaldos completos continúan exigiendo acceso completo; la auditoría disponible para planes restringidos omite el detalle de cambios que podría contener registros excluidos. La prueba gratuita continúa usando Pro.
+
+## Impresión compartida
+
+Reportes, facturas, boletas de nómina, constancias/documentos y cobros del servicio usan el mismo diálogo de color, papel y orientación. Las preferencias solo viven en memoria. A4 y Carta admiten horizontal; el papel de 80 mm siempre es vertical. Los reportes de más de cinco columnas muestran una recomendación al seleccionar 80 mm. La factura conserva sus márgenes y diseños existentes. Las clases de color y papel y la regla temporal de página se eliminan al terminar o cancelar el diálogo nativo y si la impresión falla. Los estilos de impresión se agrupan en un solo bloque; no modifican las tablas de exportación ni los generadores jsPDF.
+
+Se retiraron las menciones promocionales del procesador en las pantallas de contratación y el pie público. Se conservaron las referencias legales, técnicas y de administración necesarias para operar y conciliar pagos.
+
+## Validación pendiente después del despliegue
+
+La revisión de esta entrega fue estática; no se ejecutaron pruebas, servidores, compilaciones, pagos ni verificaciones visuales locales.
+
+1. Con una cuenta de prueba en Facturación, comprobar menú lateral, barra inferior y panel; intentar navegar directamente a Diario, Mayor, Estados financieros, Tesorería, Personal, Decisiones y Traslados. Confirmar rechazo también al solicitar sus operaciones a la API.
+2. En Fiscal → Reglas de cada empresa, configurar IVA; crear productos con IVA y facturar. Crear cajero y vendedor en Accesibilidad y entrar con ambos; verificar sus permisos y turnos.
+3. Facturar a crédito, cobrar un abono, registrar compra y gasto, pagar a proveedor, consultar libros de ventas/compras/IVA, cerrar caja y exportar Excel. Comprobar que un abono excesivo o ajeno queda rechazado.
+4. En Centro de control, marcar y desmarcar Incluir para un módulo en Facturación y Básico; recargar y comprobar interfaz, datos y API. Verificar Fiscal en una suscripción Básico anterior y en una compra nueva. Probar cambio de plan, precios editados, ahorro y vigencia en el entorno de pruebas, conservando la prueba Pro.
+5. Con un plan que permita Mayor (o habilitándolo temporalmente), imprimir Mayor, Kardex y Libros fiscales en blanco y negro y a color. Probar A4 vertical/horizontal, Carta y 80 mm; revisar papel y advertencia solo en 80 mm, repetir encabezados, bordes y legibilidad.
+6. Imprimir nómina y factura, incluida térmica; cancelar la impresión y comprobar que la pantalla conserva su aspecto. Exportar Excel, CSV y PDF de jsPDF para comparar con el comportamiento anterior.
+
+## Archivos de esta entrega
+
+- `docs/centro-control-pagadito.md`
+- `netlify/functions/api.mjs`
+- `netlify/lib/access.mjs`
+- `netlify/lib/advanced.mjs`
+- `netlify/lib/billing-rules.mjs`
+- `netlify/lib/billing.mjs`
+- `netlify/lib/customer-admin.mjs`
+- `netlify/lib/legal-templates.mjs`
+- `netlify/lib/operations.mjs`
+- `netlify/lib/transfers.mjs`
+- `public/accounting.js`
+- `public/administration.js`
+- `public/advanced.js`
+- `public/app.js`
+- `public/billing.js`
+- `public/configurar-google.html`
+- `public/cookies.html`
+- `public/country.js`
+- `public/experience.js`
+- `public/index.html`
+- `public/legal.css`
+- `public/legal.js`
+- `public/operations.js`
+- `public/platform.js`
+- `public/privacidad.html`
+- `public/reembolsos.html`
+- `public/style.css`
+- `public/terminos.html`
+- `public/trade.js`
+- `tests/billing-rules.test.mjs`
+- `.netlify/`
+- `netlify/lib/fiscal-projection.mjs`
+- `public/printing.js`

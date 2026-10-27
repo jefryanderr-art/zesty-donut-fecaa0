@@ -16,7 +16,7 @@ import { timingSafeEqual, createHash, randomBytes, randomUUID } from 'node:crypt
 import { and, desc, eq, gt, lt, or, sql, isNull } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
 import { users, companies, siteContent, loginAttempts, sessions, companyMembers, auditEvents, companyBackups, saveFailures } from '../../db/schema.ts';
-import { MODULES, allowed, allData, equal, accessError, accessibleCompanies, companyAccess, projectData, mergeData, safeMember, manageMember, verifyPassword, updateCompany, audit, migrateAccountingStorage } from '../lib/access.mjs';
+import { MODULES, allowed, requireModule, allData, equal, accessError, accessibleCompanies, companyAccess, projectData, mergeData, safeMember, manageMember, verifyPassword, updateCompany, audit, migrateAccountingStorage } from '../lib/access.mjs';
 import { runOperation, guardLedgerMutation } from '../lib/operations.mjs';
 import { PLATFORM_OWNER, receiptRecords, cashAdministrator, operatorId } from '../lib/policies.mjs';
 import { customerAdmin, isPlatformAdmin, ensureAcontecCompany, legalDocument, legalState, acceptLegal } from '../lib/customer-admin.mjs';
@@ -344,23 +344,24 @@ const handleRequest = async (request, context, metrics) => {
       return await db.transaction(async client=>{
         if(path==='branch-comparison'){
           const access=await companyAccess(client,url.searchParams.get('c'),session,true);
-          if(!allowed(access,'finanzas')||!access.unrestrictedBranches)accessError('Solo dueño o contador con acceso financiero compara sucursales.');
+          requireModule(access,'finanzas');requireModule(access,'sucursales');if(!access.unrestrictedBranches)accessError('Solo dueño o contador con acceso financiero compara sucursales.');
           return json({branches:access.branches.map(branch=>({id:branch.id,name:branch.name,...statement(scopeBranch(access.company.data,{...access,branchId:branch.id}),from,to)}))});
         }
         const ids=[...new Set((url.searchParams.get('ids')||'').split(',').filter(Boolean))].sort();if(!ids.length||ids.length>20)accessError('Selecciona de 1 a 20 empresas.',400);
-        const results=[];for(const id of ids){const access=await companyAccess(client,id,session,true);if(!allowed(access,'finanzas')||!access.unrestrictedBranches)accessError('Sin acceso financiero completo a una de las empresas.');results.push({id,name:access.company.name,currency:access.company.data?.cfg?.cur||'C$',...statement(access.company.data||{},from,to)})}
+        const results=[];for(const id of ids){const access=await companyAccess(client,id,session,true);requireModule(access,'finanzas');if(!access.unrestrictedBranches)accessError('Sin acceso financiero completo a una de las empresas.');results.push({id,name:access.company.name,currency:access.company.data?.cfg?.cur||'C$',...statement(access.company.data||{},from,to)})}
         if(new Set(results.map(r=>r.currency)).size>1)accessError('La consolidación requiere la misma moneda base. Convierte y concilia las empresas antes de consolidar.',400);
         const rows=new Map();for(const result of results)for(const row of result.rows){const key=[row.code,row.name,row.tipo,row.nat].join('|'),old=rows.get(key);if(old)for(const field of ['balance','periodBalance'])old[field]=Math.round((old[field]+row[field])*100)/100;else rows.set(key,{...row})}
         const totals=Object.fromEntries(['assets','liabilities','equity','revenue','cost','expense','profit','inventory'].map(key=>[key,Math.round(results.reduce((s,r)=>s+r[key],0)*100)/100]));
         return json({companies:results.map(({rows,...rest})=>rest),rows:[...rows.values()],totals,currency:results[0].currency});
       });
     }
-    if(path==='integrity' && method==='GET'){return await db.transaction(async client=>{const access=await companyAccess(client,url.searchParams.get('c'),session,true);if(!allowed(access,'contabilidad'))accessError('Sin permiso para revisar integridad contable.');return json(integrityReport(projectData(access.company.data,access)||{}));});}
+    if(path==='integrity' && method==='GET'){return await db.transaction(async client=>{const access=await companyAccess(client,url.searchParams.get('c'),session,true);requireModule(access,'contabilidad');return json(integrityReport(projectData(access.company.data,access)||{}));});}
     if (path === 'storage-migration' && method === 'POST') return json(await migrateAccountingStorage(url.searchParams.get('c'), session, body));
     if (path === 'discounts' && ['GET','POST'].includes(method)) return json(await discountRoute(url.searchParams.get('c'),session,method,body));
     if (path === 'operations' && method === 'POST') return json(await runOperation(url.searchParams.get('c'), session, body));
     if (path === 'company-logo' && method === 'POST') {
       const access = await companyAccess(db, url.searchParams.get('c'), session);
+      requireModule(access,'ajustes',true);
       if (!access.owner) return fail('Solo el dueño configura el logo.', 403);
       if (body.revision !== access.company.revision) return fail('La empresa cambió. Recarga antes de subir el logo.', 409);
       try { return json({ logo: await storeImage(body.image, 300000) }); } catch { return fail('El logo debe ser una imagen WebP válida de hasta 300 KB.'); }
@@ -376,6 +377,7 @@ const handleRequest = async (request, context, metrics) => {
         const [backup] = await db.select({ data: companyBackups.data }).from(companyBackups).where(and(eq(companyBackups.id, backupId), eq(companyBackups.companyId, companyId)));
         source = backup?.data;
       }
+      for(const [name,module] of Object.entries({taxes:'fiscal',pettyVouchers:'cajas',cashMovements:'cajas',costs:'costos'}))if(source?.[name]?.some(record=>record.id===id))requireModule(access,module);
       const data = projectData(source, access);
       const record = receiptRecords(data).find(item => item.id === id);
       if (!record?.receipt?.key?.startsWith(companyId + '/')) return fail('Comprobante no encontrado.', 404);
@@ -388,7 +390,7 @@ const handleRequest = async (request, context, metrics) => {
     if (path === 'members') {
       const companyId = url.searchParams.get('c');
       const access = await companyAccess(db, companyId, session);
-      if (!allowed(access, 'accesibilidad')) return fail('Sin permiso para ver los accesos.', 403);
+      requireModule(access,'accesibilidad');
       if (method === 'GET') {
         const members = await db.select().from(companyMembers).where(eq(companyMembers.companyId, companyId)).orderBy(companyMembers.createdAt);
         return json({ owner: access.company.ownerEmail, members: members.map(safeMember), modules: MODULES });
@@ -401,7 +403,7 @@ const handleRequest = async (request, context, metrics) => {
     if (path === 'audit' && method === 'GET') {
       const companyId = url.searchParams.get('c');
       const access = await companyAccess(db, companyId, session);
-      if (!allowed(access, 'auditoria') || !allData(access)) return fail('Sin permiso para ver la bitácora.', 403);
+      requireModule(access,'auditoria');
       const offset = Number(url.searchParams.get('offset') || 0);
       if (!Number.isSafeInteger(offset) || offset < 0) return fail('Página inválida.', 400);
       const from = url.searchParams.get('from'), to = url.searchParams.get('to');
@@ -415,12 +417,13 @@ const handleRequest = async (request, context, metrics) => {
       if (start) filters.push(sql`${auditEvents.createdAt} >= (${start}::timestamptz AT TIME ZONE 'UTC')`);
       if (end) filters.push(sql`${auditEvents.createdAt} < (${end}::timestamptz AT TIME ZONE 'UTC')`);
       const events = await db.select().from(auditEvents).where(and(...filters)).orderBy(desc(auditEvents.createdAt), desc(auditEvents.id)).limit(51).offset(offset);
-      return json({ events: events.slice(0, 50), more: events.length > 50 });
+      return json({ events: events.slice(0, 50).map(event=>allData(access)?event:{...event,changes:[]}), more: events.length > 50 });
     }
     if (path === 'backups') {
       const companyId = url.searchParams.get('c');
       const access = await companyAccess(db, companyId, session);
-      if (!allowed(access, 'ajustes') || !allData(access)) return fail('Sin permiso para ver los respaldos completos.', 403);
+      requireModule(access,'ajustes');
+      if (!allData(access)) return fail('Tu acceso o plan no incluye respaldos de todos los módulos.', 403);
       if (method === 'GET') {
         const id = url.searchParams.get('id');
         if (id) {
@@ -461,10 +464,11 @@ const handleRequest = async (request, context, metrics) => {
     if (path === 'receipt' && ['GET', 'POST', 'DELETE'].includes(method)) {
       const companyId = url.searchParams.get('c');
       const taxId = url.searchParams.get('tax');
+      const receiptAccess=await companyAccess(db,companyId,session);requireModule(receiptAccess,'fiscal',method!=='GET');
       if (session.member) return fail('Solo el dueño accede a los comprobantes privados.', 403);
       if (!/^[a-z0-9-]{1,80}$/.test(taxId || '')) return fail('Obligación no encontrada', 404);
       const condition = and(eq(companies.id, companyId), eq(companies.ownerEmail, session.email),isNull(companies.archivedAt));
-      const [company] = await db.select({ data: companies.data, revision: companies.revision }).from(companies).where(condition);
+      const company = receiptAccess.owner?receiptAccess.company:null;
       if (!company) return fail('Solo el dueño accede a los comprobantes privados.', 403);
       const backupId = url.searchParams.get('backup');
       let source = company.data;
@@ -581,7 +585,7 @@ const handleRequest = async (request, context, metrics) => {
       });return json({ok:true});
     }
     if(path==='branch-select' && method==='POST'){
-      const access=await companyAccess(db,body.companyId,session);
+      const access=await companyAccess(db,body.companyId,session);requireModule(access,'sucursales');
       if(body.branchId==='all' ? !access.unrestrictedBranches : !access.branches.some(b=>b.id===body.branchId))return fail('Sucursal no autorizada.',403);
       await db.update(sessions).set({activeBranchId:body.branchId}).where(eq(sessions.tokenHash,hashToken(sessionToken(request))));
       return json({ok:true});
@@ -591,7 +595,7 @@ const handleRequest = async (request, context, metrics) => {
       if (!companyName(body.name)) return fail('Escribe un nombre de empresa');
       if(owned.find(c=>c.id===body.id)?.name.trim().toLowerCase()==='acontec' && companyName(body.name).toLowerCase()!=='acontec') return fail('La empresa principal conserva el nombre Acontec.',403);
       if (/[<>&"'`]/.test(String(body.cfg?.cur || 'C$'))) return fail('Usa un símbolo o código de moneda, sin contenido HTML.');
-      const result = await updateCompany(body.id, session, body.revision, company => ({ name: companyName(body.name), description: String(body.description || '').trim().slice(0, 2000), data: { ...company.data, cfg: { ...company.data?.cfg, ruc: String(body.cfg?.ruc || '').slice(0, 100), cur: String(body.cfg?.cur || 'C$').slice(0, 20), name: companyName(body.name) } } }), 'Empresa actualizada');
+      const result = await updateCompany(body.id, session, body.revision, (company,access) => {requireModule(access,'ajustes',true);return ({ name: companyName(body.name), description: String(body.description || '').trim().slice(0, 2000), data: { ...company.data, cfg: { ...company.data?.cfg, ruc: String(body.cfg?.ruc || '').slice(0, 100), cur: String(body.cfg?.cur || 'C$').slice(0, 20), name: companyName(body.name) } } })}, 'Empresa actualizada');
       return json({ ...result, companies: await accessibleCompanies(session) });
     }
     if (path === 'data') {
@@ -615,7 +619,7 @@ const handleRequest = async (request, context, metrics) => {
         const operation = body.operationId ? {id: body.operationId, actor: session.email + ':' + (session.memberId || ''), hash: createHash('sha256').update(JSON.stringify(body)).digest('hex')} : null;
         let returnData = false;
         const result = await updateCompany(companyId, session, body.revision, (current, currentAccess) => {
-          returnData = !currentAccess.owner;
+          returnData = !currentAccess.owner||!!currentAccess.billingPlan?.blockedModules?.length;
           let incoming = body.data;
           if (body.changes) {
             let applied;
