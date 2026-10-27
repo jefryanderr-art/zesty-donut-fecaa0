@@ -169,9 +169,9 @@ button{transition:background .15s,transform .15s}button:not(:disabled):active{tr
  #rcpt.invoice-thermal small{font-size:9pt}
  #rcpt.invoice-thermal .invoice-lines{table-layout:fixed;font-size:9pt}
  #rcpt.invoice-thermal .invoice-lines :is(th,td):is(:nth-child(1),:nth-child(3),:nth-child(6)){display:none}
- #rcpt.invoice-thermal .invoice-lines :is(th,td):nth-child(2){width:37%}
- #rcpt.invoice-thermal .invoice-lines :is(th,td):nth-child(4){width:15%}
- #rcpt.invoice-thermal .invoice-lines :is(th,td):is(:nth-child(5),:nth-child(7)){width:24%}
+ #rcpt.invoice-thermal .invoice-lines :is(th,td):nth-child(2){width:30%}
+ #rcpt.invoice-thermal .invoice-lines :is(th,td):nth-child(4){width:18%}
+ #rcpt.invoice-thermal .invoice-lines :is(th,td):is(:nth-child(5),:nth-child(7)){width:26%}
  #rcpt.invoice-thermal .invoice-lines :is(th,td){overflow-wrap:anywhere;vertical-align:top}
  #rcpt.invoice-thermal .invoice-system{font-size:12pt}
  #rcpt.invoice-thermal .invoice-system img{height:10mm}
@@ -188,7 +188,7 @@ button{transition:background .15s,transform .15s}button:not(:disabled):active{tr
  #rcpt.invoice-thermal h2{margin:3px 0}
  #rcpt.invoice-thermal .invoice-customer{padding:6px 0}
  #rcpt.invoice-thermal .invoice-customer h3{margin:3px 0}
- #rcpt.invoice-thermal .invoice-lines :is(th,td){font-size:9pt;padding:2px 1px;white-space:normal}
+ #rcpt.invoice-thermal .invoice-lines :is(th,td){padding:2px 1px;white-space:normal}
  #rcpt.invoice-thermal .invoice-summary{margin-top:6px}
  #rcpt.invoice-thermal .invoice-payment h4{margin:0 0 3px}
  #rcpt.invoice-thermal .invoice-totals{font-size:10pt}
@@ -200,4 +200,36 @@ button{transition:background .15s,transform .15s}button:not(:disabled):active{tr
  #rcpt.invoice-thermal .invoice-signatures span{display:block;flex:1;min-width:0;margin:0;padding:3px 0;border-top-width:1px}
  #rcpt.invoice-thermal .invoice-system{margin-top:6px;font-size:12pt}
  #rcpt.invoice-thermal.invoice-bw *{border-width:1px}
+}
+
+@media print{
+ #rcpt.invoice-thermal .invoice-lines th{letter-spacing:0;text-transform:none;white-space:nowrap}
+}
+
+/* Ticket 80 mm compacto */
+@media print{
+ body.rc #rcpt.invoice-thermal{font-size:9pt;line-height:1.2}
+ #rcpt.invoice-thermal p{margin:1px 0}
+ #rcpt.invoice-thermal h1{font-size:14pt;margin:0 0 2px}
+ #rcpt.invoice-thermal h2{font-size:12pt;margin:2px 0}
+ #rcpt.invoice-thermal h3{font-size:11pt;margin:2px 0}
+ #rcpt.invoice-thermal h4{font-size:9pt;margin:0}
+ #rcpt.invoice-thermal .invoice-heading{padding-bottom:4px}
+ #rcpt.invoice-thermal .invoice-number{padding:4px 6px;margin-top:5px}
+ #rcpt.invoice-thermal .invoice-number p{margin:0}
+ #rcpt.invoice-thermal .invoice-customer{padding:4px 0}
+ #rcpt.invoice-thermal .invoice-lines{font-size:8.5pt}
+ #rcpt.invoice-thermal .invoice-lines th{font-size:7pt;padding:2px 0}
+ #rcpt.invoice-thermal .invoice-lines td{padding:2px 0}
+ #rcpt.invoice-thermal .invoice-summary{margin-top:6px}
+ #rcpt.invoice-thermal .invoice-payment p{margin:1px 0}
+ #rcpt.invoice-thermal .invoice-totals td,#rcpt.invoice-thermal .invoice-totals th{padding:1px 0}
+ #rcpt.invoice-thermal .invoice-totals tr:nth-child(3){display:none}
+ #rcpt.invoice-thermal .invoice-grand{font-size:11pt}
+ #rcpt.invoice-thermal .invoice-words{padding:4px 0;font-size:8.5pt}
+ #rcpt.invoice-thermal .invoice-footer{padding-top:4px;font-size:8pt}
+ #rcpt.invoice-thermal .invoice-signatures{display:flex!important;gap:6mm;margin-top:10mm!important}
+ #rcpt.invoice-thermal .invoice-signatures span{flex:1;margin-top:0!important;font-size:8pt;text-align:center}
+ #rcpt.invoice-thermal .invoice-totals,#rcpt.invoice-thermal .invoice-totals td,#rcpt.invoice-thermal .invoice-payment,#rcpt.invoice-thermal .invoice-payment p{font-size:9pt}
+ #rcpt.invoice-thermal .invoice-totals .invoice-grand th{font-size:11pt}
 }

@@ -1,3 +1,4 @@
+import { normalizeItemQuantity } from './accounting-engine.mjs';
 import { requireBilling } from './billing.mjs';
 import { moduleIncluded,supportGrantActive } from './billing-rules.mjs';
 import { users, supportGrants } from '../../db/schema.ts';
@@ -174,6 +175,7 @@ function validateInvoice(entry, previous, products) {
   let subtotal = 0, vat = 0, cost = 0;
   const stock = [];
   for (const item of entry.items) {
+    item.q = normalizeItemQuantity(item.q);
     const product = products.find(record => record.id === item.p);
     if (!product || !Number.isFinite(item.q) || item.q <= 0 || !Number.isFinite(item.u) || item.u < 0 || !Number.isFinite(item.vatRate || 0) || item.vatRate < 0 || item.vatRate > 100) accessError('Producto o importe inválido.', 400);
     const oldItem = previous?.items?.find(record => record.p === item.p);

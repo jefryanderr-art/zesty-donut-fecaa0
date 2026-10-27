@@ -92,7 +92,7 @@ function invoiceForm(ex,sale){
   if(sale)updateSaleCustomer(form);
   updateInvoiceTotals();
 }
-function updateInvoiceTotals(){const target=$('#invoice-totals');if(!target)return;const totals=taxTotals(readItems());target.innerHTML=`Base: <b>${money(totals.subtotal)}</b> · IVA: <b>${money(totals.vat)}</b> · Total: <b>${money(totals.total)}</b>`}
+function updateInvoiceTotals(){const target=$('#invoice-totals');if(!target)return;let totals;try{totals=taxTotals(readItems())}catch(error){target.textContent=error.message;return}target.innerHTML=`Base: <b>${money(totals.subtotal)}</b> · IVA: <b>${money(totals.vat)}</b> · Total: <b>${money(totals.total)}</b>`}
 ACT.venta=()=>invoiceForm(null,true);
 ACT.compra=()=>invoiceForm(null,false);
 ACT.editventa=data=>{const entry=S.entries.find(entry=>entry.id===data.id&&entry.type==='venta');if(entry)invoiceForm(entry,true)};
@@ -106,7 +106,7 @@ listV=function(type,title,cta,action,extra=''){
 };
 printRcpt=function(entry){
   const totals=entry.subtotal===undefined?{subtotal:entry.total,vat:entry.vat||0,total:entry.total}:entry;
-  $('#rcpt')?.remove();document.body.insertAdjacentHTML('beforeend',`<div id="rcpt">${rh('Comprobante de venta',esc(entry.date))}<p>Factura: ${esc(entry.reference||entry.id)}<br>Cliente: ${esc(entry.party)}${entry.customer?.taxId?'<br>RUC / cédula: '+esc(entry.customer.taxId):''}${entry.customer?.address?'<br>Dirección: '+esc(entry.customer.address):''}<br>Pago: ${esc(PAY[entry.pay])}${entry.pay==='1201'&&entry.due?'<br>Vencimiento: '+esc(entry.due):''}</p><table><thead><tr><th>Producto</th><th>Cant.</th><th>Precio sin IVA</th><th>IVA %</th><th>Base</th></tr></thead><tbody>${(entry.items||[]).map(item=>`<tr><td>${esc(prod(item.p)?.name||'Producto')}</td><td>${esc(item.q)}</td><td>${money(item.u)}</td><td>${esc(item.vatRate||0)}</td><td>${money(r2(item.q*item.u))}</td></tr>`).join('')}</tbody></table><p>Subtotal: ${money(totals.subtotal)}<br>IVA: ${money(totals.vat)}<br><b>Total: ${money(totals.total)}</b></p></div>`);
+  $('#rcpt')?.remove();document.body.insertAdjacentHTML('beforeend',`<div id="rcpt">${rh('Comprobante de venta',esc(entry.date))}<p>Factura: ${esc(entry.reference||entry.id)}<br>Cliente: ${esc(entry.party)}${entry.customer?.taxId?'<br>RUC / cédula: '+esc(entry.customer.taxId):''}${entry.customer?.address?'<br>Dirección: '+esc(entry.customer.address):''}<br>Pago: ${esc(PAY[entry.pay])}${entry.pay==='1201'&&entry.due?'<br>Vencimiento: '+esc(entry.due):''}</p><table><thead><tr><th>Producto</th><th>Cant.</th><th>Precio sin IVA</th><th>IVA %</th><th>Base</th></tr></thead><tbody>${(entry.items||[]).map(item=>`<tr><td>${esc(prod(item.p)?.name||'Producto')}</td><td>${esc(formatQuantity(item.q))}</td><td>${money(item.u)}</td><td>${esc(item.vatRate||0)}</td><td>${money(r2(item.q*item.u))}</td></tr>`).join('')}</tbody></table><p>Subtotal: ${money(totals.subtotal)}<br>IVA: ${money(totals.vat)}<br><b>Total: ${money(totals.total)}</b></p></div>`);
   document.body.classList.add('rc');const done=()=>{document.body.classList.remove('rc');$('#rcpt')?.remove();removeEventListener('afterprint',done)};addEventListener('afterprint',done);print();
 };
 ACT.delentry=data=>{
@@ -174,9 +174,9 @@ V.kardex=()=>{
     balance=quantityRound(product.stock-movements.reduce((total,record)=>total+record.movement.q,0));
     let initial=balance;
     for(const {entry,movement} of movements){balance=quantityRound(balance+movement.q);if(entry.date<from){initial=balance;continue}if(entry.date>to)continue;const item=(entry.items||[]).find(item=>item.p===product.id),unitCost=movement.unitCost??item?.cost??(entry.type==='compra'?item?.u:undefined);
-      rows+=`<tr><td>${esc(entry.date)}</td><td>${esc(entry.reference||entry.desc)}</td><td>${movement.q>0?esc(movement.q):'—'}</td><td>${movement.q<0?esc(-movement.q):'—'}</td><td>${esc(balance)}</td><td>${money(unitCost??product.cost)}${unitCost===undefined?' *':''}</td><td>${money(Math.abs(movement.q)*(unitCost??product.cost))}</td></tr>`;
+      rows+=`<tr><td>${esc(entry.date)}</td><td>${esc(entry.reference||entry.desc)}</td><td>${movement.q>0?esc(formatQuantity(movement.q)):'—'}</td><td>${movement.q<0?esc(formatQuantity(-movement.q)):'—'}</td><td>${esc(formatQuantity(balance))}</td><td>${money(unitCost??product.cost)}${unitCost===undefined?' *':''}</td><td>${money(Math.abs(movement.q)*(unitCost??product.cost))}</td></tr>`;
     }
-    rows=`<tr class="ledger-opening"><td colspan="4">Saldo inicial del período</td><td>${esc(initial)}</td><td colspan="2"></td></tr>`+rows;
+    rows=`<tr class="ledger-opening"><td colspan="4">Saldo inicial del período</td><td>${esc(formatQuantity(initial))}</td><td colspan="2"></td></tr>`+rows;
   }
   main(pageHead('Cardex / Kardex',pbtn())+`<label class="noprint">Producto<select id="kardex-product">${S.products.map(record=>`<option value="${esc(record.id)}" ${record.id===KARDEX_PRODUCT?'selected':''}>${esc(record.name)}</option>`).join('')}</select></label>`+pbar()+notice('Entradas, salidas y saldo físico por producto. * Costo referencial actual en movimientos antiguos sin costo guardado; no constituye una revaloración histórica. Los saldos sin movimiento se muestran como apertura.')+accountingTable(['Fecha','Documento','Entrada','Salida','Existencia','Costo unitario','Valor del movimiento'],rows));
 };

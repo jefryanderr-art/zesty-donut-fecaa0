@@ -1,4 +1,6 @@
 export class AccountingValidationError extends Error { constructor(message){super(message);this.publicMessage=message;this.status=422;} }
+// Validar antes de redondear: 0.0009 no se acepta como 0.001.
+export function normalizeItemQuantity(value){const q=Number(value);if(!Number.isFinite(q)||q<0.001)throw new AccountingValidationError('La cantidad mínima es 0.001.');return Math.round(q*1000)/1000}
 // Cálculos puros en centavos; usados por Functions y por las verificaciones de la plataforma.
 export function moneyCents(value){const n=Number(value),c=Math.round(n*100);if(!Number.isFinite(n)||!Number.isSafeInteger(c)||Math.abs(n*100-c)>0.000001)throw new AccountingValidationError('Usa importes seguros con un máximo de dos decimales.');return c}
 export function amortization(principal,annualRate,months){
@@ -47,7 +49,7 @@ export function allocateCents(total,weights){const cents=moneyCents(total),sum=w
 export function allocateReturnItems(originalItems,previousNotes,requested){
  const original=new Map(),returned=new Map(),wanted=new Map();for(const row of originalItems)original.set(row.p,(original.get(row.p)||0)+row.q);
  for(const note of previousNotes)for(const row of note.items||[])returned.set(row.p,(returned.get(row.p)||0)+row.q);
- for(const row of requested||[]){const q=Number(row.q);if(!Number.isFinite(q)||q<0||Math.abs(q*1e6-Math.round(q*1e6))>1e-5)throw new AccountingValidationError('Cantidad a devolver inválida.');wanted.set(row.p,(wanted.get(row.p)||0)+q)}
+ for(const row of requested||[]){if(Number(row.q)===0)continue;const q=normalizeItemQuantity(row.q);wanted.set(row.p,(wanted.get(row.p)||0)+q)}
  const items=[];for(const [id,q]of wanted){if(!q)continue;if(!original.has(id)||q>(original.get(id)-(returned.get(id)||0))+1e-6)throw new AccountingValidationError('La cantidad supera lo pendiente de devolución.');let skip=returned.get(id)||0,remaining=q;for(const row of originalItems.filter(i=>i.p===id)){const consumed=Math.min(skip,row.q);skip-=consumed;const take=Math.min(remaining,row.q-consumed);if(take>0){items.push({...row,q:take});remaining=Math.round((remaining-take)*1e6)/1e6}if(remaining<=0)break}}
  if(!items.length)throw new AccountingValidationError('Indica al menos un producto a devolver.');return {items,finalReturn:[...original].every(([id,q])=>(returned.get(id)||0)+(wanted.get(id)||0)>=q-1e-6)};
 }
