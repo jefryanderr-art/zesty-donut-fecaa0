@@ -496,14 +496,14 @@ export async function migrateAccountingStorage(companyId, session, body) {
 }
 
 // Shared creation path: caller supplies the server-resolved limit, never browser authority.
-export async function createOwnedCompany(client,session,{name,description='',companyLimit=null,testPlan=null,uniqueName=false}){
+export async function createOwnedCompany(client,session,{name,description='',companyLimit=null,testPlan=null,uniqueName=false,id}){
  if(session.member)accessError('Los colaboradores no pueden crear empresas.');
  await client.select({email:users.email}).from(users).where(eq(users.email,session.email)).for('update');
  const current=await client.select({id:companies.id,name:companies.name}).from(companies).where(and(eq(companies.ownerEmail,session.email),isNull(companies.archivedAt)));
  if(companyLimit!=null&&current.length>=companyLimit)accessError('Se alcanzó el límite de empresas del plan.',403);
  const base=String(name||'').trim().slice(0,80);if(!base)accessError('Escribe un nombre de empresa',400);
  name=base;if(uniqueName){let n=2;while(current.some(c=>c.name===name))name=base.slice(0,70)+' '+n++}
- const [created]=await client.insert(companies).values({ownerEmail:session.email,name,description:String(description).trim().slice(0,2000),testPlan,isPlatformCompany:false}).returning({id:companies.id});
+ const [created]=await client.insert(companies).values({...(id?{id}:{}),ownerEmail:session.email,name,description:String(description).trim().slice(0,2000),testPlan,isPlatformCompany:false}).returning({id:companies.id});
  await audit(client,created.id,session,'Empresa creada',[{area:'name',before:null,after:name}],0);
  return created;
 }
