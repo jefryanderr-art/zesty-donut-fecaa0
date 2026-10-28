@@ -54,7 +54,7 @@ async function requireBillingOwner(session){
 }
 export async function billingMe(session,admin,companyId){
  const context=await billingContext(session,companyId);
- if(context.internalTestPlan){const [plan]=await db.select().from(servicePlans).where(eq(servicePlans.id,context.internalTestPlan));if(!plan)billingError('Plan de prueba no disponible.',403);return {canManageBilling:false,checkoutReady:false,entitlement:internalTestEntitlement(plan.id),plan,serverNow:new Date().toISOString()}}
+ if(context.internalTestPlan){const [plan]=await db.select().from(servicePlans).where(eq(servicePlans.id,context.internalTestPlan));if(!plan)billingError('Plan de prueba no disponible.',403);return {canManageBilling:false,checkoutReady:false,entitlement:internalTestEntitlement(plan.id),plan,testPlans:context.canManageBilling?await db.select().from(servicePlans):[],serverNow:new Date().toISOString()}}
  const a=await accountAccess(context.email,context.admin);
  if(!context.canManageBilling)return {canManageBilling:false,checkoutReady:false,checkoutReason:'Solo el dueño de la empresa puede contratar el plan.',entitlement:a.ent,plan:a.plan,version:a.sub.version,serverNow:new Date().toISOString()};
  const [legal]=await db.select().from(siteContent).where(eq(siteContent.id,'legal'));

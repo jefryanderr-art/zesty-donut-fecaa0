@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import {createOwnedCompany,audit} from './access.mjs';
 import {and,eq,desc,sql,isNull} from 'drizzle-orm';
 import {db} from '../../db/index.ts';
@@ -92,15 +93,34 @@ export async function supportAction(session,companyId,method,body){
  await db.transaction(async client=>{if(body.revoke)await client.delete(supportGrants).where(eq(supportGrants.companyId,companyId));else await client.insert(supportGrants).values({companyId,email,grantedBy:session.email,expiresAt:new Date(Date.now()+24*3600000)}).onConflictDoUpdate({target:supportGrants.companyId,set:{email,grantedBy:session.email,expiresAt:new Date(Date.now()+24*3600000),createdAt:new Date()}});await client.insert(auditEvents).values({companyId,actor:session.email,action:body.revoke?'Soporte revocado':'Soporte autorizado por 24 horas · solo lectura',changes:[{area:'support',email,reason:clean(body.reason,1000)}]})});return {ok:true};
 }
 
+export async function ensurePlanTestCompany(session){
+ if(!await isPlatformAdmin(session))return;
+ await db.transaction(async client=>{
+  const [owner]=await client.select({platformAdmin:users.platformAdmin}).from(users).where(eq(users.email,session.email)).for('update');
+  if(!owner?.platformAdmin)return;
+  // Stable identity survives renames and archiving; the owner lock serializes creation.
+  const hash=createHash('sha256').update('acontec:plan-test:'+session.email).digest('hex');
+  const id=[hash.slice(0,8),hash.slice(8,12),hash.slice(12,16),hash.slice(16,20),hash.slice(20,32)].join('-');
+  const [existing]=await client.select({id:companies.id}).from(companies).where(eq(companies.id,id));
+  if(existing)return;
+  const [pro]=await client.select({id:servicePlans.id}).from(servicePlans).where(eq(servicePlans.id,'pro'));
+  if(!pro)billingError('Plan de prueba no disponible.',503);
+  await createOwnedCompany(client,session,{id,name:'Empresa de prueba de plan',testPlan:pro.id});
+  await audit(client,id,session,'Empresa de prueba interna creada automáticamente',[{area:'testPlan',before:null,after:pro.id}],0);
+ });
+}
+
 export async function testCompaniesRoute(session,method,operation,body={}){
- await requirePlatform(session,session.activeCompanyId);
+ const selfChange=method==='POST'&&operation==='set'&&body.companyId===session.activeCompanyId;
+ if(selfChange){if(!await isPlatformAdmin(session))billingError('Acceso exclusivo del super administrador de plataforma.',403)}else await requirePlatform(session,session.activeCompanyId);
  if(method==='GET'&&operation)billingError('Ruta no encontrada.',404);
  if(method==='GET')return {companies:await db.select({id:companies.id,name:companies.name,plan:companies.testPlan,date:companies.updatedAt}).from(companies).where(and(eq(companies.ownerEmail,session.email),eq(companies.isPlatformCompany,false),isNull(companies.archivedAt),sql`${companies.testPlan} IS NOT NULL`)).orderBy(desc(companies.updatedAt))};
  if(method!=='POST')billingError('Método no permitido.',405);
- const reason=clean(body.reason,1000);if(body.confirmed!==true||reason.length<3)billingError('Confirma la acción e indica el motivo.');
+ const reason=selfChange?'Cambio de plan desde Mi suscripción':clean(body.reason,1000);if(body.confirmed!==true||reason.length<3)billingError('Confirma la acción e indica el motivo.');
  if(!['create','set'].includes(operation))billingError('Operación no encontrada.',404);
  return db.transaction(async client=>{
-  await requirePlatform(session,session.activeCompanyId,client);
+  if(selfChange){if(!await isPlatformAdmin(session))billingError('Acceso exclusivo del super administrador de plataforma.',403)}else await requirePlatform(session,session.activeCompanyId,client);
+  if(selfChange&&body.plan===null)billingError('Elige un plan de prueba.');
   let plan=null;
   if(body.plan!==null){if(!['facturacion','basico','estandar','pro'].includes(body.plan))billingError('Plan inválido.');[plan]=await client.select().from(servicePlans).where(eq(servicePlans.id,body.plan));if(!plan)billingError('Plan no encontrado.');}
   let company;
@@ -112,6 +132,7 @@ export async function testCompaniesRoute(session,method,operation,body={}){
    if(!/^[a-f0-9-]{36}$/.test(body.companyId||''))billingError('Empresa inválida.');
    [company]=await client.select().from(companies).where(eq(companies.id,body.companyId)).for('update');
    if(!company||company.archivedAt||company.ownerEmail!==session.email||company.isPlatformCompany)billingError('Solo puedes cambiar tus empresas propias ajenas a la plataforma.',403);
+   if(selfChange&&(!company.testPlan||!Number.isInteger(body.revision)||body.revision!==company.revision))billingError('La empresa cambió. Recarga antes de continuar.',409);
    if(body.previousPlan!==company.testPlan)billingError('La prueba cambió. Recarga antes de continuar.',409);
    await client.update(companies).set({testPlan:plan?.id||null,revision:company.revision+1,updatedAt:new Date()}).where(eq(companies.id,company.id));
   }

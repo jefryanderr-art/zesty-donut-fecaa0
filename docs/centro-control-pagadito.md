@@ -232,6 +232,8 @@ La revisión de esta entrega fue estática; no se ejecutaron pruebas, servidores
 
 ## Empresas de prueba de plan
 
+Al cargar sus empresas, el super administrador obtiene una única «Empresa de prueba de plan» con Pro inicial, creada automáticamente bajo bloqueo e identidad estable; desde Mi suscripción puede probar los cuatro planes o volver a Pro con confirmación breve, revisión y auditoría, conservando datos y empresas de prueba anteriores y sin operaciones comerciales (pendiente verificar tras el despliegue).
+
 El Centro de control incluye empresas propias de prueba interna sin cobro. Desde Acontec activa en la sesión, el super administrador puede crear «Prueba · <nombre del plan>» (con número si se repite), abrirla con el selector existente, cambiar su plan mediante selector y motivo confirmado, o quitar la prueba. No se crea una empresa automáticamente al desplegar. La interfaz normal muestra una franja permanente «MODO DE PRUEBA INTERNA · Plan <nombre> · sin cobro» y la insignia del selector; Mi suscripción explica el modo sin ofrecer contratación. La matriz utiliza los módulos y límites actuales guardados de los cuatro planes.
 
 La columna nullable `acontec_companies.test_plan` se añadió mediante `20261027233847_add_company_test_plan`. El servidor solo la aplica cuando el dueño conserva el rol real platform_admin y la empresa no es la de plataforma. Se consulta directamente el plan guardado, sin sustituirlo por DEFAULT_PLANS ni inicializar una suscripción. Colaboradores heredan estas restricciones junto con sus permisos individuales. El navegador solo solicita cambios por las rutas administrativas protegidas; no concede permisos al enviar un plan en una operación contable.

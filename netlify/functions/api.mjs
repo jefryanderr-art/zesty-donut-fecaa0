@@ -3,7 +3,7 @@ import '../../public/cloud-sync.js';
 import {deliverMessages} from '../lib/service-mail.mjs';
 import {serviceReceipt} from '../lib/service-receipts.mjs';
 import {plans, billingRoute, subscription, requireBilling} from '../lib/billing.mjs';
-import {testCompaniesRoute,requirePlatform,platformSummary,platformAction,supportAction} from '../lib/platform.mjs';
+import {ensurePlanTestCompany,testCompaniesRoute,requirePlatform,platformSummary,platformAction,supportAction} from '../lib/platform.mjs';
 import { gunzipSync } from 'node:zlib';
 import { statement } from '../lib/reporting.mjs';
 import { integrityReport } from '../lib/accounting-engine.mjs';
@@ -326,6 +326,7 @@ const handleRequest = async (request, context, metrics) => {
     if (!session) return fail('Sesión vencida. Ingresa de nuevo.', 401);
     if (path === 'session' && method === 'POST') return json({ok:true});
     if (path === 'me' && method === 'GET' && !session.member && (session.email === PLATFORM_OWNER || session.email === adminEmail)) await ensureAcontecCompany(session.email);
+    if(path==='me'&&method==='GET')await ensurePlanTestCompany(session);
     // List summaries only on routes that actually return or need the full list.
     const owned = ['me', 'company'].includes(path) ? await accessibleCompanies(session) : [];
     const isAdmin = await isPlatformAdmin(session);

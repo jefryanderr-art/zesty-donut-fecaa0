@@ -36,7 +36,7 @@ function billingTrialOffer(){
 }
 async function showPlans(locked=false){
  BILLING_LOCKED=locked;
- if((CO?.entitlement||BILLING?.entitlement)?.internalTest){modal('Mi suscripción · prueba interna',notice(billingStatus())+'<p>Esta empresa utiliza los módulos y límites actuales del plan elegido, sin cobro ni suscripción comercial. Cambia o retira el plan desde Empresas de prueba de plan en el Centro de control de Acontec.</p>',()=>{},'Cerrar');return}
+ if((CO?.entitlement||BILLING?.entitlement)?.internalTest){await showInternalTestPlans();return}
  if(!billingCanManage()){
   let root=$('#billing-overlay');if(!root){root=document.createElement('section');root.id='billing-overlay';root.className='billing-overlay';root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label','Plan de la empresa');document.body.append(root)}
   root.innerHTML=`<div class="billing-sheet"><h1>Plan de la empresa</h1><p>${esc(locked||CO?.entitlement?.state==='en_gracia'?billingCompanyNotice:'El acceso a esta empresa depende de la suscripción de su dueño.')}</p><p>${esc(billingStatus())}</p><button id="billing-close" class="btn ghost">${locked?'Elegir otra empresa':'Volver a mi empresa'}</button> <button id="billing-logout" class="btn ghost">Salir</button></div>`;
@@ -54,6 +54,30 @@ async function showPlans(locked=false){
  root.querySelector('#billing-logout')?.addEventListener('click',async()=>{await ACT.logout();root.remove()});
  root.querySelector('#billing-cancel').onclick=async()=>{if(!confirm('¿Cancelar los cobros futuros? Conservas el acceso hasta el fin del periodo pagado.'))return;try{await api('cancel','POST',{});await refreshBilling();root.querySelector('#billing-error').textContent='Pagadito confirmó la cancelación de los cobros futuros.'}catch(e){root.querySelector('#billing-error').textContent=e.message}};
  root.querySelector('#billing-check').onclick=async()=>{const b=root.querySelector('#billing-check');b.disabled=true;try{const result=await api('billing/confirm','POST',{});await refreshBilling();if(result.status==='active'){root.remove();await openCompany(CO?.id||COS[0]?.id);alert('¡Pago confirmado!')}else root.querySelector('#billing-error').textContent='El pago sigue en verificación.'}catch(e){root.querySelector('#billing-error').textContent=e.message}finally{b.disabled=false}};
+}
+async function showInternalTestPlans(){
+ const companyId=CO?.id;
+ const data=await api('billing/me?c='+encodeURIComponent(companyId));
+ const result={plans:data.testPlans?.length?data.testPlans:[data.plan]};
+ if(CO?.id!==companyId)return;
+ let root=$('#billing-overlay');if(!root){root=document.createElement('section');root.id='billing-overlay';root.className='billing-overlay';root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label','Planes de prueba interna');document.body.append(root)}
+ const current=CO.billingPlan?.id||CO.testPlan,canChange=CO.owner===true&&!CO.support;
+ root.innerHTML=`<div class="billing-sheet"><h1>Mi suscripción · prueba interna</h1><p>Plan de prueba actual: ${esc(CO.billingPlan?.name||current)}</p><p>Los datos se conservan al cambiar de plan. Sin cobro.</p><div class="billing-plans">${['facturacion','basico','estandar','pro'].map(id=>result.plans.find(p=>p.id===id)).filter(Boolean).map(p=>`<article class="card billing-plan"><h2>${esc(p.name)}</h2><p>${p.limits.companies===null?'Empresas sin límite':esc(p.limits.companies)+' empresa'} · ${p.limits.branches===null?'Sucursales sin límite':'Sucursal principal'}</p><p>${esc(billingPlanDescription(p))}</p>${canChange?`<button class="btn full" data-test-plan="${esc(p.id)}" ${p.id===current?'disabled':''}>Probar este plan</button>`:''}</article>`).join('')}</div><p id="test-plan-error" class="err" role="alert"></p>${canChange?`<button class="btn" data-test-plan="pro" ${current==='pro'?'disabled':''}>Volver a Pro</button>`:''} <button id="test-plan-close" class="btn ghost">Volver a mi empresa</button></div>`;
+ root.querySelector('#test-plan-close').onclick=()=>root.remove();
+ root.querySelectorAll('[data-test-plan]').forEach(button=>button.onclick=async()=>{
+  const plan=button.dataset.testPlan,name=result.plans.find(p=>p.id===plan)?.name||plan;
+  if(!confirm('¿Probar el plan '+name+' sin cobro?'))return;
+  root.querySelectorAll('button').forEach(b=>b.disabled=true);
+  try{
+   if(CO?.id!==companyId)throw new Error('La empresa activa cambió. Abre de nuevo Mi suscripción.');
+   if(!await flush())throw new Error('Guarda los cambios pendientes antes de cambiar de plan.');
+   await api('platform/test-companies/set','POST',{companyId,plan,previousPlan:CO.testPlan,revision:REV,confirmed:true});
+   // Reopen from the server before permitting another save with the old revision.
+   await openCompany(companyId);
+   const summary=COS.find(c=>c.id===companyId);if(summary)summary.testPlan=CO.testPlan;
+   await showInternalTestPlans();
+  }catch(error){root.querySelector('#test-plan-error').textContent=error.message;root.querySelectorAll('button').forEach(b=>b.disabled=b.dataset.testPlan===current)}
+ });
 }
 function billingSummary(id,locked){
  if(!billingCanManage())return showPlans(locked);
