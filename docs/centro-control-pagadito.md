@@ -259,3 +259,12 @@ No se ejecutaron compilaciones, servidores ni pruebas locales. Las pruebas de re
 - [ ] Confirmar que crear/cambiar/quitar no genera cobro, pago, autorización, suscripción ni asiento en ninguna empresa. Revisar auditoría y ausencia de cambios en Acontec y clientes.
 - [ ] Quitar el plan de prueba y comprobar acceso administrativo completo, conservando datos. Verificar también una empresa administrativa sin test_plan.
 - [ ] Visitante 401; cliente real y colaborador 403 en todas las rutas de prueba; administrador fuera de Acontec 403. Rechazar empresa ajena/de plataforma, plan inválido, falta de motivo/confirmación, JSON incorrecto y origen ajeno.
+
+
+### Corrección del desfase de revisión por plan de prueba
+
+Cambiar o quitar `test_plan` conserva `companies.data` y `companies.revision`. La ruta consulta exclusivamente metadatos y compara `previousPlan` con el plan guardado bajo bloqueo de fila, también en el `UPDATE`, dentro de la transacción con auditoría. La revisión enviada por interfaces anteriores no interviene en el cambio de metadatos.
+
+Al abrir una empresa afectada como dueño después del despliegue, la lectura transaccional repara automáticamente la revisión relacional, antes de leer la contabilidad. Solo se consideran empresas ajenas a plataforma con `test_plan` o nombre exacto «Empresa de prueba de plan», cuyo dueño conserve el rol real de super administrador. Bajo bloqueo de empresa y almacenamiento se verifica el hash canónico original de JavaScript, los conteos del manifiesto, la reconstrucción completa, los totales y las filas relacionales. Solo entonces se alinea `accounting_storage.revision` con `companies.revision` y se registra un evento de auditoría en la misma transacción. La reparación es idempotente y no cambia documentos, planes, copias, tablas ni migraciones. Si la verificación falla, se devuelve su error de integridad y la transacción no modifica nada.
+
+La reparación de los datos de producción queda pendiente del despliegue y la reapertura por el dueño; no se ejecutó una actualización directa de producción en esta sesión. Quedaron pendientes para la plataforma la prueba de regresión de cambio/retiro, la reapertura de la empresa afectada, la auditoría única, el rechazo de un plan anterior obsoleto y la conservación del bloqueo ante diferencias de integridad.
