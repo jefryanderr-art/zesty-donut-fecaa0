@@ -130,11 +130,14 @@ export async function testCompaniesRoute(session,method,operation,body={}){
    company=await createOwnedCompany(client,session,{name:'Prueba · '+plan.name,testPlan:plan.id,uniqueName:true});
   }else{
    if(!/^[a-f0-9-]{36}$/.test(body.companyId||''))billingError('Empresa inválida.');
-   [company]=await client.select().from(companies).where(eq(companies.id,body.companyId)).for('update');
+   // Resolve platform metadata only: changing the plan never loads accounting data.
+   [company]=await client.select({id:companies.id,ownerEmail:companies.ownerEmail,archivedAt:companies.archivedAt,isPlatformCompany:companies.isPlatformCompany,testPlan:companies.testPlan,revision:companies.revision}).from(companies).where(eq(companies.id,body.companyId)).for('update');
    if(!company||company.archivedAt||company.ownerEmail!==session.email||company.isPlatformCompany)billingError('Solo puedes cambiar tus empresas propias ajenas a la plataforma.',403);
-   if(selfChange&&(!company.testPlan||!Number.isInteger(body.revision)||body.revision!==company.revision))billingError('La empresa cambió. Recarga antes de continuar.',409);
+   if(selfChange&&!company.testPlan)billingError('La empresa cambió. Recarga antes de continuar.',409);
    if(body.previousPlan!==company.testPlan)billingError('La prueba cambió. Recarga antes de continuar.',409);
-   await client.update(companies).set({testPlan:plan?.id||null,revision:company.revision+1,updatedAt:new Date()}).where(eq(companies.id,company.id));
+   // Platform metadata has its own concurrency token; never advance the accounting revision.
+   const changed=await client.update(companies).set({testPlan:plan?.id||null,updatedAt:new Date()}).where(and(eq(companies.id,company.id),sql`${companies.testPlan} IS NOT DISTINCT FROM ${body.previousPlan}`)).returning({id:companies.id});
+   if(!changed.length)billingError('La prueba cambió. Recarga antes de continuar.',409);
   }
   await audit(client,company.id,session,plan?'Plan de prueba interna asignado':'Plan de prueba interna retirado',[{area:'testPlan',before:company.testPlan||null,after:plan?.id||null,reason}],company.revision||0);
   return {ok:true,id:company.id};

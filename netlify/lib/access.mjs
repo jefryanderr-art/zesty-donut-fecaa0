@@ -8,7 +8,7 @@ import { CROSS_BRANCH_OPS } from './transfers.mjs';
 import { ADVANCED_ARRAYS } from './advanced.mjs';
 import { branchAccess, scopeBranch, mergeBranch, companyBranches, materializeBranches } from './branches.mjs';
 import { syncBarcodes, guardPeriods } from './controls.mjs';
-import { readAccounting, syncAccounting, convertAccounting, returnToLegacy, storageState, retainedCompanyData } from './accounting-storage.mjs';
+import { repairTestPlanRevision, readAccounting, syncAccounting, convertAccounting, returnToLegacy, storageState, retainedCompanyData } from './accounting-storage.mjs';
 import { normalizeDocument } from './accounting-codec.mjs';
 import { promisify } from 'node:util';
 import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
@@ -85,7 +85,10 @@ export async function companyAccess(client, companyId, session, lock = false, lo
     if(result.billingPlan?.blockedModules?.includes('sucursales')||result.billingPlan?.limits?.branches===1){result.branchId='principal';result.branches=result.branches.filter(b=>b.id==='principal');result.unrestrictedBranches=companyBranches(company.data).length===1}
     return result;};
   if (!session.member && company.ownerEmail === session.email) {
-    if (lock && loadAccounting) company.data = await readAccounting(client, company);
+    if (lock && loadAccounting) {
+      await repairTestPlanRevision(client, company, session.email);
+      company.data = await readAccounting(client, company);
+    }
     return finish({ company, owner: true, permissions: {} });
   }
   const [viewer]=await client.select({platformAdmin:users.platformAdmin}).from(users).where(eq(users.email,session.email));

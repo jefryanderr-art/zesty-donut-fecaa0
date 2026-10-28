@@ -39,6 +39,23 @@ export async function verifyStored(client, company, state) {
   for (const name of Object.keys(tables)) if (canonical([...rows[name]].sort(byId)) !== canonical([...verification.rows[name]].sort(byId))) storageError('Una tabla relacional no coincide con el documento verificado.');
   return data;
 }
+// Caller holds the company row lock in the same transaction. Repair only the
+// known platform test-company incident; ordinary accounting reads stay strict.
+export async function repairTestPlanRevision(client, company, actor) {
+  if (company.isPlatformCompany || (!company.testPlan && company.name !== 'Empresa de prueba de plan')) return;
+  const [owner] = await client.select({ platformAdmin: schema.users.platformAdmin }).from(schema.users).where(eq(schema.users.email, company.ownerEmail));
+  if (owner?.platformAdmin !== true) return;
+  const [state] = await client.select().from(schema.accountingStorage).where(eq(schema.accountingStorage.companyId, company.id)).for('update');
+  if (!state || state.mode !== 'relational' || state.revision === company.revision) return;
+  // Exact canonical JS hash, manifest counts, totals and every relational row.
+  // Verification errors abort the transaction without any repair or data loss.
+  await verifyStored(client, company, state);
+  await client.update(schema.accountingStorage).set({ revision: company.revision }).where(and(eq(schema.accountingStorage.companyId, company.id), eq(schema.accountingStorage.revision, state.revision)));
+  await client.insert(schema.auditEvents).values({ companyId: company.id, actor,
+    action: 'Revisión de empresa de prueba reparada', revision: company.revision,
+    changes: [{ area: 'accountingStorage.revision', before: state.revision, after: company.revision,
+      reason: 'Desfase de metadatos test_plan; integridad y conteos verificados' }] });
+}
 export async function readAccounting(client, company) {
   const state = await storageState(client, company.id);
   if (!state || state.mode === 'legacy') return company.data;
