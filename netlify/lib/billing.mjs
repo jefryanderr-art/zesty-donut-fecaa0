@@ -3,7 +3,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {and,eq,desc,sql,isNull} from 'drizzle-orm';
 import {db} from '../../db/index.ts';
 import {users,companies,subscriptions,servicePlans,billingCheckouts,customerPayments,customerEvents,serviceMessages,siteContent,legalAcceptances,auditEvents,companyBackups} from '../../db/schema.ts';
-import {internalTestApplies,internalTestEntitlement,servicePaymentKey,DEFAULT_PLANS,entitlement,moduleIncluded,providerConfig,billingError,managuaDay,addMonths,dayEnd,env} from './billing-rules.mjs';
+import {internalTestApplies,internalTestEntitlement,servicePaymentKey,planLimits,DEFAULT_PLANS,entitlement,moduleIncluded,providerConfig,billingError,managuaDay,addMonths,dayEnd,env} from './billing-rules.mjs';
 import {pagadito,safePaymentUrl} from './pagadito.mjs';
 import {readAccounting,syncAccounting} from './accounting-storage.mjs';
 import {guardPeriods} from './period-controls.mjs';
@@ -32,7 +32,7 @@ export async function subscription(email,client=db){
  if(created.length)await event(client,email,email,'Suscripción inicializada',{trialHours:24,preservedLegacyPayment:!!paid,legacyPlan:profile.plan||null});
  [sub]=await client.select().from(subscriptions).where(eq(subscriptions.email,email));if(created.length)await projectProfile(client,sub);return sub;
 }
-export async function accountAccess(email,admin=false,client=db){const sub=await subscription(email,client),ent=entitlement(sub,admin),list=await plans(client),plan=admin?DEFAULT_PLANS.find(p=>p.id==='pro'):list.find(p=>p.id===ent.plan);return {sub,ent,plan:plan?{...plan,limits:admin?plan.limits:{...plan.limits,...sub.limits}}:null}}
+export async function accountAccess(email,admin=false,client=db){const sub=await subscription(email,client),ent=entitlement(sub,admin),list=await plans(client),plan=list.find(p=>p.id===ent.plan);return {sub,ent,plan:plan?{...plan,limits:admin?plan.limits:planLimits(plan,sub)}:null}}
 export async function requireBilling(email,admin=false,client=db){const a=await accountAccess(email,admin,client);if(!a.ent.access)billingError('Tu acceso venció. Abre Mi suscripción para elegir un plan.',402);return a}
 async function projectProfile(client,sub){const [u]=await client.select().from(users).where(eq(users.email,sub.email));const plan=(await plans(client)).find(p=>p.id===sub.plan);await client.update(users).set({profile:{...u.profile,plan:sub.plan||'',state:entitlement(sub).state,paidUntil:sub.paidUntil?managuaDay(new Date(sub.paidUntil)):'',currency:'USD',monthlyAmountCents:plan?(sub.interval==='anual'?Math.round(plan.annualCents/12):plan.monthlyCents):0},version:u.version+1}).where(eq(users.email,sub.email))}
 // Resolve ownership independently of the login method, without requiring paid access.

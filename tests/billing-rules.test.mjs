@@ -1,7 +1,7 @@
 import { fiscalAnnualTotals } from '../netlify/lib/fiscal-projection.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {internalTestApplies,internalTestEntitlement,addMonths,dayEnd,entitlement,DEFAULT_PLANS,moduleIncluded,requirePlanModule,planModule,BLOCKABLE_MODULES,platformContextAllowed,supportGrantActive,servicePaymentKey,validatePlan} from '../netlify/lib/billing-rules.mjs';
+import {internalTestApplies,internalTestEntitlement,addMonths,dayEnd,entitlement,DEFAULT_PLANS,moduleIncluded,requirePlanModule,planModule,BLOCKABLE_MODULES,platformContextAllowed,supportGrantActive,servicePaymentKey,validatePlan,planLimits} from '../netlify/lib/billing-rules.mjs';
 
 test('la prueba vence a las 24 horas y no se reinicia por consultar',()=>{
  const sub={trialEndsAt:'2026-10-23T12:00:00Z',state:'prueba'};
@@ -62,7 +62,7 @@ test('los planes existentes conservan precios y límites; Básico incorpora Fisc
  assert.deepEqual(basic.blockedModules,['personal','control_personal','decisiones','sucursales']);
  assert.equal(moduleIncluded(basic,'fiscal'),true);
  assert.deepEqual(standard.blockedModules,['sucursales']);assert.deepEqual(pro.blockedModules,[]);
- assert.deepEqual([basic,standard].map(p=>p.limits),[{companies:1,branches:1},{companies:1,branches:1}]);assert.deepEqual(pro.limits,{companies:null,branches:null});
+ assert.deepEqual([basic,standard].map(p=>p.limits),[{companies:1,branches:1},{companies:1,branches:1}]);assert.deepEqual(pro.limits,{companies:1,branches:10});
  assert.throws(()=>validatePlan({...basic,monthlyCents:3500.5,active:true}));assert.equal(validatePlan({...basic,active:true}).monthlyCents,3500);
 });
 test('Facturación ocupa el primer lugar con precios confirmados y bloqueos precisos',()=>{
@@ -104,4 +104,63 @@ test('prueba interna exige dueño administrador, plan y empresa ajena a platafor
 });
 test('el entitlement interno no concede una suscripción comercial',()=>{
  for(const plan of DEFAULT_PLANS)assert.deepEqual(internalTestEntitlement(plan.id),{access:true,state:'prueba_interna',plan:plan.id,internalTest:true});
+});
+
+
+test('los límites guardados prevalecen sobre valores antiguos de suscripción',()=>{
+ const plan={limits:{companies:2,branches:7}};
+ assert.deepEqual(planLimits(plan,{limits:{companies:null,branches:100}}),plan.limits);
+ assert.deepEqual(planLimits(plan,{limits:{manual:false,companies:null,branches:100}}),plan.limits);
+ assert.deepEqual(planLimits(plan,{limits:{manual:true,companies:3,branches:null}}),{companies:3,branches:null});
+ plan.limits={companies:4,branches:5};
+ assert.deepEqual(planLimits(plan,{limits:{companies:1,branches:1}}),{companies:4,branches:5});
+ assert.deepEqual(entitlement(null,true),{access:true,state:'admin',plan:'pro'});
+});
+test('todos los planes aceptan límites editables de 1 a 10000 o ilimitados',()=>{
+ for(const plan of DEFAULT_PLANS){
+  for(const value of [1,10000,null]){
+   const input={...plan,name:'Nombre guardado',monthlyCents:1234,annualCents:12000,limits:{companies:value,branches:value},blockedModules:['ventas'],active:true};
+   assert.deepEqual(validatePlan(input),input);
+  }
+  for(const value of [0,-1,10001,1.5,'2',undefined])for(const key of ['companies','branches'])assert.throws(()=>validatePlan({...plan,limits:{...plan.limits,[key]:value}}));
+ }
+});
+
+test('accountAccess usa el Pro guardado para administrador y refleja sus ediciones',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const source=await readFile(new URL('../netlify/lib/billing.mjs',import.meta.url),'utf8');
+ const route=source.slice(source.indexOf('export async function accountAccess'),source.indexOf('export async function requireBilling')).replace('export ','');
+ const saved={...DEFAULT_PLANS[3],limits:{companies:2,branches:3}};
+ const sub={limits:{companies:null,branches:null}};
+ const run=new Function('db','subscription','entitlement','plans','planLimits',route+';return accountAccess;')({},async()=>sub,entitlement,async()=>[saved],planLimits);
+ const access=await run('admin@example.invalid',true);
+ assert.deepEqual(access.ent,{access:true,state:'admin',plan:'pro'});
+ assert.deepEqual(access.plan.limits,{companies:2,branches:3});
+ saved.limits={companies:1,branches:6};
+ assert.deepEqual((await run('admin@example.invalid',true)).plan.limits,saved.limits);
+});
+
+test('guide consulta Pro guardado sin inicializar suscripciones y protege Acontec',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const source=await readFile(new URL('../netlify/lib/access.mjs',import.meta.url),'utf8');
+ const route=source.slice(source.indexOf('export async function companyAccess'),source.indexOf('export function entryModule')).replace('export ','');
+ const company={id:'00000000-0000-0000-0000-000000000001',ownerEmail:'admin@example.invalid',isPlatformCompany:true,data:{branches:[]}};
+ const plan={...DEFAULT_PLANS[3],limits:{companies:1,branches:4}};
+ const tables={companies:{id:'id'},users:{},servicePlans:{},subscriptions:{}};
+ let subscriptionReads=0;
+ const client={select:()=>({from(table){this.table=table;return this},where(){return this},orderBy(){return this},then(resolve){
+  if(this.table===tables.subscriptions){subscriptionReads++;resolve([{limits:{companies:null,branches:null}}]);}
+  else if(this.table===tables.users)resolve([{platformAdmin:true}]);
+  else if(this.table===tables.servicePlans)resolve([plan]);
+  else resolve([{...company}]);
+ }})};
+ const dependencies={...tables,auditEvents:{},getTableColumns:()=>({data:'data'}),sql:()=>{},eq:()=>{},and:()=>{},isNull:()=>{},entitlement,planLimits,internalTestApplies,
+  requireBilling:()=>{throw Error('guide no debe inicializar suscripciones')},accessError:message=>{throw Error(message)},
+  branchAccess:async access=>({...access,branches:[{id:'principal'}],branchId:'principal'})};
+ const run=new Function(...Object.keys(dependencies),route+';return companyAccess;')(...Object.values(dependencies));
+ const result=await run(client,company.id,{email:company.ownerEmail},false,'guide');
+ assert.equal(subscriptionReads,1);
+ assert.deepEqual(result.billingPlan.limits,{companies:1,branches:4});
+ assert.equal(result.readOnlyLimit,false);
+ assert.equal(result.entitlement.state,'admin');
 });
