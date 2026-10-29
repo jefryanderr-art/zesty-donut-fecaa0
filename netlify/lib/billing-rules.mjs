@@ -4,7 +4,7 @@ export const DEFAULT_PLANS = [
  {id:'facturacion',name:'Facturación',monthlyCents:3000,annualCents:31000,currency:'USD',limits:{companies:1,branches:1},blockedModules:['contabilidad','finanzas','cajas','personal','control_personal','decisiones','sucursales']},
  {id:'basico',name:'Básico',monthlyCents:3500,annualCents:31400,currency:'USD',limits:{companies:1,branches:1},blockedModules:['personal','control_personal','decisiones','sucursales']},
  {id:'estandar',name:'Estándar',monthlyCents:7000,annualCents:63000,currency:'USD',limits:{companies:1,branches:1},blockedModules:['sucursales']},
- {id:'pro',name:'Pro',monthlyCents:20000,annualCents:190000,currency:'USD',limits:{companies:null,branches:null},blockedModules:[]},
+ {id:'pro',name:'Pro',monthlyCents:20000,annualCents:190000,currency:'USD',limits:{companies:1,branches:10},blockedModules:[]},
 ];
 export const env = name => globalThis.Netlify?.env?.get(name) ?? process.env[name];
 export function billingError(message,status=400){throw Object.assign(new Error(message),{publicMessage:message,status})}
@@ -36,6 +36,8 @@ export const BLOCKABLE_MODULES = [...catalog.all, 'ventas','compras','gastos','i
 export function planModule(module){return ({...Object.fromEntries(catalog.all.map(id=>[id,id])),cobrar:'ventas',pagar:'compras',asistencia:'control_personal',attendance:'control_personal',vacation:'control_personal',employeeAdvance:'control_personal',simuladores:'decisiones',rentabilidad:'decisiones',pronostico:'decisiones',traslados:'sucursales',compararsucursales:'sucursales'})[module]||module}
 export function moduleIncluded(plan,module){return !!plan&&!(plan.blockedModules||[]).includes(planModule(module))}
 export function requirePlanModule(plan,module){const key=planModule(module),label={...catalog.moduleLabels,contabilidad:'contabilidad formal',finanzas:'estados financieros',cajas:'Tesorería',control_personal:'Control del personal',decisiones:'Decisiones',sucursales:'administración de sucursales',accesibilidad:'Administración de accesos',facturacion:'Facturación y turnos'}[key]||key;if(plan&&!moduleIncluded(plan,module))billingError('Tu plan no incluye '+label+'.',403)}
+// Only explicitly enabled customer exceptions may override a saved plan.
+export const planLimits = (plan,sub) => ({...plan?.limits,...(sub?.limits?.manual===true?{companies:sub.limits.companies,branches:sub.limits.branches}:{})});
 export function validatePlan(body){
  if(!/^[a-z][a-z0-9_-]{1,40}$/.test(body.id)||!String(body.name||'').trim()||body.currency!=='USD')billingError('Revisa identificador, nombre y moneda USD.');
  for(const key of ['monthlyCents','annualCents'])if(!Number.isSafeInteger(body[key])||body[key]<1||body[key]>999999900)billingError('Usa precios positivos en centavos enteros.');

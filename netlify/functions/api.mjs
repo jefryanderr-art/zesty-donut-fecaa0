@@ -566,7 +566,7 @@ const handleRequest = async (request, context, metrics) => {
     if (path === 'company' && method === 'POST') {
       if (session.member) return fail('Los colaboradores no pueden crear empresas.', 403);
       const billing=await requireBilling(session.email,isAdmin);
-      const companyLimit=isAdmin?null:billing.plan?.limits?.companies;
+      const companyLimit=billing.plan?.limits?.companies;
       if(companyLimit!=null&&owned.filter(c=>c.owner).length>=companyLimit)return fail('Se alcanzó el límite de empresas del plan.',403);
       if (!companyName(body.name)) return fail('Escribe un nombre de empresa');
       const company = await db.transaction(client => createOwnedCompany(client,session,{name:body.name,description:body.description,businessType:body.businessType||'comercio',companyLimit}));

@@ -6,13 +6,7 @@
   try{acknowledged=localStorage.getItem(privacyKey)==='seen'}catch{}
   let messages=[],identity='',opened=false,pending=false,request=null,generation=0;
   const quick=[
-    ['facturacion','¿Cómo registro una venta?','1. Abre Facturación y pulsa Abrir turno si hay pago inmediato.\n2. Pulsa + Crear factura.\n3. Revisa fecha, cliente y serie; agrega productos y confirma cantidades y precios sin IVA.\n4. Revisa IVA y total; distribuye Pago mixto.\n5. Pulsa Emitir factura y registrar asiento. Una corrección posterior requiere Nota de crédito autorizada.'],
-    ['facturacion','¿Cómo registro una venta a crédito?','1. Abre Facturación y pulsa + Crear factura.\n2. Identifica al cliente y revisa Vencimiento del crédito.\n3. Agrega productos y revisa cantidades, precios sin IVA, impuesto y total.\n4. En Pago mixto indica la parte a crédito y cualquier pago inmediato; este requiere turno abierto.\n5. Revisa el reparto y pulsa Emitir factura y registrar asiento. El cobro posterior reduce la deuda; no es otra venta.\n\nverifica con tu contador'],
-    ['inventario','¿Cómo agrego productos?','1. Abre Productos e inventario y pulsa + Producto.\n2. Revisa código, nombre, unidad, costo y precio sin IVA.\n3. Indica existencia inicial y mínimo cuando corresponda.\n4. Revisa la sucursal y guarda con el botón del formulario.\n5. No repitas inventario inicial ya registrado. Usa Compras para ingresar mercadería comprada después.'],
-    ['compras','¿Cómo registro una compra?','1. Abre Compras y pulsa + Nueva compra.\n2. Revisa Fecha, Proveedor y Forma de pago.\n3. Usa + Agregar producto para completar las líneas.\n4. Revisa cantidades, costos sin IVA, impuesto y total antes de confirmar.\n5. Si queda deuda, el pago posterior debe aplicarse al documento; no registres otra compra.\n\nverifica con tu contador'],
-    ['finanzas','¿Cómo leo el estado de resultados?','1. Abre Estado de resultados y elige el período.\n2. Revisa Total ingresos.\n3. Resta Costo de ventas para comprender Utilidad bruta.\n4. Revisa Total gastos y UTILIDAD (PÉRDIDA) NETA.\n5. Una utilidad no equivale a efectivo: puede incluir ventas pendientes de cobro. Confirma empresa y sucursal.\n\nverifica con tu contador'],
-  ];
-  const assistantQuick=()=>{const profile=globalThis.AcontecProfiles?.get(CO?.businessType);return profile&&profile.id!=='comercio'?[...profile.quickQuestions.map(([module,label,answer])=>[module,label,answer]),...quick]:quick;};
+const assistantQuick=()=>{const profile=globalThis.AcontecProfiles?.get(CO?.businessType);return profile&&profile.id!=='comercio'?[...profile.quickQuestions.map(([module,label,answer])=>[module,label,answer]),...quick]:quick;};
   const ready=()=>!!U&&!!CO&&R==='panel'&&!HOME&&CO.assistantAvailable&&!CO.support;
   const context=()=>[U?.email,CO?.id,CO?.memberId,CO?.branchId].join(':');
   function reset(){request?.abort();request=null;messages=[];opened=false;pending=false;generation++;document.getElementById('assistant-sheet')?.remove()}
@@ -34,6 +28,7 @@
     const keyboard=window.visualViewport?Math.max(0,innerHeight-visualViewport.height-visualViewport.offsetTop):0;
     sheet.style.setProperty('--assistant-bottom',Math.max(navBottom,keyboard)+12+'px');
   }
+  const typeFocus=()=>{try{if(!matchMedia('(pointer:coarse)').matches)document.getElementById('assistant-question')?.focus()}catch{}};
   function draw(){
     if(!ready()){reset();return}
     const root=document.getElementById('assistant-sheet');if(!root)return;
@@ -41,15 +36,16 @@
     document.querySelector('[data-assistant="open"]')?.setAttribute('aria-expanded',String(opened));
     root.innerHTML=`<header class="assistant-head"><div><span class="assistant-eyebrow">GUÍA DE USO</span><h2 id="assistant-title">Pregúntale a Acontec</h2></div><button type="button" class="assistant-icon" data-assistant="close" aria-label="Cerrar asistente">×</button></header>
       <p class="assistant-intro">Solo orientación. No consulta tus cifras ni realiza cambios.</p>
-      ${!acknowledged?'<div class="assistant-privacy"><p>Tu pregunta y hasta 4 mensajes se envían a un proveedor de IA. No escribas datos contables, personales ni contraseñas. La conversación vive solo en esta pantalla.</p><a href="/privacidad.html" target="_blank" rel="noopener">Privacidad</a> <button type="button" class="btn ghost" id="assistant-privacy-accept" data-assistant="privacy">Entendido</button></div>':''}
-      <div class="assistant-chips" aria-label="Preguntas rápidas sin IA">${assistantQuick().map(([module,label],index)=>permission(module)?`<button type="button" data-assistant="quick" data-index="${esc(index)}" ${pending||!acknowledged?'disabled':''}>${esc(label)}</button>`:'').join('')}</div>
-      <div class="assistant-messages" role="log" aria-live="polite" aria-relevant="additions text" aria-label="Conversación de ayuda">${messages.map(message=>`<article class="assistant-message ${message.role==='user'?'assistant-user':''}"><b>${esc(message.role==='user'?'Tú':'Acontec')}</b>${format(message.content)}</article>`).join('')}${pending?'<p role="status">Consultando la guía…</p>':''}</div>
-      <form id="assistant-form"><label for="assistant-question">Tu pregunta sobre Acontec</label><textarea id="assistant-question" name="question" maxlength="400" rows="2" placeholder="¿Cómo uso…?" required ${pending||!acknowledged?'disabled':''}></textarea><div class="assistant-form-foot"><small>Máx. 400 caracteres · 20 al día por usuario</small><button class="btn" ${pending||!acknowledged?'disabled':''}>Enviar</button></div></form>
+${!acknowledged?'<div class="assistant-privacy"><p>Solo si el sitio tiene una clave de IA configurada y un proveedor válido, tu pregunta y hasta 4 mensajes se envían a ese proveedor. Sin clave, responde nuestra guía sin IA ni cupo diario. No escribas datos contables, personales ni contraseñas. La conversación vive solo en esta pantalla.</p><a href="/privacidad.html" target="_blank" rel="noopener">Privacidad</a> <button type="button" class="btn ghost" id="assistant-privacy-accept" data-assistant="privacy">Entendido</button></div>':''}
+      <div class="assistant-body"><div class="assistant-chips" aria-label="Preguntas rápidas sin IA">${assistantQuick().map(([module,label],index)=>permission(module)?<button type="button" data-assistant="quick" data-index="${esc(index)}" ${pending||!acknowledged?'disabled':''}>${esc(label)}</button>:'').join('')}</div>
+      <div class="assistant-messages" role="log" aria-live="polite" aria-relevant="additions text" aria-label="Conversación de ayuda">${messages.map(message=><article class="assistant-message ${message.role==='user'?'assistant-user':''}"><b>${esc(message.role==='user'?'Tú':'Acontec')}</b>${format(message.content)}</article>).join('')}${pending?'<p role="status">Consultando la guía…</p>':''}</div></div>
+      <form id="assistant-form"><label for="assistant-question">Tu pregunta sobre Acontec</label><textarea id="assistant-question" name="question" maxlength="400" rows="2" placeholder="¿Cómo uso…?" required ${pending||!acknowledged?'disabled':''}></textarea><div class="assistant-form-foot"><small>Máx. 400 caracteres · Con IA: 20 al día por usuario</small><button class="btn" ${pending||!acknowledged?'disabled':''}>Enviar</button></div></form>
       <footer class="assistant-footer"><span>Las preguntas rápidas no consumen IA.</span><button type="button" class="lk" data-assistant="clear">Limpiar conversación</button></footer>`;
     root.querySelector('#assistant-form').addEventListener('submit',send);
-    geometry();const log=root.querySelector('.assistant-messages');log.scrollTop=log.scrollHeight;
+    geometry();const body=root.querySelector('.assistant-body');const message=messages[messages.length-1],last=body.querySelector('.assistant-message:last-of-type');
+    if(message?.role==='assistant'&&!pending&&last)body.scrollTop+=last.getBoundingClientRect().top-body.getBoundingClientRect().top-8;else body.scrollTop=body.scrollHeight;
   }
-  function show(){if(!ready())return;opened=true;draw();document.getElementById(acknowledged?'assistant-question':'assistant-privacy-accept')?.focus()}
+  function show(){if(!ready())return;opened=true;draw();if(acknowledged)typeFocus();else document.getElementById('assistant-privacy-accept')?.focus()}
   function close(){opened=false;draw();document.querySelector('[data-assistant="open"]')?.setAttribute('aria-expanded','false');document.querySelector('[data-assistant="open"]')?.focus()}
   async function send(event){
     event.preventDefault();if(pending||!ready()||!acknowledged)return;
@@ -66,7 +62,7 @@
     }catch(error){
       if(turn===generation&&key===context()&&ready()&&error.name!=='AbortError')messages.push({role:'assistant',content:'No hay conexión con la ayuda. Usa las preguntas rápidas o vuelve a intentarlo más tarde.'});
     }finally{
-      if(turn===generation&&key===context()){pending=false;request=null;if(ready()){draw();if(opened)document.getElementById('assistant-question')?.focus()}}
+      if(turn===generation&&key===context()){pending=false;request=null;if(ready()){draw();if(opened)typeFocus()}}
     }
   }
   const panel=V.panel;
@@ -87,13 +83,13 @@
   ACT.policy=async function(data,...args){
     const result=policy.call(this,data,...args),article=document.querySelector('#modal article');
     await result;
-    if(data.id==='privacidad'&&article?.isConnected)article.insertAdjacentHTML('beforeend','<p>'+esc('Asistente de ayuda opcional: envía tu pregunta y hasta cuatro mensajes recortados a Anthropic, junto con hasta tres secciones de guía y la pantalla Panel. No consulta ni envía datos contables de la empresa. No compartas datos personales ni credenciales. La conversación permanece solo en pantalla; guardamos únicamente metadatos de uso y en el navegador que viste el aviso. Puedes limpiar el chat; el dueño puede desactivar la función en Ajustes y respaldo.')+'</p>');
+    if(data.id==='privacidad'&&article?.isConnected)article.insertAdjacentHTML('beforeend','<p>'+esc('Asistente de ayuda opcional: solo si el sitio tiene una clave de IA configurada y un proveedor válido, envía tu pregunta y hasta cuatro mensajes recortados a Anthropic, junto con hasta tres secciones de guía y la pantalla Panel. Sin clave o con proveedor no válido responde desde nuestra guía, sin envío a IA ni consumo de cupo. No consulta ni envía datos contables de la empresa. No compartas datos personales ni credenciales. La conversación permanece solo en pantalla; guardamos únicamente metadatos de uso cuando se intenta una llamada a IA y en el navegador que viste el aviso. Puedes limpiar el chat; el dueño puede desactivar la función en Ajustes y respaldo.')+'</p>');
   };
   const settings=V.ajustes;
   V.ajustes=async function(){
     const id=CO.id;await settings();
     if(R!=='ajustes'||CO?.id!==id||!CO.owner||CO.support||!CO.assistantGlobalEnabled||!permission('ajustes',true))return;
-    document.getElementById('main').insertAdjacentHTML('afterbegin',`<section class="card assistant-settings"><h3>Asistente de ayuda</h3><p>Guía de uso sin acceso a cifras. Desactivado por defecto. Máximo 20 preguntas por usuario y 100 por empresa al día.</p><form id="assistant-settings-form"><label class="ck"><input type="checkbox" name="enabled" ${CO.assistantEnabled?'checked':''}> Activar Pregúntale a Acontec en el Panel</label><label>Zona horaria del límite diario<input name="timeZone" maxlength="80" required value="${esc(CO.assistantTimeZone||'America/Managua')}" placeholder="America/Managua"></label><p class="mut">Usa la zona de tu empresa; por ejemplo, America/Managua. El cambio conserva el consumo ya registrado para cada fecha.</p><p class="err" role="status"></p><button class="btn">Guardar configuración del asistente</button></form></section>`);
+    document.getElementById('main').insertAdjacentHTML('afterbegin',`<section class="card assistant-settings"><h3>Asistente de ayuda</h3><p>Guía de uso sin acceso a cifras. Desactivado por defecto. Sin IA, responde desde la guía sin cupo diario. Con IA: máximo 20 preguntas por usuario y 100 por empresa al día.</p><form id="assistant-settings-form"><label class="ck"><input type="checkbox" name="enabled" ${CO.assistantEnabled?'checked':''}> Activar Pregúntale a Acontec en el Panel</label><label>Zona horaria del límite diario<input name="timeZone" maxlength="80" required value="${esc(CO.assistantTimeZone||'America/Managua')}" placeholder="America/Managua"></label><p class="mut">Usa la zona de tu empresa; por ejemplo, America/Managua. El cambio conserva el consumo ya registrado para cada fecha.</p><p class="err" role="status"></p><button class="btn">Guardar configuración del asistente</button></form></section>`);
     document.getElementById('assistant-settings-form').addEventListener('submit',async event=>{
       event.preventDefault();const form=event.target,button=form.querySelector('button');button.disabled=true;
       try{
@@ -112,8 +108,8 @@
     switch(button.dataset.assistant){
       case'open':show();break;
       case'close':close();break;
-      case'privacy':acknowledged=true;try{localStorage.setItem(privacyKey,'seen')}catch{}draw();document.getElementById('assistant-question')?.focus();break;
-      case'clear':request?.abort();generation++;pending=false;messages=[];draw();document.getElementById('assistant-question')?.focus();break;
+      case'privacy':acknowledged=true;try{localStorage.setItem(privacyKey,'seen')}catch{}draw();typeFocus();break;
+      case'clear':request?.abort();generation++;pending=false;messages=[];draw();typeFocus();break;
       case'quick':{
         if(!ready()||!acknowledged||pending)return;
         const item=assistantQuick()[Number(button.dataset.index)];if(!item||!permission(item[0]))return;
@@ -122,7 +118,12 @@
     }
     const trigger=document.querySelector('[data-assistant="open"]');trigger?.setAttribute('aria-expanded',String(opened));
   });
-  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&opened){event.preventDefault();close()}});
+  document.addEventListener('keydown',event=>{
+    if(event.key==='Escape'&&opened){event.preventDefault();close()}
+    if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing&&event.target.id==='assistant-question'){
+      event.preventDefault();if(event.target.value.trim())event.target.form.requestSubmit();
+    }
+  });
   addEventListener('resize',geometry);window.visualViewport?.addEventListener('resize',geometry);
   if(typeof ResizeObserver==='function')new ResizeObserver(geometry).observe(document.body);
 })();

@@ -5,7 +5,7 @@ import {db} from '../../db/index.ts';
 import {users,companies,subscriptions,customerPayments,customerEvents,servicePlans,serviceMessages,siteContent,supportGrants,auditEvents} from '../../db/schema.ts';
 import {mailReady} from './service-mail.mjs';
 import {isPlatformAdmin} from './customer-admin.mjs';
-import {platformContextAllowed,billingError,entitlement,validatePlan,providerConfig,managuaDay,dayEnd} from './billing-rules.mjs';
+import {platformContextAllowed,billingError,entitlement,planLimits,validatePlan,providerConfig,managuaDay,dayEnd} from './billing-rules.mjs';
 import {plans,subscription,event,confirmPayment,bookPayment,cancelSubscription} from './billing.mjs';
 export async function requirePlatform(session,companyId,client=db){
  if(!await isPlatformAdmin(session))billingError('Acceso exclusivo del super administrador de plataforma.',403);
@@ -24,7 +24,7 @@ export async function platformSummary(url){
  const debtRows=await db.execute(sql`SELECT coalesce(sum((c->>'amountCents')::bigint),0)::bigint AS cents FROM acontec_billing_checkouts b CROSS JOIN LATERAL jsonb_array_elements(b.charges) c WHERE b.state IN ('pending','active') AND b.environment=${providerConfig().environment} AND c->>'status' IN ('PENDING','VERIFYING','FAILED','UNCOLLECTABLE') AND c->>'date'<=${managuaDay()}`);totals.pendingCents+=Number((debtRows.rows||debtRows)[0].cents);
  const usage=await db.execute(sql`SELECT c.owner_email AS email, count(*)::int AS companies, array_agg(c.name) AS company_names, sum(greatest(1,CASE WHEN jsonb_typeof(c.data->'branches')='array' THEN jsonb_array_length(c.data->'branches') ELSE 0 END))::int AS branches, sum(pg_column_size(c.data))::bigint AS storage_bytes, (SELECT count(*)::int FROM acontec_company_members m JOIN acontec_companies co ON co.id=m.company_id WHERE co.owner_email=c.owner_email AND m.active=true) AS collaborators FROM acontec_companies c WHERE c.archived_at IS NULL GROUP BY c.owner_email`);
  const use=usage.rows||usage;
- for(const row of clients){row.usage=use.find(u=>u.email===row.email)||{companies:0,branches:0,collaborators:0,storage_bytes:0,company_names:[]};row.usage.aiMessages=null;const p=list.find(p=>p.id===row.plan),limits={...p?.limits,...row.sub?.limits};row.nearLimit=!!p&&['companies','branches'].some(k=>limits[k]!=null&&row.usage[k]>=limits[k]*.8)}
+ for(const row of clients){row.usage=use.find(u=>u.email===row.email)||{companies:0,branches:0,collaborators:0,storage_bytes:0,company_names:[]};row.usage.aiMessages=null;const p=list.find(p=>p.id===row.plan),limits=planLimits(p,row.sub);row.nearLimit=!!p&&['companies','branches'].some(k=>limits[k]!=null&&row.usage[k]>=limits[k]*.8)}
  const alertRows=await db.execute(sql`SELECT count(*) FILTER (WHERE state='unknown')::int AS unresolved, count(*) FILTER (WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(charges) c WHERE c->>'status' IN ('FAILED','EXPIRED','UNCOLLECTABLE')))::int AS failed FROM acontec_billing_checkouts`);const alerts=(alertRows.rows||alertRows)[0];
  const [legal]=await db.select().from(siteContent).where(eq(siteContent.id,'legal'));
  const paymentSetup={missingVariables:Object.entries({PAGADITO_UID:process.env.PAGADITO_UID,PAGADITO_WSK:process.env.PAGADITO_WSK,PAGADITO_ENV:process.env.PAGADITO_ENV}).filter(([,value])=>!value?.trim()).map(([name])=>name),legalReady:!!(legal?.content?.approved&&legal.content.version&&legal.content.refunds)};
@@ -76,7 +76,7 @@ export async function platformAction(session,body){
    if(body.state==='cancelado')billingError('La baja debe cancelar primero los cobros desde Mi suscripción; suspender no cancela cargos del proveedor.',409);
    if(body.trialEndsAt){const date=new Date(body.trialEndsAt);if(!Number.isFinite(date.getTime()))billingError('Fecha de prueba inválida.');patch.trialEndsAt=date}
    if(body.paidUntil&&body.state!=='prueba'){if(!/^\d{4}-\d{2}-\d{2}$/.test(body.paidUntil)||!Number.isFinite(Date.parse(body.paidUntil)))billingError('Fecha inválida.');patch.paidUntil=dayEnd(body.paidUntil)}
-   if(body.limits){for(const key of ['companies','branches'])if(body.limits[key]!==null&&(!Number.isInteger(body.limits[key])||body.limits[key]<1||body.limits[key]>10000))billingError('Límites inválidos.');patch.limits=body.limits}
+   if(body.limits){for(const key of ['companies','branches'])if(body.limits[key]!==null&&(!Number.isInteger(body.limits[key])||body.limits[key]<1||body.limits[key]>10000))billingError('Límites inválidos.');patch.limits=body.limits.manual===true?{manual:true,companies:body.limits.companies,branches:body.limits.branches}:{}}
   }else billingError('Operación no encontrada.',404);
   await client.update(subscriptions).set(patch).where(eq(subscriptions.email,email));
   const effective={...sub,...patch};await client.update(users).set({profile:{...user.profile,plan:effective.plan,state:entitlement(effective).state,paidUntil:effective.paidUntil?managuaDay(new Date(effective.paidUntil)):''},version:user.version+1}).where(eq(users.email,email));
