@@ -117,13 +117,13 @@
     root.innerHTML=`<header class="assistant-head"><div><span class="assistant-eyebrow">GUÍA DE USO</span><h2 id="assistant-title">Pregúntale a Acontec</h2></div><button type="button" class="assistant-icon" data-assistant="close" aria-label="Cerrar asistente">×</button></header>
       <p class="assistant-intro">Solo orientación. No consulta tus cifras ni realiza cambios.</p>
       ${!acknowledged?'<div class="assistant-privacy"><p>Solo si el sitio tiene una clave de IA configurada y un proveedor válido, tu pregunta y hasta 4 mensajes se envían a ese proveedor. Sin clave, responde nuestra guía sin IA ni cupo diario. No escribas datos contables, personales ni contraseñas. La conversación vive solo en esta pantalla.</p><a href="/privacidad.html" target="_blank" rel="noopener">Privacidad</a> <button type="button" class="btn ghost" id="assistant-privacy-accept" data-assistant="privacy">Entendido</button></div>':''}
-      <div class="assistant-chips" aria-label="Preguntas rápidas sin IA">${quick.map(([module,label],index)=>permission(module)?`<button type="button" data-assistant="quick" data-index="${esc(index)}" ${pending||!acknowledged?'disabled':''}>${esc(label)}</button>`:'').join('')}</div>
-      <div class="assistant-messages" role="log" aria-live="polite" aria-relevant="additions text" aria-label="Conversación de ayuda">${messages.map(message=>`<article class="assistant-message ${message.role==='user'?'assistant-user':''}"><b>${esc(message.role==='user'?'Tú':'Acontec')}</b>${format(message.content)}</article>`).join('')}${pending?'<p role="status">Consultando la guía…</p>':''}</div>
+      <div class="assistant-body"><div class="assistant-chips" aria-label="Preguntas rápidas sin IA">${quick.map(([module,label],index)=>permission(module)?`<button type="button" data-assistant="quick" data-index="${esc(index)}" ${pending||!acknowledged?'disabled':''}>${esc(label)}</button>`:'').join('')}</div>
+      <div class="assistant-messages" role="log" aria-live="polite" aria-relevant="additions text" aria-label="Conversación de ayuda">${messages.map(message=>`<article class="assistant-message ${message.role==='user'?'assistant-user':''}"><b>${esc(message.role==='user'?'Tú':'Acontec')}</b>${format(message.content)}</article>`).join('')}${pending?'<p role="status">Consultando la guía…</p>':''}</div></div>
       <form id="assistant-form"><label for="assistant-question">Tu pregunta sobre Acontec</label><textarea id="assistant-question" name="question" maxlength="400" rows="2" placeholder="¿Cómo uso…?" required ${pending||!acknowledged?'disabled':''}></textarea><div class="assistant-form-foot"><small>Máx. 400 caracteres · Con IA: 20 al día por usuario</small><button class="btn" ${pending||!acknowledged?'disabled':''}>Enviar</button></div></form>
       <footer class="assistant-footer"><span>Las preguntas rápidas no consumen IA.</span><button type="button" class="lk" data-assistant="clear">Limpiar conversación</button></footer>`;
     root.querySelector('#assistant-form').addEventListener('submit',send);
-    geometry();const log=root.querySelector('.assistant-messages');const last=messages[messages.length-1],bubbles=log.querySelectorAll('.assistant-message'),target=bubbles[bubbles.length-1];
-    if(last?.role==='assistant'&&target)log.scrollTop+=target.getBoundingClientRect().top-log.getBoundingClientRect().top-4;else log.scrollTop=log.scrollHeight;
+    geometry();const body=root.querySelector('.assistant-body');const message=messages[messages.length-1],last=body.querySelector('.assistant-message:last-of-type');
+    if(message?.role==='assistant'&&!pending&&last)body.scrollTop+=last.getBoundingClientRect().top-body.getBoundingClientRect().top-8;else body.scrollTop=body.scrollHeight;
   }
   function show(){if(!ready())return;opened=true;draw();if(acknowledged)typeFocus();else document.getElementById('assistant-privacy-accept')?.focus()}
   function close(){opened=false;draw();document.querySelector('[data-assistant="open"]')?.setAttribute('aria-expanded','false');document.querySelector('[data-assistant="open"]')?.focus()}
@@ -198,7 +198,12 @@
     }
     const trigger=document.querySelector('[data-assistant="open"]');trigger?.setAttribute('aria-expanded',String(opened));
   });
-  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&opened){event.preventDefault();close()}});
+  document.addEventListener('keydown',event=>{
+    if(event.key==='Escape'&&opened){event.preventDefault();close()}
+    if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing&&event.target.id==='assistant-question'){
+      event.preventDefault();if(event.target.value.trim())event.target.form.requestSubmit();
+    }
+  });
   addEventListener('resize',geometry);window.visualViewport?.addEventListener('resize',geometry);
   if(typeof ResizeObserver==='function')new ResizeObserver(geometry).observe(document.body);
 })();
