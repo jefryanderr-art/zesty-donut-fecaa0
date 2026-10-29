@@ -1,7 +1,7 @@
 import { fiscalAnnualTotals } from './fiscal-projection.mjs';
 import { normalizeItemQuantity } from './accounting-engine.mjs';
 import { requireBilling } from './billing.mjs';
-import { DEFAULT_PLANS,internalTestApplies,internalTestEntitlement,moduleIncluded,requirePlanModule,supportGrantActive, entitlement } from './billing-rules.mjs';
+import { planLimits,internalTestApplies,internalTestEntitlement,moduleIncluded,requirePlanModule,supportGrantActive, entitlement } from './billing-rules.mjs';
 import { users, servicePlans, supportGrants, subscriptions } from '../../db/schema.ts';
 import { TRADE_ARRAYS } from './trade.mjs';
 import { CROSS_BRANCH_OPS } from './transfers.mjs';
@@ -87,14 +87,13 @@ export async function companyAccess(client, companyId, session, lock = false, lo
       const [sub]=await client.select().from(subscriptions).where(eq(subscriptions.email,company.ownerEmail));
       const ent=entitlement(sub,ownerUser?.platformAdmin===true);
       if(!ent.access)accessError('Tu acceso venció. Abre Mi suscripción para elegir un plan.',402);
-      const [row]=await client.select().from(servicePlans).where(eq(servicePlans.id,ent.plan));
-      const plan=ownerUser?.platformAdmin?DEFAULT_PLANS.find(p=>p.id==='pro'):row;
+      const [plan]=await client.select().from(servicePlans).where(eq(servicePlans.id,ent.plan));
       if(!plan)accessError('Plan no disponible.',403);
-      billing={ent,plan:{...plan,limits:ownerUser?.platformAdmin?plan.limits:{...plan.limits,...sub?.limits}}};
+      billing={ent,plan:{...plan,limits:ownerUser?.platformAdmin?plan.limits:planLimits(plan,sub)}};
     } else billing=await requireBilling(company.ownerEmail,ownerUser?.platformAdmin===true,client);
     const result=await branchAccess(access,session);result.billingPlan=billing.plan;result.entitlement=billing.ent;result.internalTestPlan=internalTest?billing.plan.id:null;
-    const ownedRows=await client.select({id:companies.id}).from(companies).where(and(eq(companies.ownerEmail,company.ownerEmail),isNull(companies.archivedAt))).orderBy(companies.id);
-    const limit=billing.plan?.limits?.companies;result.readOnlyLimit=!internalTest&&limit!=null&&ownedRows.findIndex(c=>c.id===company.id)>=limit;
+    const ownedRows=await client.select({id:companies.id}).from(companies).where(and(eq(companies.ownerEmail,company.ownerEmail),isNull(companies.archivedAt))).orderBy(sql`coalesce((select min(${auditEvents.createdAt}) from ${auditEvents} where ${auditEvents.companyId}=${companies.id} and ${auditEvents.action}='Empresa creada'), (select min(${auditEvents.createdAt}) from ${auditEvents} where ${auditEvents.companyId}=${companies.id}), ${companies.updatedAt})`,companies.id);
+    const limit=billing.plan?.limits?.companies;result.readOnlyLimit=!company.isPlatformCompany&&!internalTest&&limit!=null&&ownedRows.findIndex(c=>c.id===company.id)>=limit;
     if(result.billingPlan?.blockedModules?.includes('sucursales')||result.billingPlan?.limits?.branches===1){result.branchId='principal';result.branches=result.branches.filter(b=>b.id==='principal');result.unrestrictedBranches=companyBranches(company.data).length===1}
     return result;};
   if (!session.member && company.ownerEmail === session.email) {
