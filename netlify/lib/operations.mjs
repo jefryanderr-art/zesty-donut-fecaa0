@@ -1,3 +1,4 @@
+import {BUSINESS_OPS,businessOperation,prepareBusinessSale,restoreBusinessReturn,validateBusinessRecords} from './business.mjs';
 import { normalizeItemQuantity } from './accounting-engine.mjs';
 import { consumeDiscount } from './discounts.mjs';
 import { tradeOperation, TRADE_OPS } from './trade.mjs';
@@ -132,6 +133,9 @@ export function guardLedgerMutation(previous, next, access) {
     const updated = next.taxes?.find(record => record.id === tax.id);
     requireValue(updated && ['source', 'period', 'base', 'rate', 'withholdings', 'amount', 'entryId'].every(name => equal(tax[name], updated[name])), 'Conserva la obligación y el cálculo del anticipo generado.');
   }
+  validateBusinessRecords(next,requireValue);
+  for(const r of previous?.businessRecords||[])if(r.module==='lotes'&&r.q>0)requireValue(next.products.some(p=>p.id===r.productId),'Conserva el producto que tiene lotes.');
+  for(const p of next.products||[]){const old=previous?.products?.find(o=>o.id===p.id);requireValue(!old||old.kind===p.kind,'No cambies el tipo de un producto histórico.');if(p.kind==='service')requireValue(p.stock===0&&p.cost===0,'Los servicios no tienen existencias ni costo inventariable.');}
   const previousProducts = new Map((previous?.products || []).map(product => [product.id, product]));
   const stockTotals = entries => {
     const totals = new Map();
@@ -223,7 +227,7 @@ function registerCost(data, access, session, body) {
   data.costs.push(record);
   return record;
 }
-async function makeSale(data, access, session, body, client, companyId) {
+async function makeSale(data, access, session, body, client, companyId, trustedSourceId=null) {
   requirePermission(access, 'facturacion');
   const date = dateValue(body.date), payments = body.payments;
   requireValue(Array.isArray(payments) && payments.length > 0 && payments.length <= 4, 'Indica las formas de pago.');
@@ -241,15 +245,16 @@ async function makeSale(data, access, session, body, client, companyId) {
   const discount = Number(body.discount || 0), limit = 99;
   requireValue(Number.isFinite(discount) && discount >= 0 && discount <= limit && discount < 100, `El descuento excede el límite autorizado (${limit}%).`);
   requireValue(Array.isArray(body.items) && body.items.length && body.items.length <= 200, 'Agrega productos a la factura.');
+  const businessAllocations=prepareBusinessSale(data,access,session,body,{check:requireValue,permit:requirePermission,amount,date:dateValue,entry:appendEntry,trustedSourceId});
   const quantities = new Map();
   const items = body.items.map(item => {
     const product = data.products.find(record => record.id === item.p), quantity = normalizeItemQuantity(item.q);
     requireValue(product && Number.isFinite(quantity) && quantity > 0 && quantity <= 1000000, 'Producto o cantidad inválida.');
-    quantities.set(product.id, (quantities.get(product.id) || 0) + quantity);
+    if(product.kind!=='service')quantities.set(product.id, (quantities.get(product.id) || 0) + quantity);
     const price = amount(item.u ?? product.price, true), unit = round(price * (1 - discount / 100)), vatRate = Number(product.vatRate || 0);
     requireValue(Number.isFinite(price) && price >= 0 && Number.isFinite(vatRate) && vatRate >= 0 && vatRate <= 100, 'Precio o IVA de producto inválido.');
     requireValue(price >= product.price, 'Usa el campo de descuento autorizado para rebajar el precio de catálogo.');
-    return { originalPrice: product.price, code: product.code || '', p: product.id, name: product.name, unit: product.unit || 'unidad', q: quantity, listPrice: price, u: unit, cost: product.cost, vatRate };
+    return { originalPrice: product.price, code: product.code || '', p: product.id, name: product.name, unit: product.unit || 'unidad', q: quantity, listPrice: price, u: unit, cost: product.kind==='service'?0:product.cost, ...(product.kind==='service'?{service:true}:{}), vatRate };
   });
   for (const [id, quantity] of quantities) requireValue(data.products.find(product => product.id === id).stock >= quantity, 'Existencia insuficiente.');
   const {subtotal,vat,total}=invoiceTotals(items);
@@ -283,8 +288,9 @@ async function makeSale(data, access, session, body, client, companyId) {
   if (cost) lines.push(...linesBetween('5101', '1301', cost));
   const quotation=body.sourceQuotation?data.quotations?.find(q=>q.id===body.sourceQuotation):null;
   requireValue(!body.sourceQuotation||quotation?.status==='Pendiente','La cotización no está disponible para convertir.');
-  const entry = appendEntry(data, session, { date, due, reference, series, sequence, type: 'venta', origin: body.origin === 'ventas' ? 'ventas' : 'facturacion', desc: 'Venta - ' + (customer?.name || text(body.party) || 'Cliente general'), party: customer?.name || text(body.party) || 'Cliente general', customerId: customer?.id || '', customer: customer ? { name: customer.name, taxId: customer.taxId, address: customer.address, phone: customer.phone } : null, operatorId: operatorId(access, session), operatorName: actorName(session), shiftId: shift?.id || null, discount, discountAudit: discount > 0 ? {actor:actorName(session),userId:operatorId(access,session),percent:discount,amountCents:cents(round(invoiceTotals(items.map(item=>({...item,u:item.listPrice}))).total-total)),at:new Date().toISOString()} : null, items, payments, pay: credit ? '1201' : methods.has('efectivo') ? '1104' : '1102', subtotal, vat, total, creditAmount: credit, stock: items.map(item => ({ pid: item.p, q: -item.q, unit: item.unit, unitCost: item.cost })), lines });
+  const entry = appendEntry(data, session, { date, due, reference, series, sequence, type: 'venta', origin: body.origin === 'ventas' ? 'ventas' : 'facturacion', desc: 'Venta - ' + (customer?.name || text(body.party) || 'Cliente general'), party: customer?.name || text(body.party) || 'Cliente general', customerId: customer?.id || '', customer: customer ? { name: customer.name, taxId: customer.taxId, address: customer.address, phone: customer.phone } : null, operatorId: operatorId(access, session), operatorName: actorName(session), shiftId: shift?.id || null, discount, discountAudit: discount > 0 ? {actor:actorName(session),userId:operatorId(access,session),percent:discount,amountCents:cents(round(invoiceTotals(items.map(item=>({...item,u:item.listPrice}))).total-total)),at:new Date().toISOString()} : null, items, payments, pay: credit ? '1201' : methods.has('efectivo') ? '1104' : '1102', subtotal, vat, total, creditAmount: credit, ...(businessAllocations.length?{businessAllocations}:{}), stock: items.filter(item=>!item.service).map(item => ({ pid: item.p, q: -item.q, unit: item.unit, unitCost: item.cost })), lines });
   if(entry.discountAudit) await audit(client,companyId,session,'Descuentos',[{area:'descuentos',event:'Factura con descuento',invoiceId:entry.id,reference:entry.reference,...entry.discountAudit}]);
+  for(const a of businessAllocations){const r=data.businessRecords?.find(r=>r.id===a.id);if(r?.module==='variantes'){entry.businessVariants||=[];entry.businessVariants.push({id:r.id,productId:r.productId,serial:r.serial,warranty:r.warranty,size:r.size,color:r.color,model:r.model})}}
   if(quotation){quotation.status='Convertida';quotation.entryId=entry.id;}
   for (const [id, quantity] of quantities) { const product = data.products.find(record => record.id === id); product.stock = Math.round((product.stock - quantity) * 1e6) / 1e6; }
   if (settings.packagingCostId) {
@@ -331,8 +337,9 @@ function creditNote(data, access, session, body) {
   if (finalReturn) cost = round(original.lines.filter(line => line.a === '5101').reduce((sum, line) => sum + line.d - line.c, 0) - previousNotes.reduce((sum, note) => sum + note.lines.filter(line => line.a === '5101').reduce((total, line) => total + line.c - line.d, 0), 0));
   if (cost) lines.push(...linesBetween('1301', '5101', cost));
   const number = (data.invoiceSequences.NC || 0) + 1; data.invoiceSequences.NC = number;
-  const note = appendEntry(data, session, { date, type: 'nota-credito', invoiceId: original.id, reference: 'NC-' + String(number).padStart(8, '0'), desc: 'Nota de crédito - ' + (original.reference || original.id), party: original.party, customerId: original.customerId || '', reason: text(body.reason, 1000), supervisor: actorName(session), originalOperatorId: original.operatorId || null, originalOperatorName: original.operatorName || original.actor || 'Histórico', operatorId: operatorId(access, session), shiftId: shift?.id || null, items, payments, debtReduction, refund, subtotal, vat, total, stock: items.map(item => ({ pid: item.p, q: item.q, unit: item.unit || 'unidad', unitCost: item.cost })), lines });
-  for (const item of items) { const product = data.products.find(record => record.id === item.p), value = product.stock * product.cost + item.q * item.cost; product.stock = Math.round((product.stock + item.q) * 1e6) / 1e6; product.cost = round(value / product.stock); }
+  const note = appendEntry(data, session, { date, type: 'nota-credito', invoiceId: original.id, reference: 'NC-' + String(number).padStart(8, '0'), desc: 'Nota de crédito - ' + (original.reference || original.id), party: original.party, customerId: original.customerId || '', reason: text(body.reason, 1000), supervisor: actorName(session), originalOperatorId: original.operatorId || null, originalOperatorName: original.operatorName || original.actor || 'Histórico', operatorId: operatorId(access, session), shiftId: shift?.id || null, items, payments, debtReduction, refund, subtotal, vat, total, stock: items.filter(item=>!item.service).map(item => ({ pid: item.p, q: item.q, unit: item.unit || 'unidad', unitCost: item.cost })), lines });
+  for (const item of items.filter(item=>!item.service)) { const product = data.products.find(record => record.id === item.p), value = product.stock * product.cost + item.q * item.cost; product.stock = Math.round((product.stock + item.q) * 1e6) / 1e6; product.cost = round(value / product.stock); }
+  restoreBusinessReturn(data,access,original,note,body,{check:requireValue,permit:requirePermission});
   return note;
 }
 async function saveAttachment(data, companyId, body, record, addedKeys, historical) {
@@ -352,6 +359,7 @@ async function saveAttachment(data, companyId, body, record, addedKeys, historic
 }
 export async function runOperation(companyId, session, body) {
   const addedKeys = [];
+  if(BUSINESS_OPS.includes(body.operation)&&!body.operationId)accessError('La operación requiere un identificador único.',400);
   let output = null;
   if(body.operationId && !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.operationId)) accessError('Identificador de operación inválido.',400);
   const receipt=body.operationId?{id:body.operationId,actor:session.email+':'+(session.memberId||''),hash:createHash('sha256').update(JSON.stringify(body)).digest('hex'),resultId:()=>typeof output==='string'?output:null}:null;
@@ -362,9 +370,14 @@ export async function runOperation(companyId, session, body) {
       const operationSession = access.member ? { ...session, member: access.member } : session;
       const historical = body.file ? await retainedCompanyData(client, companyId) : [];
       const beforeIds=new Set(data.entries.map(e=>e.id));
+      let businessPatch={};
       const operation = body.operation, userId = operatorId(access, session);
       if(operation==='sale') await consumeDiscount(client,companyId,access,operationSession,body);
-      if(operation==='countryTemplate'){requirePermission(access,'fiscal');let template;try{template=countryTemplate(body)}catch(error){accessError(error.message,400)}data.cfg.countryTemplate=template;data.cfg.fiscal={...data.cfg.fiscal,...template.fiscal};for(const [code,name,tipo,nat]of [['6109','Aportes patronales','gasto','D'],['2112','Aportes patronales por pagar','pasivo','C']])if(!data.accounts.some(a=>a.code===code))data.accounts.push({code,name,tipo,nat,sub:''});}
+      if(BUSINESS_OPS.includes(operation)){
+        output=await businessOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,amount,date:dateValue,entry:appendEntry,financialCash,registerCost,sale:(b,id)=>makeSale(data,access,operationSession,b,client,companyId,id)});
+        if(operation==='businessOnboard'){businessPatch=output;output=null;}
+      }
+      else if(operation==='countryTemplate'){requirePermission(access,'fiscal');let template;try{template=countryTemplate(body)}catch(error){accessError(error.message,400)}data.cfg.countryTemplate=template;data.cfg.fiscal={...data.cfg.fiscal,...template.fiscal};for(const [code,name,tipo,nat]of [['6109','Aportes patronales','gasto','D'],['2112','Aportes patronales por pagar','pasivo','C']])if(!data.accounts.some(a=>a.code===code))data.accounts.push({code,name,tipo,nat,sub:''});}
       else if(crossBranch){output=transferOperation(data,access,operationSession,body,{requireValue,requirePermission,appendEntry,dateValue,amount,ledgerBalance,guardCash});}
       else if(TRADE_OPS.includes(operation)){output=tradeOperation(data,access,operationSession,body,{requireValue,requirePermission,appendEntry,dateValue,amount,ledgerBalance,guardCash});}
       else if(operation==='importRecords'){ output=importRecords(data,access,operationSession,body,{requireValue,requirePermission,appendEntry,dateValue,validateSupplier}); }
@@ -466,6 +479,7 @@ export async function runOperation(companyId, session, body) {
         if(product && body.barcodes !== undefined) product.barcodes=body.barcodes;
         requireValue(product && text(body.name), 'Producto no encontrado o nombre vacío.');
         const cost = amount(body.cost, true);
+        requireValue(product.kind!=='service'||cost===0,'Un servicio no tiene costo de inventario.');
         requireValue(cost===product.cost || (access.company.data?.products?.find(p=>p.id===product.id)?.stock??product.stock)===product.stock,'El producto tiene existencias en otras sucursales. Una revalorización global requiere revisión contable.');
         const difference = round(product.stock * cost) - round(product.stock * product.cost);
         const date = dateValue(body.date);
@@ -662,7 +676,8 @@ export async function runOperation(companyId, session, body) {
       } else accessError('Operación no encontrada.', 404);
       for(const entry of data.entries)if(!beforeIds.has(entry.id)){if(body.costCenter)entry.costCenter=text(body.costCenter,100);if(body.project)entry.project=text(body.project,100);}
       guardCash(crossBranch?access.company.data:company.data, data);
-      return { data, ...(crossBranch?{crossBranch:true}:{}) };
+      validateBusinessRecords(data,requireValue);
+      return { data, ...businessPatch, ...(crossBranch?{crossBranch:true}:{}) };
     }, 'Operación: ' + text(body.operation, 50), receipt);
     return { ...result, id: result.replayed ? result.resultId : output };
   } catch (error) {

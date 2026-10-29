@@ -17,7 +17,7 @@ export function cents(value) {
   return result;
 }
 const moneyNames = new Set([...Object.values(collections), ...Object.values(children)].flatMap(def => def.money || []).concat([
-  'freight','duty','insurance','employerSocial','inatec','totalPersonnel','residual','accumulated','principal','interest','foreignAmount','baseTotal','received','listPrice', 'salaryPending', 'indemnity', 'vacation', 'aguinaldo', 'output', 'input', 'net', 'profit', 'revenue', 'expenses', 'tax', 'balance', 'originalPrice', 'originalSubtotal', 'discountAmount', 'refund', 'debtReduction', 'cash', 'card', 'transfer', 'efectivo', 'tarjeta', 'transferencia', 'credito',
+  'interestPaid','freight','duty','insurance','employerSocial','inatec','totalPersonnel','residual','accumulated','principal','interest','foreignAmount','baseTotal','received','listPrice', 'salaryPending', 'indemnity', 'vacation', 'aguinaldo', 'output', 'input', 'net', 'profit', 'revenue', 'expenses', 'tax', 'balance', 'originalPrice', 'originalSubtotal', 'discountAmount', 'refund', 'debtReduction', 'cash', 'card', 'transfer', 'efectivo', 'tarjeta', 'transferencia', 'credito',
 ]));
 // El JSON residual conserva configuraciones y campos históricos, nunca el documento completo.
 // Las cantidades y tasas conservan precisión; todo campo monetario conocido usa centavos.

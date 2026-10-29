@@ -1,3 +1,4 @@
+import { catalog } from './business-profile.mjs';
 // Importes de plataforma exclusivamente en centavos enteros.
 export const DEFAULT_PLANS = [
  {id:'facturacion',name:'Facturación',monthlyCents:3000,annualCents:31000,currency:'USD',limits:{companies:1,branches:1},blockedModules:['contabilidad','finanzas','cajas','personal','control_personal','decisiones','sucursales']},
@@ -30,11 +31,11 @@ export function entitlement(sub,admin=false,now=Date.now()){
  if(!paid&&now<new Date(sub.trialEndsAt).getTime())return {access:true,state:'prueba',plan:'pro',trialEndsAt:new Date(sub.trialEndsAt).toISOString()};
  return {access:false,state:sub.canceledAt?'cancelado':'vencido',plan:sub.plan};
 }
-export const BLOCKABLE_MODULES = ['ventas','compras','gastos','inventario','contabilidad','finanzas','cajas','personal','fiscal','control_personal','decisiones','sucursales','facturacion','costos','proveedores','accesibilidad','ajustes','auditoria'];
+export const BLOCKABLE_MODULES = [...catalog.all, 'ventas','compras','gastos','inventario','contabilidad','finanzas','cajas','personal','fiscal','control_personal','decisiones','sucursales','facturacion','costos','proveedores','accesibilidad','ajustes','auditoria'];
 // Las deudas operativas no conceden acceso al libro diario ni a asientos manuales.
-export function planModule(module){return ({cobrar:'ventas',pagar:'compras',asistencia:'control_personal',attendance:'control_personal',vacation:'control_personal',employeeAdvance:'control_personal',simuladores:'decisiones',rentabilidad:'decisiones',pronostico:'decisiones',traslados:'sucursales',compararsucursales:'sucursales'})[module]||module}
+export function planModule(module){return ({...Object.fromEntries(catalog.all.map(id=>[id,id])),cobrar:'ventas',pagar:'compras',asistencia:'control_personal',attendance:'control_personal',vacation:'control_personal',employeeAdvance:'control_personal',simuladores:'decisiones',rentabilidad:'decisiones',pronostico:'decisiones',traslados:'sucursales',compararsucursales:'sucursales'})[module]||module}
 export function moduleIncluded(plan,module){return !!plan&&!(plan.blockedModules||[]).includes(planModule(module))}
-export function requirePlanModule(plan,module){const key=planModule(module),label={contabilidad:'contabilidad formal',finanzas:'estados financieros',cajas:'Tesorería',control_personal:'Control del personal',decisiones:'Decisiones',sucursales:'administración de sucursales',accesibilidad:'Administración de accesos',facturacion:'Facturación y turnos'}[key]||key;if(plan&&!moduleIncluded(plan,module))billingError('Tu plan no incluye '+label+'.',403)}
+export function requirePlanModule(plan,module){const key=planModule(module),label={...catalog.moduleLabels,contabilidad:'contabilidad formal',finanzas:'estados financieros',cajas:'Tesorería',control_personal:'Control del personal',decisiones:'Decisiones',sucursales:'administración de sucursales',accesibilidad:'Administración de accesos',facturacion:'Facturación y turnos'}[key]||key;if(plan&&!moduleIncluded(plan,module))billingError('Tu plan no incluye '+label+'.',403)}
 // Only explicitly enabled customer exceptions may override a saved plan.
 export const planLimits = (plan,sub) => ({...plan?.limits,...(sub?.limits?.manual===true?{companies:sub.limits.companies,branches:sub.limits.branches}:{})});
 export function validatePlan(body){

@@ -7,7 +7,7 @@ const permission=(module,write=false)=>{
   const role=String(CO.role||'').trim().toLowerCase();
   if(module==='ventas'&&role!=='contador')return false;
   if(['cajero','vendedor','supervisor'].includes(role)&&['contabilidad','finanzas','personal','fiscal','ajustes','auditoria','accesibilidad'].includes(module))return false;
-  if(['cajero','vendedor'].includes(role)&&(!['facturacion','inventario','cajas'].includes(module)||(module==='inventario'&&write)))return false;
+  if(['cajero','vendedor'].includes(role)&&(!['facturacion','inventario','cajas','cuentas_abiertas','agenda','despacho','documentos_venta','comprobantes','medidas','rutas'].includes(module)||(module==='inventario'&&write)))return false;
   const fallback={facturacion:'ventas',cajas:'contabilidad',costos:'gastos',proveedores:'compras'},level=CO.permissions?.[module]??(role==='contador'?CO.permissions?.[fallback[module]]:undefined);
   return level==='escritura'||(!write&&level==='lectura');
 };
@@ -146,14 +146,14 @@ ACT.cfg=()=>modal('Datos de la empresa',`<label>Nombre<input name="name" require
 });
 ACT.switch=()=>{
   menu(false);
-  modal(U.worker?'Empresa asignada':'Mis empresas',(U.editor?'<button type="button" class="btn ghost full" style="margin-bottom:8px" data-a="home">Página principal de Acontec</button>':'')+COS.map(company=>`<button type="button" class="btn ${company.id===CO.id?'':'ghost'} full" style="margin-bottom:8px" data-a="opencomp" data-id="${company.id}">${esc(company.name)} · ${esc(company.role)}</button>`).join('')+(U.worker?'<p class="mut">El dueño administra tus accesos. Tu usuario no crea empresas.</p>':'<label>Crear nueva empresa<input name="name" maxlength="80" placeholder="Nombre de la empresa"></label><label>Descripción<textarea name="description" rows="2" maxlength="2000"></textarea></label>'),async form=>{
+  modal(U.worker?'Empresa asignada':'Mis empresas',(U.editor?'<button type="button" class="btn ghost full" style="margin-bottom:8px" data-a="home">Página principal de Acontec</button>':'')+COS.map(company=>`<button type="button" class="btn ${company.id===CO.id?'':'ghost'} full" style="margin-bottom:8px" data-a="opencomp" data-id="${company.id}">${esc(company.name)} · ${esc(company.role)}</button>`).join('')+(U.worker?'<p class="mut">El dueño administra tus accesos. Tu usuario no crea empresas.</p>':'<label>Crear nueva empresa<input name="name" maxlength="80" placeholder="Nombre de la empresa"></label><label>Descripción<textarea name="description" rows="2" maxlength="2000"></textarea></label>'+businessTypeField()),async form=>{
     if(U.worker)return;
     const name=v(form,'name').trim();if(!name)return 'Escribe un nombre o elige una empresa.';
     if(!await flush())return 'Guarda primero los cambios pendientes.';
-    const result=await api('company','POST',{name,description:v(form,'description')});COS=result.companies;await openCompany(result.id);
+    const result=await api('company','POST',{name,description:v(form,'description'),businessType:v(form,'businessType')});COS=result.companies;await openCompany(result.id);
   },U.worker?'Cerrar':'Crear empresa');
 };
-const backupEnvelope=(data=S,company=CO,revision=REV)=>({format:'acontec-backup',version:1,exportedAt:new Date().toISOString(),company:{id:company.id,name:company.name,description:company.description||'',branchId:company.branchId??null,branchName:company.branchId?(company.branches||[]).find(b=>b.id===company.branchId)?.name||'Principal':'Todas las sucursales'},revision,data});
+const backupEnvelope=(data=S,company=CO,revision=REV)=>({format:'acontec-backup',version:1,exportedAt:new Date().toISOString(),company:{id:company.id,name:company.name,description:company.description||'',businessType:company.businessType||'comercio',businessCustomization:company.businessCustomization||{},branchId:company.branchId??null,branchName:company.branchId?(company.branches||[]).find(b=>b.id===company.branchId)?.name||'Principal':'Todas las sucursales'},revision,data});
 const safeFilename=value=>String(value).replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ._-]/g,'-').slice(0,100);
 function downloadBackup(envelope,name){downloadFile(new Blob([JSON.stringify(envelope,null,2)],{type:'application/json'}),name)}
 ACT.backup=async()=>{
@@ -164,13 +164,13 @@ ACT.backup=async()=>{
 };
 ACT.downloadSnapshot=async data=>{
   const {backup}=await api('backups?c='+CO.id+'&id='+data.id);
-  downloadBackup(backupEnvelope(backup.data,{...CO,name:backup.name,description:backup.description},backup.revision),`respaldo-${safeFilename(backup.name)}-version-${backup.revision}.json`);
+  downloadBackup(backupEnvelope(backup.data,{...CO,name:backup.name,description:backup.description,businessType:backup.businessType,businessCustomization:backup.businessCustomization},backup.revision),`respaldo-${safeFilename(backup.name)}-version-${backup.revision}.json`);
 };
 async function applyRestore(body){
   if(!permission('ajustes',true)||!completeAccess(true))throw new Error('No tienes permiso para restaurar.');
   if(!await flush())throw new Error('Guarda o descarga los cambios pendientes antes de restaurar.');
   const result=await api('backups?c='+CO.id,'POST',{...body,revision:REV});
-  REV=result.revision;S=result.data;rememberCloud();saveVersion=0;savedVersion=0;COS=result.companies;CO={...CO,...COS.find(company=>company.id===CO.id)};shell();view();setSt('Respaldo restaurado en la nube');
+  REV=result.revision;S=result.data;rememberCloud();saveVersion=0;savedVersion=0;COS=result.companies;const fresh=await api('data?c='+CO.id);CO=fresh.company;S=fresh.data;REV=fresh.revision;rememberCloud();shell();view();setSt('Respaldo restaurado en la nube');
 }
 async function restoreFile(file){
   if(file.size>25000000)throw new Error('El archivo JSON supera el límite de lectura de 25 MB.');
@@ -179,7 +179,7 @@ async function restoreFile(file){
   if(envelope.company?.branchId && envelope.company.branchId!==CO.branchId)throw new Error('Selecciona la sucursal de este respaldo antes de restaurarlo.');
   if(envelope.company?.id&&envelope.company.id!==CO.id)throw new Error('Este respaldo pertenece a otra empresa.');
   if(!data||!Array.isArray(data.accounts)||!Array.isArray(data.entries)||!Array.isArray(data.products))throw new Error('El archivo no es un respaldo contable válido.');
-  if(confirm('¿Restaurar este archivo? La versión actual se conserva en el historial antes de reemplazarla. Los adjuntos originales deben seguir disponibles en esta empresa.'))await applyRestore({data});
+  if(confirm('¿Restaurar este archivo? La versión actual se conserva en el historial antes de reemplazarla. Los adjuntos originales deben seguir disponibles en esta empresa.'))await applyRestore({data,...(envelope.company?.businessType?{profile:{businessType:envelope.company.businessType,businessCustomization:envelope.company.businessCustomization||{}}}:{})});
 }
 ACT.restore=()=>$('#rf').click();
 ACT.restoreSnapshot=async data=>{if(confirm('¿Restaurar esta versión? Los cambios posteriores dejan de ser la versión activa, pero el estado actual se respalda antes de continuar.'))await applyRestore({id:data.id})};
@@ -211,7 +211,7 @@ ACT.backupAll=()=>runExport(async(companyId,current)=>{
   if(permission('auditoria'))files['bitacora.json']=fflate.strToU8(JSON.stringify(await collectAudit(companyId),null,2));
   if(permission('accesibilidad')){const result=await api('members?c='+companyId);files['accesos-sin-contrasenas.json']=fflate.strToU8(JSON.stringify({owner:result.owner,members:result.members},null,2))}
   const {backups}=await api('backups?c='+companyId);
-  for(const record of backups){const {backup}=await api('backups?c='+companyId+'&id='+record.id);files[`versiones/version-${backup.revision}.json`]=fflate.strToU8(JSON.stringify(backupEnvelope(backup.data,{...company,name:backup.name,description:backup.description},backup.revision),null,2));if(company.owner)addReceipts(backup.data,backup.id)}
+  for(const record of backups){const {backup}=await api('backups?c='+companyId+'&id='+record.id);files[`versiones/version-${backup.revision}.json`]=fflate.strToU8(JSON.stringify(backupEnvelope(backup.data,{...company,name:backup.name,description:backup.description,businessType:backup.businessType,businessCustomization:backup.businessCustomization},backup.revision),null,2));if(company.owner)addReceipts(backup.data,backup.id)}
   const manifest=[];
   for(const [key,{tax,backupId}] of receipts){
     exportStatus(`Descargando adjuntos: ${manifest.length+1} de ${receipts.size}…`);
@@ -287,6 +287,11 @@ async function createCompanyPdf(company,state,revision){
     const records=state[key]||[];
     if(!records.length){table(['Estado'],[['Sin registros']]);continue}
     for(const record of records){table(['Campo','Valor'],Object.entries(record).map(([field,value])=>[field,readableValue(value)]))}
+  }
+  {
+    heading('Perfil y operaciones de negocio',true);
+    table(['Perfil','Valor'],[['Tipo de negocio',company.businessType||'comercio'],['Personalización',JSON.stringify(company.businessCustomization||{})]]);
+    for(const record of state.businessRecords||[]){heading(record.name||record.id);table(['Campo','Valor'],Object.entries(record).map(([key,value])=>[key,readableValue(value)]));}
   }
   heading('Configuración y reglas de la empresa',true);table(['Parámetro','Valor'],Object.entries(state.cfg).map(([key,value])=>[key,readableValue(value)]));
   for(let page=1;page<=documentPdf.getNumberOfPages();page++){documentPdf.setPage(page);documentPdf.setFontSize(8);documentPdf.setTextColor(100);documentPdf.text(`Acontec · ${page} / ${documentPdf.getNumberOfPages()}`,16,289)}

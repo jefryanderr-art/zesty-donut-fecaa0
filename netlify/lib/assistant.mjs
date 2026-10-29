@@ -1,3 +1,4 @@
+import {catalog} from './business-profile.mjs';
 import { createHash } from 'node:crypto';
 import { sql, eq } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
@@ -94,7 +95,7 @@ export async function assistantAnswer(companyId, session, body) {
       method:'POST', signal:AbortSignal.timeout(15000),
       headers:{'content-type':'application/json','x-api-key':env('ASSISTANT_API_KEY'),'anthropic-version':'2023-06-01'},
       body:JSON.stringify({model:env('ASSISTANT_MODEL') || 'claude-haiku-4-5-20251001',max_tokens:450,
-        system:[{type:'text',text:SYSTEM},{type:'text',text:JSON.stringify(selected),cache_control:{type:'ephemeral'}}],
+        system:[{type:'text',text:SYSTEM+' Perfil de negocio: '+catalog.get(access.company.businessType).name+'. Etiquetas públicas del perfil: '+JSON.stringify(catalog.get(access.company.businessType).labels)},{type:'text',text:JSON.stringify(selected),cache_control:{type:'ephemeral'}}],
         messages:[{role:'user',content:JSON.stringify({question:redact(question),history,screen:'panel'})}]}),
     });
     if (!response.ok) throw new Error('provider_unavailable');

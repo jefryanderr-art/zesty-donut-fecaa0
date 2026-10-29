@@ -11,7 +11,7 @@ export function roleAllows(access, module) {
   const role = operationalRole(access);
   if (module === 'ventas' && role !== 'contador') return false;
   if (['cajero', 'vendedor', 'supervisor'].includes(role) && ['contabilidad', 'finanzas', 'personal', 'fiscal', 'ajustes', 'auditoria', 'accesibilidad'].includes(module)) return false;
-  if (['cajero', 'vendedor'].includes(role) && !['facturacion', 'inventario', 'cajas'].includes(module)) return false;
+  if (['cajero', 'vendedor'].includes(role) && !['facturacion', 'inventario', 'cajas','cuentas_abiertas','agenda','despacho','documentos_venta','comprobantes','medidas','rutas'].includes(module)) return false;
   if (['cajero', 'vendedor'].includes(role) && module === 'inventario') return 'lectura';
   return true;
 }

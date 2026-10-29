@@ -1,5 +1,6 @@
 // Contrato compartido por el esquema, el conversor y el script de migración.
 export const collections = {
+  businessRecords: { table: 'business_records', text: ['module','kind','name','status','branchId','customerId','productId','entryId','resource','due'], money: ['total','principal','interest','penalty','paid','deposit','valuation','cost','price'], numeric: ['q','rate'] },
   branches: { table: 'branches', text: ['name','code','address','phone'] },
   accounts: { table: 'accounts', key: 'code', text: ['name', 'tipo', 'nat', 'sub'] },
   products: { table: 'products', text: ['name', 'code', 'unit'], money: ['cost', 'price'], numeric: ['stock', 'min'] },

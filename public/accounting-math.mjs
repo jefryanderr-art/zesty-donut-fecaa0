@@ -65,3 +65,39 @@ export function leaseSchedule(principal,residual,annualRate,months){
  const rate=annualRate/1200,payment=Math.round(rate?(initial-end/Math.pow(1+rate,months))*rate/(1-Math.pow(1+rate,-months)):(initial-end)/months);let balance=initial;const rows=[];
  for(let n=1;n<=months;n++){const interest=Math.round(balance*rate),capital=n===months?balance-end:Math.min(balance-end,Math.max(0,payment-interest));balance-=capital;rows.push({number:n,principal:capital/100,interest:interest/100,total:(capital+interest)/100,balance:balance/100})}return rows;
 }
+
+// Cartera otorgada: tasas por período configuradas, nunca reglas legales implícitas.
+export function businessLoanSchedule({principal,rate,periods,method}) {
+ const initial=moneyCents(principal);
+ if(initial<periods||!Number.isInteger(periods)||periods<1||periods>600||!Number.isFinite(rate)||rate<0||rate>100||!['frances','capital_constante','plano'].includes(method))throw new AccountingValidationError('Revisa capital, tasa por período, cuotas y método.');
+ const r=rate/100,annuity=Math.round(r?initial*r/(1-Math.pow(1+r,-periods)):initial/periods);let balance=initial;const rows=[];
+ for(let n=1;n<=periods;n++){
+  const interest=Math.round((method==='plano'?initial:balance)*r);
+  const capital=n===periods?balance:Math.min(balance,method==='frances'?Math.max(0,annuity-interest):Math.floor(initial/periods));
+  if(capital<1)throw new AccountingValidationError('Las condiciones no amortizan el capital en centavos.');
+  balance-=capital;rows.push({number:n,principal:capital/100,interest:interest/100,total:(capital+interest)/100,balance:balance/100,paid:0,penalty:0});
+ }
+ return rows;
+}
+export function businessCommission(base,rate){const c=moneyCents(base);if(c<0||!Number.isFinite(rate)||rate<0||rate>100)throw new AccountingValidationError('Base o porcentaje inválido.');return Math.round(c*rate/100)/100}
+export function businessLateCharge(principal,dailyRate,days){if(!Number.isInteger(days)||days<0||days>36500||!Number.isFinite(dailyRate)||dailyRate<0||dailyRate>100)throw new AccountingValidationError('Días o tasa de mora inválidos.');const result=Math.round(moneyCents(principal)*dailyRate/100*days);if(!Number.isSafeInteger(result))throw new AccountingValidationError('La mora supera el rango seguro.');return result/100}
+export function businessBillItems(record,products,projectItems){
+ const find=id=>{const p=products.find(p=>p.id===id);if(!p)throw new AccountingValidationError('Producto inexistente.');return p};
+ let items=structuredClone(projectItems??record.items??[]);
+ if(record.module==='variantes'){const p=find(record.productId);items=[{p:p.id,q:1,u:p.price}]}
+ if(record.module==='reservas'&&record.tariffProductId){
+  const p=find(record.tariffProductId),unit=record.timeUnit==='hora'?3600000:86400000,zone=record.timeZone||'America/Managua',dayKey=t=>new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(t)),firstDay=dayKey(record.start),lastDay=dayKey(record.end),count=record.timeUnit==='hora'?Math.ceil((Date.parse(record.end)-Date.parse(record.start))/unit):Math.max(1,Math.round((Date.parse(lastDay)-Date.parse(firstDay))/86400000));
+  if(p.kind!=='service'||!['hora','día','noche'].includes(record.timeUnit)||!Number.isInteger(count)||count<1||count>3660)throw new AccountingValidationError('Revisa servicio, unidad y duración de la tarifa.');
+  const charges=new Map();for(let n=0;n<count;n++){const day=record.timeUnit==='hora'?dayKey(Date.parse(record.start)+n*unit):new Date(Date.parse(firstDay+'T12:00:00Z')+n*86400000).toISOString().slice(0,10),tariffs=(record.tariffs||[]).filter(t=>t.from<=day&&t.to>=day);if(tariffs.length>1)throw new AccountingValidationError('Hay temporadas superpuestas.');const u=tariffs[0]?.price??p.price;charges.set(u,(charges.get(u)||0)+1)}items.push(...[...charges].map(([u,q])=>({p:p.id,q,u})));
+ }
+ items=items.map(i=>({...i,vatRate:find(i.p).vatRate||0}));
+ if(record.serviceRate){const p=find(record.serviceProductId);if(p.kind!=='service')throw new AccountingValidationError('Configura el producto de servicio.');items.push({p:p.id,q:1,u:businessCommission(invoiceTotals(items).subtotal,record.serviceRate),vatRate:p.vatRate||0})}
+ return items;
+}
+export function businessContractLateItems(record,entries,products,day){
+ if(record.module!=='contratos'||!record.lateRate)return {items:[],updates:[]};
+ const p=products.find(p=>p.id===record.lateProductId);if(p?.kind!=='service')throw new AccountingValidationError('Configura un servicio para la mora.');
+ let cents=0;const updates=[];
+ for(const billed of record.billed||[]){const balanceCents=entries.filter(e=>e.id===billed.entryId||e.invoiceId===billed.entryId).flatMap(e=>e.lines||[]).filter(l=>l.a==='1201').reduce((s,l)=>s+moneyCents(l.d)-moneyCents(l.c),0),from=billed.lateThrough||billed.due;if(balanceCents>0&&day>from){const days=Math.floor((Date.parse(day)-Date.parse(from))/86400000);cents+=moneyCents(businessLateCharge(balanceCents/100,record.lateRate,days));updates.push(billed)}}
+ if(!Number.isSafeInteger(cents))throw new AccountingValidationError('La mora supera el rango seguro.');return {items:cents?[{p:p.id,q:1,u:cents/100,vatRate:p.vatRate||0}]:[],updates};
+}
