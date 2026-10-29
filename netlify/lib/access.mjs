@@ -1,8 +1,8 @@
 import { fiscalAnnualTotals } from './fiscal-projection.mjs';
 import { normalizeItemQuantity } from './accounting-engine.mjs';
 import { requireBilling } from './billing.mjs';
-import { internalTestApplies,internalTestEntitlement,moduleIncluded,requirePlanModule,supportGrantActive } from './billing-rules.mjs';
-import { users, servicePlans, supportGrants } from '../../db/schema.ts';
+import { internalTestApplies,internalTestEntitlement,moduleIncluded,requirePlanModule,supportGrantActive, entitlement } from './billing-rules.mjs';
+import { users, servicePlans, supportGrants, subscriptions } from '../../db/schema.ts';
 import { TRADE_ARRAYS } from './trade.mjs';
 import { CROSS_BRANCH_OPS } from './transfers.mjs';
 import { ADVANCED_ARRAYS } from './advanced.mjs';
@@ -13,7 +13,7 @@ import { normalizeDocument } from './accounting-codec.mjs';
 import { promisify } from 'node:util';
 import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
-import { and, desc, eq, lt, or, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, lt, or, isNull, sql, getTableColumns } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
 import { companies, companyMembers, companyBackups, auditEvents, sessions, saveOperations } from '../../db/schema.ts';
 import { OPERATION_ARRAYS, roleAllows, salesAdministrator, cashAdministrator, operatorId, receiptRecords } from './policies.mjs';
@@ -70,7 +70,11 @@ export async function accessibleCompanies(session) {
 }
 export async function companyAccess(client, companyId, session, lock = false, loadAccounting = true) {
   if (!/^[a-f0-9-]{36}$/.test(companyId || '')) accessError('Empresa no encontrada.', 404);
-  let query = client.select().from(companies).where(eq(companies.id, companyId));
+  // Help uses only authorization/configuration metadata; never loads the accounting document.
+  const {data: _accountingData, ...metadata} = getTableColumns(companies);
+  let query = (loadAccounting === 'guide'
+    ? client.select({...metadata, data: sql`jsonb_build_object('branches', ${companies.data}->'branches')`})
+    : client.select()).from(companies).where(eq(companies.id, companyId));
   if (lock) query = query.for('update');
   const [company] = await query;
   if (!company || company.archivedAt) accessError('Empresa no encontrada.', 404);
@@ -78,14 +82,22 @@ export async function companyAccess(client, companyId, session, lock = false, lo
     const [ownerUser]=await client.select({platformAdmin:users.platformAdmin}).from(users).where(eq(users.email,company.ownerEmail));
     const internalTest=internalTestApplies({testPlan:company.testPlan,isPlatformCompany:company.isPlatformCompany,ownerPlatformAdmin:ownerUser?.platformAdmin});
     let billing;
-    if(internalTest){const [plan]=await client.select().from(servicePlans).where(eq(servicePlans.id,company.testPlan));if(!plan)accessError('Plan de prueba no disponible.',403);billing={plan,ent:internalTestEntitlement(plan.id)}}else billing=await requireBilling(company.ownerEmail,ownerUser?.platformAdmin===true,client);
+    if(internalTest){const [plan]=await client.select().from(servicePlans).where(eq(servicePlans.id,company.testPlan));if(!plan)accessError('Plan de prueba no disponible.',403);billing={plan,ent:internalTestEntitlement(plan.id)}}else if(loadAccounting==='guide') {
+      // Help must never initialize a subscription, plan or accounting document.
+      const [sub]=await client.select().from(subscriptions).where(eq(subscriptions.email,company.ownerEmail));
+      const ent=entitlement(sub,ownerUser?.platformAdmin===true);
+      if(!ent.access)accessError('Tu acceso venció. Abre Mi suscripción para elegir un plan.',402);
+      const [plan]=await client.select().from(servicePlans).where(eq(servicePlans.id,ent.plan));
+      if(!plan)accessError('Plan no disponible.',403);
+      billing={ent,plan:{...plan,limits:ownerUser?.platformAdmin?plan.limits:{...plan.limits,...sub?.limits}}};
+    } else billing=await requireBilling(company.ownerEmail,ownerUser?.platformAdmin===true,client);
     const result=await branchAccess(access,session);result.billingPlan=billing.plan;result.entitlement=billing.ent;result.internalTestPlan=internalTest?billing.plan.id:null;
     const ownedRows=await client.select({id:companies.id}).from(companies).where(and(eq(companies.ownerEmail,company.ownerEmail),isNull(companies.archivedAt))).orderBy(companies.id);
     const limit=billing.plan?.limits?.companies;result.readOnlyLimit=!internalTest&&limit!=null&&ownedRows.findIndex(c=>c.id===company.id)>=limit;
     if(result.billingPlan?.blockedModules?.includes('sucursales')||result.billingPlan?.limits?.branches===1){result.branchId='principal';result.branches=result.branches.filter(b=>b.id==='principal');result.unrestrictedBranches=companyBranches(company.data).length===1}
     return result;};
   if (!session.member && company.ownerEmail === session.email) {
-    if (lock && loadAccounting) {
+    if (lock && loadAccounting === true) {
       await repairTestPlanRevision(client, company, session.email);
       company.data = await readAccounting(client, company);
     }
@@ -98,11 +110,12 @@ export async function companyAccess(client, companyId, session, lock = false, lo
     const [admin]=await client.select({platformAdmin:users.platformAdmin}).from(users).where(eq(users.email,session.email));
     const [grant]=await client.select().from(supportGrants).where(and(eq(supportGrants.companyId,companyId),eq(supportGrants.email,session.email)));
     if(!supportGrantActive(grant,session.email,admin?.platformAdmin,!!session.member))accessError('Sin acceso a esta empresa.');
-    if(lock&&loadAccounting)company.data=await readAccounting(client,company);
+    if(loadAccounting==='guide')accessError('El asistente no está disponible durante el soporte temporal.');
+    if(lock&&loadAccounting===true)company.data=await readAccounting(client,company);
     await audit(client,companyId,session,'Consulta de soporte · solo lectura',[{area:'support',expiresAt:grant.expiresAt.toISOString()}]);
     return finish({company,owner:false,support:true,supportExpiresAt:grant.expiresAt,permissions:Object.fromEntries(MODULES.map(m=>[m,'lectura'])),member:{role:'contador'}});
   }
-  if (lock && loadAccounting) company.data = await readAccounting(client, company);
+  if (lock && loadAccounting === true) company.data = await readAccounting(client, company);
   return finish({ company, owner: false, permissions: member.permissions, member });
 }
 export function entryModule(entry) {

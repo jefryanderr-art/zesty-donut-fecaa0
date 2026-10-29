@@ -53,6 +53,8 @@ export const companies = pgTable('acontec_companies', {
   id: uuid().defaultRandom().primaryKey(),
   archivedAt: timestamp('archived_at'),
   testPlan: text('test_plan'),
+  assistantEnabled: boolean('assistant_enabled').default(false).notNull(),
+  assistantTimeZone: text('assistant_time_zone').default('America/Managua').notNull(),
   isPlatformCompany: boolean('is_platform_company').default(false).notNull(),
   ownerEmail: text('owner_email').notNull().references(() => users.email),
   name: text().notNull(),
@@ -268,3 +270,20 @@ export const serviceMessages = pgTable('acontec_service_messages', {
   actor: text().notNull(), attempts: integer().default(0).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(), sentAt: timestamp('sent_at'),
 }, table => [serverAccess(),index('acontec_service_message_queue_idx').on(table.state,table.createdAt)]).enableRLS();
+
+// Each compact audit row also reserves one indexed daily user/company slot.
+export const assistantUsage = pgTable('acontec_assistant_usage', {
+  id: uuid().defaultRandom().primaryKey(),
+  companyId: uuid('company_id').notNull().references(() => companies.id),
+  actor: text().notNull(),
+  day: text().notNull(),
+  userSlot: integer('user_slot').notNull(),
+  companySlot: integer('company_slot').notNull(),
+  sections: text().notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, table => [serverAccess(),
+  uniqueIndex('acontec_assistant_user_day_slot_idx').on(table.actor, table.day, table.userSlot),
+  uniqueIndex('acontec_assistant_company_day_slot_idx').on(table.companyId, table.day, table.companySlot),
+  check('acontec_assistant_user_limit', sql`${table.userSlot} BETWEEN 1 AND 20`),
+  check('acontec_assistant_company_limit', sql`${table.companySlot} BETWEEN 1 AND 100`),
+]).enableRLS();

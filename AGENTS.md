@@ -18,7 +18,7 @@ El editor modifica contenido global, no el nombre de empresa de los clientes. El
 
 ## Fase 0: normalización contable
 
-Por decisión del propietario se adaptó la Fase 0 a Netlify Database (Postgres), conservando el adaptador Drizzle actual. No se migró a Supabase ni se agregaron credenciales externas. Se incorporaron módulos de gestión, sucursales, códigos de barras e impresión; su alcance y sus límites se documentan en `docs/gestion-y-sucursales.md`. No se agregó un asistente de IA.
+Por decisión del propietario se adaptó la Fase 0 a Netlify Database (Postgres), conservando el adaptador Drizzle actual. No se migró a Supabase ni se agregaron credenciales externas. Se incorporaron módulos de gestión, sucursales, códigos de barras e impresión; su alcance y sus límites se documentan en `docs/gestion-y-sucursales.md`.
 
 Las tablas relacionales contables usan claves por empresa e identificador histórico e índices por empresa y fecha. Guardar los importes en columnas BIGINT de centavos enteros, dentro del rango entero seguro de JavaScript; cantidades y tasas conservan su precisión. El frontend mantiene importes en unidades monetarias por compatibilidad. Declarar todo campo monetario nuevo en `db/accounting-model.mjs` o en el conversor residual; no introducir importes flotantes en metadatos nuevos.
 
@@ -67,3 +67,14 @@ El soporte requiere autorización temporal vigente del dueño y siempre es de so
 ## Empresas de prueba de plan
 
 `companies.testPlan` solo se aplica en servidor a empresas ajenas a plataforma cuyo dueño tiene rol real platform_admin. Consultar el plan actual guardado; no usar DEFAULT_PLANS como sustituto ni inicializar suscripciones. Crear/cambiar/quitar exige contexto de plataforma, motivo confirmado y auditoría. Reutilizar creación normal; mantener revisión y permisos de colaboradores. No afectar pagos, clientes ni Acontec. Quitar el plan revierte el acceso sin borrar datos. La lista completa de comprobaciones de «Empresas de prueba de plan» en `docs/centro-control-pagadito.md` queda **pendiente tras el despliegue**, incluidas migración/RLS, permisos, módulos/límites de los cuatro planes, URL/API, colaboradores, franja, móvil/oscuro, ausencia de cobros/asientos y reversión.
+
+
+## Asistente de ayuda: versión ligera
+
+`public/assistant.js` añade chat solo a `V.panel`, con hoja móvil por encima de `.bnav`, respuestas rápidas locales y conversación efímera. No guardar conversaciones, tokens ni datos contables en el navegador; solo se recuerda el aviso de privacidad. Escapar texto con `esc` antes del formato mínimo propio.
+
+`POST /api/assistant` reutiliza sesión, JSON, mismo origen y permisos de `access.mjs`/planes. El modo `guide` de `companyAccess` proyecta solo metadatos y sucursales, sin cargar contabilidad ni inicializar planes o suscripciones. Soporte temporal queda excluido. La guía ESM estática está en `netlify/lib/assistant-guide.mjs`: conservar secciones de 150–400 palabras y nombres reales; revisar cambios de pantallas también en la guía y respuestas rápidas. No agregar herramientas ni consultas de cifras.
+
+Se requieren `ASSISTANT_ENABLED=true` en Netlify y activación explícita del dueño en Ajustes y respaldo; la columna aditiva comienza desactivada. `ASSISTANT_API_KEY`, `ASSISTANT_PROVIDER` (Anthropic) y `ASSISTANT_MODEL` viven exclusivamente en Netlify. Se usa fetch nativo, una llamada sin reintentos ni streaming, 15 segundos, 400 caracteres por pregunta, 4 mensajes de 500 caracteres, 3 secciones permitidas y 450 tokens de salida. No registrar prompts, respuestas, credenciales ni cuerpos de errores del proveedor.
+
+La tabla RLS `acontec_assistant_usage` es simultáneamente contador y bitácora compacta: identidad interna seudonimizada, empresa, fecha, posiciones diarias, secciones y hora. Un único INSERT con consultas indexadas reserva la pregunta; índices únicos y CHECK impiden superar 20 preguntas por usuario/fecha y 100 por empresa/fecha ante concurrencia. No reintentar conflictos automáticamente; los intentos al proveedor fallidos conservan su consumo. La fecha usa la zona IANA configurada por el dueño (inicialmente America/Managua). Las preguntas rápidas locales no consumen cupos ni invocaciones. Conservar tablas y migraciones para revertir. Las comprobaciones funcionales, RLS y consumo quedan pendientes tras desplegar; solo se revisó estáticamente.
