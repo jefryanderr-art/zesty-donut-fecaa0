@@ -3,26 +3,12 @@ import { sql, eq } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
 import { companies } from '../../db/schema.ts';
 import { allowed, companyAccess, accessError, audit, requireModule } from './access.mjs';
-import { assistantGuide } from './assistant-guide.mjs';
+import { rank, selectGuide, suggestions, noMatchTopics, asksOwnFigures } from './assistant-search.mjs';
 
 const env = key => globalThis.Netlify?.env?.get(key);
 export const assistantOn = () => env('ASSISTANT_ENABLED') === 'true';
 export const assistantAvailable = access => assistantOn() && access.company.assistantEnabled && !access.support;
-const normalize = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 const canRead = (access, section) => section.modulo === 'general' || allowed(access, section.modulo);
-const stop = new Set('como que para una unos unas del las los con por tengo hacer registrar registro quiero puedo donde cual cuando esto esta este ayuda usar sistema acontec'.split(' '));
-function rank(question) {
-  const normalized = normalize(question), words = new Set(normalized.split(' ').filter(word => word.length > 2 && !stop.has(word)));
-  return assistantGuide.map(section => {
-    let score = 0;
-    for (const key of section.palabras_clave) {
-      const keyword = normalize(key);
-      if (keyword.includes(' ') && (' '+normalized+' ').includes(' '+keyword+' ')) score += 6;
-      else if (words.has(keyword)) score += 3;
-    }
-    return { section, score };
-  }).sort((a,b) => b.score-a.score);
-}
 // Refuse credential-bearing messages altogether and redact identifiers before inference.
 const sensitive = value => /(?:contrase[ñn]a|password|clave|api.?key|token|hash|secreto|credencial)\s*(?:es\s+|[:=]\s*)\S+/i.test(value) || /(?:Bearer\s+\S+|sk-[\w-]+|eyJ[\w-]+\.[\w-]+\.[\w-]+|-----BEGIN|postgres(?:ql)?:\/\/|[a-f\d]{32,})/i.test(value);
 function redact(value) {
@@ -84,18 +70,19 @@ export async function assistantAnswer(companyId, session, body) {
   if (sensitive(question) || /(?:contrase[ñn]a|password|clave|token|hash|secreto|credencial)/i.test(question)) return {answer:'No compartas contraseñas, claves, tokens ni credenciales. Escribe únicamente una pregunta general sobre el uso de Acontec.'};
   const ranked = rank(question), best = ranked[0];
   if (best.score >= 3 && !canRead(access,best.section)) return {answer:'Tu perfil no tiene acceso a ese módulo. Consúltalo con el dueño de la empresa.'};
-  const selected = ranked.filter(row => row.score >= 3 && canRead(access,row.section)).slice(0,3).map(row => row.section);
-  if (/\b(mi|mis|cuanto|cuantos|cuanta|cuantas|cuales|muestrame|dame|dime|calcula)\b/.test(normalize(question)) && /\b(ventas|vendi|vendido|saldo|saldos|debe|deben|deuda|deudas|inventario|stock|productos|cobros|pagos|balance|patrimonio|resultado|ganancia|ganancias|utilidad|utilidades|efectivo|caja|banco|facturas|ingresos|gastos|cifras)\b/.test(normalize(question)) && !/\b(como|registrar|registro|agregar|leo|interpretar|leer)\b/.test(normalize(question))) {
+  const selected = selectGuide(ranked, section => canRead(access,section));
+  if (asksOwnFigures(question)) {
     return {answer:'Por ahora puedo explicarte en qué pantalla ver tus cifras y cómo leerlas; no consulto datos de tu empresa. Tema de la guía: '+(selected[0]?.titulo || 'Panel: Resumen del periodo')+'. Pregunta cómo usar esa pantalla.'};
   }
   if (!selected.length) {
-    const topics = assistantGuide.filter(section => canRead(access,section)).slice(0,3).map(section => section.titulo);
-    return {answer:'No tengo esa información en la guía. Puedes preguntar por: '+topics.join('; ')+'.'};
+    const topics = suggestions(ranked, section => canRead(access,section));
+    if (topics.length) return {answer:'¿Quisiste preguntar por...?\n'+topics.map(section => '- '+section.titulo).join('\n')+'\nElige un tema o usa las preguntas rápidas.'};
+    return {answer:noMatchTopics(section => canRead(access,section))};
   }
   const provider = env('ASSISTANT_PROVIDER') || 'anthropic';
   if (provider !== 'anthropic' || !env('ASSISTANT_API_KEY')) {
     const sections = selected.slice(0,2);
-    let answer = sections.map(section => '**'+section.titulo+'**\n'+section.texto.split('\n').filter(step => step.trim()).map((step,index) => (index+1)+'. '+step).join('\n')).join('\n\n');
+    let answer = sections.map(section => '**'+section.titulo+'**\n'+section.texto).join('\n\n');
     if (sections.some(section => ['fiscal','contabilidad','personal','finanzas'].includes(section.modulo)) && !answer.trim().endsWith('verifica con tu contador')) answer+='\n\nverifica con tu contador';
     return {answer};
   }
