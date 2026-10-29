@@ -1,3 +1,4 @@
+import { assistantAnswer, assistantSettings, assistantOn, assistantAvailable } from '../lib/assistant.mjs';
 import { discountRoute } from '../lib/discounts.mjs';
 import '../../public/cloud-sync.js';
 import {deliverMessages} from '../lib/service-mail.mjs';
@@ -84,7 +85,7 @@ async function issueSession(email, admin, request, memberId = null) {
   await db.delete(sessions).where(or(lt(sessions.expiresAt, new Date()), eq(sessions.tokenHash, hashToken(sessionToken(request)))));
   return json({ ok: true }, 200, { 'set-cookie': `${SESSION}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=28800` });
 }
-async function readSession(request) {
+async function readSession(request, renew = true) {
   const token = sessionToken(request);
   if (!/^[a-f0-9]{64}$/.test(token)) return null;
   const [session] = await db.select({ email: sessions.email, admin: sessions.admin, memberId: sessions.memberId, activeBranchId: sessions.activeBranchId, activeCompanyId:sessions.activeCompanyId, name: users.name, expiresAt: sessions.expiresAt }).from(sessions).innerJoin(users, eq(users.email, sessions.email))
@@ -95,7 +96,7 @@ async function readSession(request) {
     session.member = member;
   }
   // Renew at most once per hour while requests keep the session active.
-  if (session && session.expiresAt.getTime() < Date.now() + 25200000) {
+  if (renew && session && session.expiresAt.getTime() < Date.now() + 25200000) {
     await db.update(sessions).set({expiresAt: new Date(Date.now() + 28800000)}).where(and(eq(sessions.tokenHash, hashToken(token)), gt(sessions.expiresAt, new Date())));
     globalThis.Netlify?.context?.cookies?.set({name: SESSION, value: token, path: '/', httpOnly: true, secure: true, sameSite: 'strict', maxAge: 28800});
   }
@@ -161,6 +162,7 @@ const handleRequest = async (request, context, metrics) => {
       const image = await getStore({ name: 'acontec-images', consistency: 'strong' }).get(key, { type: 'arrayBuffer' });
       return image ? new Response(image, { headers: { 'content-type': 'image/webp', 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff' } }) : fail('Imagen no encontrada', 404);
     }
+    if (['assistant','assistant-settings'].includes(path) && !assistantOn()) return fail('El asistente no está disponible.',404);
     let rawBody = '';
     if (method !== 'GET') {
       const bytes = Buffer.from(await request.arrayBuffer());
@@ -322,7 +324,8 @@ const handleRequest = async (request, context, metrics) => {
       context.cookies.delete('nf_refresh');
       return json({ ok: true }, 200, { 'set-cookie': `${SESSION}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0` });
     }
-    const session = await readSession(request);
+    // Chat only validates expiry; normal app requests retain hourly renewal.
+    const session = await readSession(request, path !== 'assistant');
     if (!session) return fail('Sesión vencida. Ingresa de nuevo.', 401);
     if (path === 'session' && method === 'POST') return json({ok:true});
     if (path === 'me' && method === 'GET' && !session.member && (session.email === PLATFORM_OWNER || session.email === adminEmail)) await ensureAcontecCompany(session.email);
@@ -340,6 +343,12 @@ const handleRequest = async (request, context, metrics) => {
     if(path==='platform'){await requirePlatform(session,url.searchParams.get('c'));if(method==='GET')return json(await platformSummary(url));if(method==='POST'){const result=await platformAction(session,body);if(['message','verifyPayment'].includes(body.operation))context.waitUntil(deliverMessages(20));return json(result);}return fail('Método no permitido.',405);}
     if (path === 'customers-admin') {await requirePlatform(session,url.searchParams.get('c'));return json(await customerAdmin(method, body, url, session));}
     if (consent.required && !isAdmin && path !== 'me') return fail('Debes aceptar los términos de uso y la política de privacidad vigentes.', 428);
+    if (path === 'assistant' || path === 'assistant-settings') {
+      if (method !== 'POST') return fail('Método no permitido.',405);
+      if (!assistantOn()) return fail('El asistente no está disponible.',404);
+      if (metrics.bytes > 12000 || Buffer.byteLength(rawBody) > 12000) return fail('La consulta es demasiado larga.',413);
+      return json(await (path === 'assistant' ? assistantAnswer : assistantSettings)(url.searchParams.get('c'),session,body));
+    }
     if(['branch-comparison','consolidated'].includes(path)&&method==='GET'){
       const from=url.searchParams.get('from')||'2000-01-01',to=url.searchParams.get('to')||new Date().toISOString().slice(0,10);
       if(![from,to].every(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)&&!Number.isNaN(Date.parse(d)))||to<from)return fail('Período inválido.');
@@ -600,7 +609,7 @@ const handleRequest = async (request, context, metrics) => {
           const access = await companyAccess(client, companyId, session, true);
           const { id, name, description } = access.company;
           await client.update(sessions).set({activeCompanyId:id}).where(eq(sessions.tokenHash,hashToken(sessionToken(request))));
-          const company = { testPlan:access.company.testPlan, internalTestPlan:access.internalTestPlan, isPlatformCompany:access.company.isPlatformCompany, billingPlan:access.billingPlan, entitlement:access.entitlement, readOnlyLimit:access.readOnlyLimit, support:access.support||false,supportExpiresAt:access.supportExpiresAt, id, name, description, owner: access.owner, permissions: access.permissions, memberId: access.member?.id, role: access.owner ? 'Dueño' : access.member?.role, branches: access.branches, branchId: access.branchId, unrestrictedBranches: access.unrestrictedBranches };
+          const company = { assistantAvailable:assistantAvailable(access), assistantGlobalEnabled:assistantOn()&&!access.support, assistantEnabled:access.company.assistantEnabled, assistantTimeZone:access.company.assistantTimeZone, testPlan:access.company.testPlan, internalTestPlan:access.internalTestPlan, isPlatformCompany:access.company.isPlatformCompany, billingPlan:access.billingPlan, entitlement:access.entitlement, readOnlyLimit:access.readOnlyLimit, support:access.support||false,supportExpiresAt:access.supportExpiresAt, id, name, description, owner: access.owner, permissions: access.permissions, memberId: access.member?.id, role: access.owner ? 'Dueño' : access.member?.role, branches: access.branches, branchId: access.branchId, unrestrictedBranches: access.unrestrictedBranches };
           return json({ data: projectData(access.company.data, access), revision: access.company.revision, company });
         });}catch(error){
           // companyAccess checks ownership/membership before checking the owner's plan.
