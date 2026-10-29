@@ -1,7 +1,7 @@
 import { fiscalAnnualTotals } from './fiscal-projection.mjs';
 import { normalizeItemQuantity } from './accounting-engine.mjs';
 import { requireBilling } from './billing.mjs';
-import { internalTestApplies,internalTestEntitlement,moduleIncluded,requirePlanModule,supportGrantActive, entitlement } from './billing-rules.mjs';
+import { DEFAULT_PLANS,internalTestApplies,internalTestEntitlement,moduleIncluded,requirePlanModule,supportGrantActive, entitlement } from './billing-rules.mjs';
 import { users, servicePlans, supportGrants, subscriptions } from '../../db/schema.ts';
 import { TRADE_ARRAYS } from './trade.mjs';
 import { CROSS_BRANCH_OPS } from './transfers.mjs';
@@ -87,7 +87,8 @@ export async function companyAccess(client, companyId, session, lock = false, lo
       const [sub]=await client.select().from(subscriptions).where(eq(subscriptions.email,company.ownerEmail));
       const ent=entitlement(sub,ownerUser?.platformAdmin===true);
       if(!ent.access)accessError('Tu acceso venció. Abre Mi suscripción para elegir un plan.',402);
-      const [plan]=await client.select().from(servicePlans).where(eq(servicePlans.id,ent.plan));
+      const [row]=await client.select().from(servicePlans).where(eq(servicePlans.id,ent.plan));
+      const plan=ownerUser?.platformAdmin?DEFAULT_PLANS.find(p=>p.id==='pro'):row;
       if(!plan)accessError('Plan no disponible.',403);
       billing={ent,plan:{...plan,limits:ownerUser?.platformAdmin?plan.limits:{...plan.limits,...sub?.limits}}};
     } else billing=await requireBilling(company.ownerEmail,ownerUser?.platformAdmin===true,client);
