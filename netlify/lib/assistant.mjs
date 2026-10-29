@@ -65,6 +65,7 @@ export async function assistantSettings(companyId, session, body) {
   return db.transaction(async client => {
     const access = await companyAccess(client, companyId, session, true, 'guide');
     if (!access.owner || access.support) accessError('Solo el dueño configura el asistente.');
+    if (access.readOnlyLimit) accessError('Esta empresa está en solo lectura porque supera el límite de empresas de tu plan.');
     requireModule(access,'ajustes',true);
     if (body.revision !== access.company.revision) accessError('La empresa cambió. Recarga antes de configurar el asistente.',409);
     await client.update(companies).set({assistantEnabled:body.enabled,assistantTimeZone:timeZone,revision:body.revision+1,updatedAt:new Date()}).where(eq(companies.id,companyId));
