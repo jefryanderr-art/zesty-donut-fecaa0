@@ -108,6 +108,7 @@
     const keyboard=window.visualViewport?Math.max(0,innerHeight-visualViewport.height-visualViewport.offsetTop):0;
     sheet.style.setProperty('--assistant-bottom',Math.max(navBottom,keyboard)+12+'px');
   }
+  const typeFocus=()=>{try{if(!matchMedia('(pointer:coarse)').matches)document.getElementById('assistant-question')?.focus()}catch{}};
   function draw(){
     if(!ready()){reset();return}
     const root=document.getElementById('assistant-sheet');if(!root)return;
@@ -121,9 +122,10 @@
       <form id="assistant-form"><label for="assistant-question">Tu pregunta sobre Acontec</label><textarea id="assistant-question" name="question" maxlength="400" rows="2" placeholder="¿Cómo uso…?" required ${pending||!acknowledged?'disabled':''}></textarea><div class="assistant-form-foot"><small>Máx. 400 caracteres · Con IA: 20 al día por usuario</small><button class="btn" ${pending||!acknowledged?'disabled':''}>Enviar</button></div></form>
       <footer class="assistant-footer"><span>Las preguntas rápidas no consumen IA.</span><button type="button" class="lk" data-assistant="clear">Limpiar conversación</button></footer>`;
     root.querySelector('#assistant-form').addEventListener('submit',send);
-    geometry();const log=root.querySelector('.assistant-messages');log.scrollTop=log.scrollHeight;
+    geometry();const log=root.querySelector('.assistant-messages');const last=messages[messages.length-1],bubbles=log.querySelectorAll('.assistant-message'),target=bubbles[bubbles.length-1];
+    if(last?.role==='assistant'&&target)log.scrollTop+=target.getBoundingClientRect().top-log.getBoundingClientRect().top-4;else log.scrollTop=log.scrollHeight;
   }
-  function show(){if(!ready())return;opened=true;draw();document.getElementById(acknowledged?'assistant-question':'assistant-privacy-accept')?.focus()}
+  function show(){if(!ready())return;opened=true;draw();if(acknowledged)typeFocus();else document.getElementById('assistant-privacy-accept')?.focus()}
   function close(){opened=false;draw();document.querySelector('[data-assistant="open"]')?.setAttribute('aria-expanded','false');document.querySelector('[data-assistant="open"]')?.focus()}
   async function send(event){
     event.preventDefault();if(pending||!ready()||!acknowledged)return;
@@ -140,7 +142,7 @@
     }catch(error){
       if(turn===generation&&key===context()&&ready()&&error.name!=='AbortError')messages.push({role:'assistant',content:'No hay conexión con la ayuda. Usa las preguntas rápidas o vuelve a intentarlo más tarde.'});
     }finally{
-      if(turn===generation&&key===context()){pending=false;request=null;if(ready()){draw();if(opened)document.getElementById('assistant-question')?.focus()}}
+      if(turn===generation&&key===context()){pending=false;request=null;if(ready()){draw();if(opened)typeFocus()}}
     }
   }
   const panel=V.panel;
@@ -186,8 +188,8 @@
     switch(button.dataset.assistant){
       case'open':show();break;
       case'close':close();break;
-      case'privacy':acknowledged=true;try{localStorage.setItem(privacyKey,'seen')}catch{}draw();document.getElementById('assistant-question')?.focus();break;
-      case'clear':request?.abort();generation++;pending=false;messages=[];draw();document.getElementById('assistant-question')?.focus();break;
+      case'privacy':acknowledged=true;try{localStorage.setItem(privacyKey,'seen')}catch{}draw();typeFocus();break;
+      case'clear':request?.abort();generation++;pending=false;messages=[];draw();typeFocus();break;
       case'quick':{
         if(!ready()||!acknowledged||pending)return;
         const item=quick[Number(button.dataset.index)];if(!item||!permission(item[0]))return;
