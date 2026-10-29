@@ -1,3 +1,4 @@
+import { validateProfile } from '../lib/business-profile.mjs';
 import { assistantAnswer, assistantSettings, assistantOn, assistantAvailable } from '../lib/assistant.mjs';
 import { discountRoute } from '../lib/discounts.mjs';
 import '../../public/cloud-sync.js';
@@ -112,14 +113,14 @@ async function authenticateIdentity(operation) {
   };
   try { return await operation(); } finally { cookies.set = originalSet; }
 }
-async function ensureAccount(email, name, description = '', personName = '') {
+async function ensureAccount(email, name, description = '', personName = '', businessType = 'comercio') {
   await db.insert(users).values({ email, profile: { state: 'sin_plan' } }).onConflictDoNothing();
   if (personName) await db.update(users).set({ name: String(personName).trim().slice(0, 200) }).where(eq(users.email, email));
   const owned = await db.select({ id: companies.id }).from(companies).where(eq(companies.ownerEmail, email)).limit(1);
   if (!owned.length) {
     const hash = createHash('sha256').update('acontec:' + email).digest('hex');
     const id = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
-    await db.insert(companies).values({ id, ownerEmail: email, name: companyName(name) || 'Mi empresa', description: String(description || '').trim().slice(0, 2000) }).onConflictDoNothing();
+    await db.insert(companies).values({ id, ownerEmail: email, name: companyName(name) || 'Mi empresa', ...validateProfile(businessType), onboardingDone:false, description: String(description || '').trim().slice(0, 2000) }).onConflictDoNothing();
   }
 }
 async function limitAttempts(request, context) {
@@ -216,7 +217,7 @@ const handleRequest = async (request, context, metrics) => {
       const email = cleanEmail(identityUser?.email);
       if (!email) return fail('No se pudo restablecer la contraseña', 400);
       const isOwnerAdmin = email === adminEmail || email === PLATFORM_OWNER;
-      await ensureAccount(email, isOwnerAdmin ? 'Acontec' : identityUser.userMetadata?.company);
+      await ensureAccount(email, isOwnerAdmin ? 'Acontec' : identityUser.userMetadata?.company,'','',identityUser.userMetadata?.businessType||'comercio');
       if (isOwnerAdmin) {
         await db.update(users).set({ platformAdmin: true }).where(eq(users.email, email));
         await ensureAcontecCompany(email);
@@ -229,7 +230,7 @@ const handleRequest = async (request, context, metrics) => {
       const email = cleanEmail(identityUser.email);
       if (!email || !identityUser.confirmedAt) return fail('No se pudo confirmar la cuenta', 403);
       const isOwnerAdmin = email === adminEmail || email === PLATFORM_OWNER;
-      await ensureAccount(email, isOwnerAdmin ? 'Acontec' : identityUser.userMetadata?.company, identityUser.userMetadata?.description);
+      await ensureAccount(email, isOwnerAdmin ? 'Acontec' : identityUser.userMetadata?.company, identityUser.userMetadata?.description,'',identityUser.userMetadata?.businessType||'comercio');
       if (isOwnerAdmin) {
         await db.update(users).set({ platformAdmin: true }).where(eq(users.email, email));
         await ensureAcontecCompany(email);
@@ -259,11 +260,11 @@ const handleRequest = async (request, context, metrics) => {
         const isOwnerAdmin = email === adminEmail || email === PLATFORM_OWNER;
         let identityUser;
         try {
-          identityUser = await authenticateIdentity(() => signup(email, password, { company: companyName(body.company), description: String(body.description || '').trim().slice(0, 2000) }));
+          identityUser = await authenticateIdentity(() => signup(email, password, { company: companyName(body.company), description: String(body.description || '').trim().slice(0, 2000),businessType:validateProfile(body.businessType||'comercio').businessType }));
         } catch (error) {
           return fail(error?.message || 'No se pudo crear la cuenta', error?.status || 400);
         }
-        await ensureAccount(email, isOwnerAdmin ? 'Acontec' : body.company, body.description);
+        await ensureAccount(email, isOwnerAdmin ? 'Acontec' : body.company, body.description, '', body.businessType||'comercio');
         if (isOwnerAdmin) {
           await db.update(users).set({ platformAdmin: true }).where(eq(users.email, email));
           await ensureAcontecCompany(email);
@@ -299,7 +300,7 @@ const handleRequest = async (request, context, metrics) => {
           return fail(error?.message || 'Error al iniciar sesión', error?.status || 400);
         }
         if (!identityUser.confirmedAt) return fail('Confirma tu correo antes de ingresar', 403);
-        await ensureAccount(email, identityUser.userMetadata?.company);
+        await ensureAccount(email, identityUser.userMetadata?.company,'','',identityUser.userMetadata?.businessType||'comercio');
         return await issueSession(email, false, request);
       }
       if (!googleClientId) return fail('Falta autorizar este sitio en Google. Consulta la guía de activación de Google.', 503);
@@ -311,7 +312,7 @@ const handleRequest = async (request, context, metrics) => {
       if (!googleUser?.email_verified || !googleUser.email) return fail('Google no confirmó tu correo', 401);
       const googleEmail = cleanEmail(googleUser.email);
       const isOwnerAdmin = googleEmail === adminEmail || googleEmail === PLATFORM_OWNER;
-      await ensureAccount(googleEmail, isOwnerAdmin ? 'Acontec' : body.company, '', googleUser.name);
+      await ensureAccount(googleEmail, isOwnerAdmin ? 'Acontec' : body.company, '', googleUser.name,body.businessType||'comercio');
       if (isOwnerAdmin) {
         await db.update(users).set({ platformAdmin: true }).where(eq(users.email, googleEmail));
         await ensureAcontecCompany(googleEmail);
@@ -448,12 +449,14 @@ const handleRequest = async (request, context, metrics) => {
       if (method === 'POST') {
         const result = await updateCompany(companyId, session, body.revision, async (company, currentAccess, client) => {
           if (!allowed(currentAccess, 'ajustes', true) || !allData(currentAccess, true)) accessError('Sin permiso para restaurar respaldos.');
-          let data = body.data, name = company.name, description = company.description;
+          let data = body.data, name = company.name, description = company.description, profilePatch={};
+          if(body.profile){if(!currentAccess.owner)accessError('Solo el dueño restaura el perfil.');profilePatch=validateProfile(body.profile.businessType,body.profile.businessCustomization)}
           if (body.id) {
             if (!/^[a-f0-9-]{36}$/.test(body.id)) accessError('Respaldo no encontrado.', 404);
             const [backup] = await client.select().from(companyBackups).where(and(eq(companyBackups.id, body.id), eq(companyBackups.companyId, companyId)));
             if (!backup?.data) accessError('Respaldo vacío o no encontrado.', 404);
             data = scopeBranch(backup.data, currentAccess); name = backup.name; description = backup.description;
+            if(currentAccess.owner)profilePatch=validateProfile(backup.businessType,backup.businessCustomization);
           }
           mergeData(company.data, data, { owner: true });
           guardLedgerMutation(company.data, data, currentAccess);
@@ -467,7 +470,7 @@ const handleRequest = async (request, context, metrics) => {
             const file = await getStore({ name: 'acontec-private-receipts', consistency: 'strong' }).getMetadata(tax.receipt.key);
             if (!file) accessError('Falta un comprobante del respaldo. No se modificaron los datos.', 400);
           }
-          return { data, name, description };
+          return { data, name, description, ...profilePatch };
         }, 'Respaldo restaurado');
         return json({ ...result, companies: await accessibleCompanies(session) });
       }
@@ -552,13 +555,21 @@ const handleRequest = async (request, context, metrics) => {
       return json({ revision: updated.revision, receipt });
     }
     if (path === 'me' && method === 'GET') return json({ user: { email: session.member?.username || session.email, name: session.member?.name || session.name, worker: !!session.member, admin: isAdmin, editor: canEditSite, consentRequired: consent.required, legal: consent.document }, companies: owned });
+    if(path==='business-profile'&&method==='POST'){
+      const result=await updateCompany(url.searchParams.get('c'),session,body.revision,(company,access)=>{
+        if(!access.owner)accessError('Solo el dueño personaliza el sistema.');
+        requireModule(access,'ajustes',true);
+        return validateProfile(body.businessType,body.businessCustomization);
+      },'Perfil de negocio actualizado');
+      return json(result);
+    }
     if (path === 'company' && method === 'POST') {
       if (session.member) return fail('Los colaboradores no pueden crear empresas.', 403);
       const billing=await requireBilling(session.email,isAdmin);
       const companyLimit=isAdmin?null:billing.plan?.limits?.companies;
       if(companyLimit!=null&&owned.filter(c=>c.owner).length>=companyLimit)return fail('Se alcanzó el límite de empresas del plan.',403);
       if (!companyName(body.name)) return fail('Escribe un nombre de empresa');
-      const company = await db.transaction(client => createOwnedCompany(client,session,{name:body.name,description:body.description,companyLimit}));
+      const company = await db.transaction(client => createOwnedCompany(client,session,{name:body.name,description:body.description,businessType:body.businessType||'comercio',companyLimit}));
       return json({ id: company.id, companies: await accessibleCompanies(session) });
     }
     if (path === 'company' && method === 'DELETE') {
@@ -609,7 +620,7 @@ const handleRequest = async (request, context, metrics) => {
           const access = await companyAccess(client, companyId, session, true);
           const { id, name, description } = access.company;
           await client.update(sessions).set({activeCompanyId:id}).where(eq(sessions.tokenHash,hashToken(sessionToken(request))));
-          const company = { assistantAvailable:assistantAvailable(access), assistantGlobalEnabled:assistantOn()&&!access.support, assistantEnabled:access.company.assistantEnabled, assistantTimeZone:access.company.assistantTimeZone, testPlan:access.company.testPlan, internalTestPlan:access.internalTestPlan, isPlatformCompany:access.company.isPlatformCompany, billingPlan:access.billingPlan, entitlement:access.entitlement, readOnlyLimit:access.readOnlyLimit, support:access.support||false,supportExpiresAt:access.supportExpiresAt, id, name, description, owner: access.owner, permissions: access.permissions, memberId: access.member?.id, role: access.owner ? 'Dueño' : access.member?.role, branches: access.branches, branchId: access.branchId, unrestrictedBranches: access.unrestrictedBranches };
+          const company = { businessType:access.company.businessType, businessCustomization:access.company.businessCustomization, onboardingDone:access.company.onboardingDone, assistantAvailable:assistantAvailable(access), assistantGlobalEnabled:assistantOn()&&!access.support, assistantEnabled:access.company.assistantEnabled, assistantTimeZone:access.company.assistantTimeZone, testPlan:access.company.testPlan, internalTestPlan:access.internalTestPlan, isPlatformCompany:access.company.isPlatformCompany, billingPlan:access.billingPlan, entitlement:access.entitlement, readOnlyLimit:access.readOnlyLimit, support:access.support||false,supportExpiresAt:access.supportExpiresAt, id, name, description, owner: access.owner, permissions: access.permissions, memberId: access.member?.id, role: access.owner ? 'Dueño' : access.member?.role, branches: access.branches, branchId: access.branchId, unrestrictedBranches: access.unrestrictedBranches };
           return json({ data: projectData(access.company.data, access), revision: access.company.revision, company });
         });}catch(error){
           // companyAccess checks ownership/membership before checking the owner's plan.
@@ -632,7 +643,10 @@ const handleRequest = async (request, context, metrics) => {
             if (applied.conflicts.length) accessError('Algunos registros cambiaron. Revisa los cambios pendientes.', 409);
             incoming = applied.data;
           }
+          const visible=projectData(current.data,currentAccess);
+          if(!equal(incoming?.businessRecords||[],visible?.businessRecords||[]))accessError('Usa los módulos de negocio para modificar sus registros.',403);
           const data = mergeData(current.data, incoming, currentAccess);
+          if(current.data?.businessRecords)data.businessRecords=structuredClone(current.data.businessRecords);
           guardLedgerMutation(current.data, data, currentAccess);
           const existing = (current.data?.taxes || []).filter(tax => tax.receipt);
           const incomingReceipts = (data.taxes || []).filter(tax => tax.receipt);

@@ -1,6 +1,6 @@
 // La dimensión se interpreta como Principal para todos los registros históricos.
 export const PRIMARY_BRANCH='principal';
-export const BRANCH_ARRAYS=['entries','shifts','cashMovements','pettyFunds','pettyVouchers','cashCounts','costs','employees','payrolls','settlements','taxes','assets','loans','recurringEntries','quotations','purchaseOrders','stockTransfers','moneyTransfers','attendance','vacationRequests','employeeAdvances','foreignDocuments','budgets','withholdings','instruments','partners'];
+export const BRANCH_ARRAYS=['businessRecords','entries','shifts','cashMovements','pettyFunds','pettyVouchers','cashCounts','costs','employees','payrolls','settlements','taxes','assets','loans','recurringEntries','quotations','purchaseOrders','stockTransfers','moneyTransfers','attendance','vacationRequests','employeeAdvances','foreignDocuments','budgets','withholdings','instruments','partners'];
 export const companyBranches=data=>data?.branches?.length?data.branches:[{id:PRIMARY_BRANCH,name:'Principal',code:'P',active:true,main:true,address:'',phone:''}];
 const fail=(message,status=403)=>{const error=new Error(message);error.publicMessage=message;error.status=status;throw error};
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);

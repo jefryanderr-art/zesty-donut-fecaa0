@@ -1,3 +1,4 @@
+import { catalog, validateProfile } from './business-profile.mjs';
 import { fiscalAnnualTotals } from './fiscal-projection.mjs';
 import { normalizeItemQuantity } from './accounting-engine.mjs';
 import { requireBilling } from './billing.mjs';
@@ -18,7 +19,7 @@ import { db } from '../../db/index.ts';
 import { companies, companyMembers, companyBackups, auditEvents, sessions, saveOperations } from '../../db/schema.ts';
 import { OPERATION_ARRAYS, roleAllows, salesAdministrator, cashAdministrator, operatorId, receiptRecords } from './policies.mjs';
 
-export const MODULES = ['ventas', 'compras', 'gastos', 'inventario', 'contabilidad', 'finanzas', 'personal', 'fiscal', 'ajustes', 'accesibilidad', 'auditoria', 'facturacion', 'cajas', 'costos', 'proveedores'];
+export const MODULES = [...catalog.all, 'ventas', 'compras', 'gastos', 'inventario', 'contabilidad', 'finanzas', 'personal', 'fiscal', 'ajustes', 'accesibilidad', 'auditoria', 'facturacion', 'cajas', 'costos', 'proveedores'];
 const DATA_MODULES = ['compras', 'gastos', 'inventario', 'contabilidad', 'finanzas', 'personal', 'fiscal'];
 const deriveKey = promisify(scrypt);
 const round = value => Math.round(value * 100) / 100;
@@ -35,7 +36,7 @@ export const allowed = (access, module, write = false) => {
   const level = access.permissions?.[module] ?? (access.member?.role?.toLowerCase() === 'contador' ? access.permissions?.[fallback[module]] : undefined);
   return !!roleAllows(access, module) && !(write && roleAllows(access, module) === 'lectura') && (level === 'escritura' || (!write && level === 'lectura'));
 };
-export const allData = (access, write = false) => access.unrestrictedBranches !== false && !(access.billingPlan?.blockedModules||[]).some(m=>['control_personal','decisiones'].includes(m)) && salesAdministrator(access) && [...DATA_MODULES, 'ventas', 'facturacion', 'cajas', 'costos', 'proveedores'].every(module => allowed(access, module, write));
+export const allData = (access, write = false) => (access.company?.data?.businessRecords||[]).every(r=>allowed(access,r.module,write)) && access.unrestrictedBranches !== false && !(access.billingPlan?.blockedModules||[]).some(m=>['control_personal','decisiones'].includes(m)) && salesAdministrator(access) && [...DATA_MODULES, 'ventas', 'facturacion', 'cajas', 'costos', 'proveedores'].every(module => allowed(access, module, write));
 export const actorName = session => session.member ? `${session.member.name} (${session.member.username || session.email})` : session.email;
 export const safeMember = member => ({ id: member.id, email: member.email, username: member.username, name: member.name, role: member.role, permissions: member.permissions, branchIds: member.branchIds, active: member.active, version: member.version });
 export function accessError(message, status = 403) {
@@ -186,6 +187,7 @@ export function projectData(data, access) {
     const copy = { ...record }; if(!access.owner)delete copy.receipt; return copy;
   }) : [];
   for(const [name,module] of Object.entries({...ADVANCED_ARRAYS,...TRADE_ARRAYS})) projected[name]=allowed(access,module)?structuredClone(data[name]||[]):[];
+  projected.businessRecords=(data.businessRecords||[]).filter(row=>allowed(access,row.module)).map(row=>structuredClone(row));
   projected.stockTransfers=moduleIncluded(access.billingPlan||{blockedModules:[]},'sucursales')&&allowed(access,'inventario')?structuredClone(data.stockTransfers||[]):[];
   return projected;
 }
@@ -263,6 +265,7 @@ export function mergeData(current, incoming, access) {
   }
   const projected = projectData(current, { ...access, branchId: null });
   const merged = structuredClone(current);
+  if(current.businessRecords) merged.businessRecords=structuredClone(current.businessRecords);
   merged.cfg ||= {};
   merged.customers = merged.customers || [];
   for (const [name, module] of Object.entries({ customers: 'ventas', accounts: 'contabilidad', employees: 'personal', payrolls: 'personal', settlements: 'personal', taxes: 'fiscal', properties: 'fiscal' })) {
@@ -359,7 +362,7 @@ export async function audit(client, companyId, session, action, changes, revisio
 }
 export async function checkpoint(client, company) {
   if (!company.data) return [];
-  await client.insert(companyBackups).values({ companyId: company.id, name: company.name, description: company.description, data: company.data, revision: company.revision }).onConflictDoNothing();
+  await client.insert(companyBackups).values({ companyId: company.id, name: company.name, description: company.description, businessType:company.businessType, businessCustomization:company.businessCustomization, onboardingDone:company.onboardingDone, data: company.data, revision: company.revision }).onConflictDoNothing();
   const retained = await client.select({ revision: companyBackups.revision }).from(companyBackups).where(eq(companyBackups.companyId, company.id)).orderBy(desc(companyBackups.revision)).limit(30);
   if (retained.length === 30) {
     const removed = await client.delete(companyBackups).where(and(eq(companyBackups.companyId, company.id), lt(companyBackups.revision, retained[29].revision))).returning({ data: companyBackups.data });
@@ -411,7 +414,7 @@ export async function updateCompany(companyId, session, revision, mutate, action
     await syncAccounting(client, fullCompany, updated);
     timings.recordsMs = Math.round(performance.now() - phase);
     const changes = dataChanges(fullCompany.data, updated.data);
-    for (const field of ['name', 'description']) if (company[field] !== updated[field]) changes.push({ area: field, before: company[field], after: updated[field] });
+    for (const field of ['name', 'description', 'businessType', 'businessCustomization', 'onboardingDone']) if (!equal(company[field],updated[field])) changes.push({ area: field, before: company[field], after: updated[field] });
     await audit(client, companyId, { ...session, auditBranchId: access.branchId }, action, changes, updated.revision);
     return remember({ revision: updated.revision, data: projectData(updated.data, access), timings });
   });
@@ -436,7 +439,7 @@ export function validatePermissions(permissions, access, role) {
     result[module] = level;
   }
   const prospective = { owner: false, permissions: result, member: { role } };
-  const availableData=write=>MODULES.filter(m=>!['ajustes','auditoria','accesibilidad'].includes(m)&&(!access.billingPlan||moduleIncluded(access.billingPlan,m))).every(m=>allowed(prospective,m,write));
+  const availableData=write=>MODULES.filter(m=>(!catalog.all.includes(m)||(access.company?.data?.businessRecords||[]).some(r=>r.module===m))&&!['ajustes','auditoria','accesibilidad'].includes(m)&&(!access.billingPlan||moduleIncluded(access.billingPlan,m))).every(m=>allowed(prospective,m,write));
   if (result.ajustes !== 'ninguno' && !allData(prospective)) accessError('Los respaldos de Ajustes requieren lectura de todos los módulos por contener información completa.', 400);
   if (result.ajustes === 'escritura' && !allData(prospective, true)) accessError('Restaurar respaldos requiere escritura en todos los módulos.', 400);
   if(result.auditoria!=='ninguno'&&!availableData(false))accessError('La auditoría requiere lectura de los módulos incluidos.',400);
@@ -512,14 +515,14 @@ export async function migrateAccountingStorage(companyId, session, body) {
 }
 
 // Shared creation path: caller supplies the server-resolved limit, never browser authority.
-export async function createOwnedCompany(client,session,{name,description='',companyLimit=null,testPlan=null,uniqueName=false,id}){
+export async function createOwnedCompany(client,session,{name,description='',companyLimit=null,testPlan=null,uniqueName=false,id,businessType='comercio'}){
  if(session.member)accessError('Los colaboradores no pueden crear empresas.');
  await client.select({email:users.email}).from(users).where(eq(users.email,session.email)).for('update');
  const current=await client.select({id:companies.id,name:companies.name}).from(companies).where(and(eq(companies.ownerEmail,session.email),isNull(companies.archivedAt)));
  if(companyLimit!=null&&current.length>=companyLimit)accessError('Se alcanzó el límite de empresas del plan.',403);
  const base=String(name||'').trim().slice(0,80);if(!base)accessError('Escribe un nombre de empresa',400);
  name=base;if(uniqueName){let n=2;while(current.some(c=>c.name===name))name=base.slice(0,70)+' '+n++}
- const [created]=await client.insert(companies).values({...(id?{id}:{}),ownerEmail:session.email,name,description:String(description).trim().slice(0,2000),testPlan,isPlatformCompany:false}).returning({id:companies.id});
+ const [created]=await client.insert(companies).values({...(id?{id}:{}),ownerEmail:session.email,name,description:String(description).trim().slice(0,2000),testPlan,isPlatformCompany:false,...validateProfile(businessType),onboardingDone:false}).returning({id:companies.id});
  await audit(client,created.id,session,'Empresa creada',[{area:'name',before:null,after:name}],0);
  return created;
 }

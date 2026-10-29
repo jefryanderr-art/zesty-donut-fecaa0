@@ -12,6 +12,7 @@
     ['compras','¿Cómo registro una compra?','1. Abre Compras y pulsa + Nueva compra.\n2. Revisa Fecha, Proveedor y Forma de pago.\n3. Usa + Agregar producto para completar las líneas.\n4. Revisa cantidades, costos sin IVA, impuesto y total antes de confirmar.\n5. Si queda deuda, el pago posterior debe aplicarse al documento; no registres otra compra.\n\nverifica con tu contador'],
     ['finanzas','¿Cómo leo el estado de resultados?','1. Abre Estado de resultados y elige el período.\n2. Revisa Total ingresos.\n3. Resta Costo de ventas para comprender Utilidad bruta.\n4. Revisa Total gastos y UTILIDAD (PÉRDIDA) NETA.\n5. Una utilidad no equivale a efectivo: puede incluir ventas pendientes de cobro. Confirma empresa y sucursal.\n\nverifica con tu contador'],
   ];
+  const assistantQuick=()=>{const profile=globalThis.AcontecProfiles?.get(CO?.businessType);return profile&&profile.id!=='comercio'?[...profile.quickQuestions.map(([module,label,answer])=>[module,label,answer]),...quick]:quick;};
   const ready=()=>!!U&&!!CO&&R==='panel'&&!HOME&&CO.assistantAvailable&&!CO.support;
   const context=()=>[U?.email,CO?.id,CO?.memberId,CO?.branchId].join(':');
   function reset(){request?.abort();request=null;messages=[];opened=false;pending=false;generation++;document.getElementById('assistant-sheet')?.remove()}
@@ -41,7 +42,7 @@
     root.innerHTML=`<header class="assistant-head"><div><span class="assistant-eyebrow">GUÍA DE USO</span><h2 id="assistant-title">Pregúntale a Acontec</h2></div><button type="button" class="assistant-icon" data-assistant="close" aria-label="Cerrar asistente">×</button></header>
       <p class="assistant-intro">Solo orientación. No consulta tus cifras ni realiza cambios.</p>
       ${!acknowledged?'<div class="assistant-privacy"><p>Tu pregunta y hasta 4 mensajes se envían a un proveedor de IA. No escribas datos contables, personales ni contraseñas. La conversación vive solo en esta pantalla.</p><a href="/privacidad.html" target="_blank" rel="noopener">Privacidad</a> <button type="button" class="btn ghost" id="assistant-privacy-accept" data-assistant="privacy">Entendido</button></div>':''}
-      <div class="assistant-chips" aria-label="Preguntas rápidas sin IA">${quick.map(([module,label],index)=>permission(module)?`<button type="button" data-assistant="quick" data-index="${esc(index)}" ${pending||!acknowledged?'disabled':''}>${esc(label)}</button>`:'').join('')}</div>
+      <div class="assistant-chips" aria-label="Preguntas rápidas sin IA">${assistantQuick().map(([module,label],index)=>permission(module)?`<button type="button" data-assistant="quick" data-index="${esc(index)}" ${pending||!acknowledged?'disabled':''}>${esc(label)}</button>`:'').join('')}</div>
       <div class="assistant-messages" role="log" aria-live="polite" aria-relevant="additions text" aria-label="Conversación de ayuda">${messages.map(message=>`<article class="assistant-message ${message.role==='user'?'assistant-user':''}"><b>${esc(message.role==='user'?'Tú':'Acontec')}</b>${format(message.content)}</article>`).join('')}${pending?'<p role="status">Consultando la guía…</p>':''}</div>
       <form id="assistant-form"><label for="assistant-question">Tu pregunta sobre Acontec</label><textarea id="assistant-question" name="question" maxlength="400" rows="2" placeholder="¿Cómo uso…?" required ${pending||!acknowledged?'disabled':''}></textarea><div class="assistant-form-foot"><small>Máx. 400 caracteres · 20 al día por usuario</small><button class="btn" ${pending||!acknowledged?'disabled':''}>Enviar</button></div></form>
       <footer class="assistant-footer"><span>Las preguntas rápidas no consumen IA.</span><button type="button" class="lk" data-assistant="clear">Limpiar conversación</button></footer>`;
@@ -115,7 +116,7 @@
       case'clear':request?.abort();generation++;pending=false;messages=[];draw();document.getElementById('assistant-question')?.focus();break;
       case'quick':{
         if(!ready()||!acknowledged||pending)return;
-        const item=quick[Number(button.dataset.index)];if(!item||!permission(item[0]))return;
+        const item=assistantQuick()[Number(button.dataset.index)];if(!item||!permission(item[0]))return;
         messages.push({role:'user',content:item[1]},{role:'assistant',content:item[2]});draw();break;
       }
     }

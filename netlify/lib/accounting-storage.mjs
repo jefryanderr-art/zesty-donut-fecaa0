@@ -4,6 +4,7 @@ import { collections, children } from '../../db/accounting-model.mjs';
 import { canonical, documentHash, normalizeDocument, restoreDocument, storageError } from './accounting-codec.mjs';
 
 const tables = {
+  businessRecords: schema.businessRecords,
   assets: schema.assets, loans: schema.loans, recurringEntries: schema.recurringEntries, exchangeRates: schema.exchangeRates, foreignDocuments: schema.foreignDocuments, budgets: schema.budgets, quotations: schema.quotations, purchaseOrders: schema.purchaseOrders, attendance: schema.attendance, vacationRequests: schema.vacationRequests, employeeAdvances: schema.employeeAdvances,
   withholdings:schema.withholdings,instruments:schema.instruments,partners:schema.partners,stockTransfers: schema.stockTransfers, branches: schema.branches, accounts: schema.ledgerAccounts, products: schema.products, customers: schema.customers,
   suppliers: schema.suppliers, employees: schema.employees, payrolls: schema.payrolls,

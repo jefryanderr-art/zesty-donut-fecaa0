@@ -53,6 +53,9 @@ export const companies = pgTable('acontec_companies', {
   id: uuid().defaultRandom().primaryKey(),
   archivedAt: timestamp('archived_at'),
   testPlan: text('test_plan'),
+  businessType: text('business_type').default('comercio').notNull(),
+  businessCustomization: jsonb('business_customization').default({}).notNull(),
+  onboardingDone: boolean('onboarding_done').default(true).notNull(),
   assistantEnabled: boolean('assistant_enabled').default(false).notNull(),
   assistantTimeZone: text('assistant_time_zone').default('America/Managua').notNull(),
   isPlatformCompany: boolean('is_platform_company').default(false).notNull(),
@@ -112,6 +115,9 @@ export const auditEvents = pgTable('acontec_audit_events', {
 export const companyBackups = pgTable('acontec_company_backups', {
   id: uuid().defaultRandom().primaryKey(),
   companyId: uuid('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  businessType: text('business_type').default('comercio').notNull(),
+  businessCustomization: jsonb('business_customization').default({}).notNull(),
+  onboardingDone: boolean('onboarding_done').default(true).notNull(),
   name: text().notNull(),
   description: text().notNull(),
   data: jsonb(),
@@ -142,6 +148,7 @@ function recordTable(definition: any, child = false) {
     ...(definition.table === 'journal_lines' ? [check('acontec_line_nonnegative', sql`${table.dCents} >= 0 AND ${table.cCents} >= 0`)] : []),
   ]).enableRLS();
 }
+export const businessRecords = recordTable(collections.businessRecords);
 export const ledgerAccounts = recordTable(collections.accounts);
 export const products = recordTable(collections.products);
 export const customers = recordTable(collections.customers);

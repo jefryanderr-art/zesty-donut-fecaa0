@@ -237,7 +237,7 @@ async function renderGoogle(){
       if(!document.contains(form))return;
       const error=form.querySelector('.err'),button=form.querySelector('#submit-auth');
       error.textContent='Conectando con Google…';button.disabled=true;
-      try{await session(await api('google','POST',{credential:result.credential,company:form.elements.co.value}))}
+      try{await session(await api('google','POST',{credential:result.credential,company:form.elements.co.value,businessType:form.elements.businessType?.value||'comercio'}))}
       catch(problem){error.textContent=problem.message}
       finally{if(document.contains(button))button.disabled=false}
     }});
@@ -259,7 +259,7 @@ function authView(){
   <div class="err" role="status" aria-live="polite" style="padding:0 0 8px"></div><button class="btn full" id="submit-auth">Ingresar <span aria-hidden="true">→</span></button><div class="or">o continúa con</div><div id="gbtn"><button type="button" class="btn ghost full" data-a="google" ${GID?'':'disabled aria-describedby="google-help"'}><b class="google-letter">G</b> Continuar con Google</button></div>${GID?'':'<p id="google-help" class="mut">Google requiere autorizar este sitio una sola vez. <a href="/configurar-google.html">Guía paso a paso para activarlo</a>. Mientras tanto, puedes crear tu cuenta con correo y contraseña.</p>'}</form><p class="access-note"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.5"/></svg> Tu información es privada. Solo tú accedes a tu empresa.</p></section>`}</main>${contactSection()}<footer class="auth-footer"><span>${esc(SITE.brand)} · ${esc(SITE.tagline)}</span><span>${esc(SITE.footer)}</span>${U?.editor?`<button type="button" class="footer-settings" data-a="gear" aria-label="Editar página principal de Acontec" title="Editar textos, información, imágenes y logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-.7 2.1-2.1 1.2-2.2-.4-2 3.4 1.5 1.7v2L2 14.7l2 3.4 2.2-.4 2.1 1.2L9 21h4l.7-2.1 2.1-1.2 2.2.4 2-3.4-1.5-1.7v-2L20 9.3l-2-3.4-2.2.4-2.1-1.2L13 3Z"/><circle cx="11" cy="12" r="3"/></svg></button>`:''}</footer></div>`;
   if(U)return;
   $('#af').onsubmit=async event=>{event.preventDefault();const fields=event.target.elements,error=$('#af .err'),button=$('#submit-auth');error.textContent='';button.disabled=true;button.textContent='Conectando…';
-    try{await session(await api(AM=='login'?'login':'register','POST',{email:fields.em.value,password:fields.pw.value,company:fields.co.value,description:fields.description?.value||''}))}catch(problem){error.textContent=problem.message}finally{if(document.contains(button)){button.disabled=false;button.innerHTML=AM=='login'?'Ingresar <span aria-hidden="true">→</span>':'Crear cuenta <span aria-hidden="true">→</span>'}}};
+    try{await session(await api(AM=='login'?'login':'register','POST',{email:fields.em.value,password:fields.pw.value,company:fields.co.value,description:fields.description?.value||'',businessType:fields.businessType?.value||'comercio'}))}catch(problem){error.textContent=problem.message}finally{if(document.contains(button)){button.disabled=false;button.innerHTML=AM=='login'?'Ingresar <span aria-hidden="true">→</span>':'Crear cuenta <span aria-hidden="true">→</span>'}}};
   if(GID)renderGoogle();
 }
 
