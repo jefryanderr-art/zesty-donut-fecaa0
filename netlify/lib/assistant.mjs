@@ -84,14 +84,23 @@ export async function assistantAnswer(companyId, session, body) {
   const ranked = rank(question), best = ranked[0];
   if (best.score >= 3 && !canRead(access,best.section)) return {answer:'Tu perfil no tiene acceso a ese módulo. Consúltalo con el dueño de la empresa.'};
   const selected = ranked.filter(row => row.score >= 3 && canRead(access,row.section)).slice(0,3).map(row => row.section);
-  await reserve(access,session,selected.map(section => section.id));
   if (/\b(mi|mis|cuanto|cuantos|cuanta|cuantas|cuales|muestrame|dame|dime|calcula)\b/.test(normalize(question)) && /\b(ventas|vendi|vendido|saldo|saldos|debe|deben|deuda|deudas|inventario|stock|productos|cobros|pagos|balance|patrimonio|resultado|ganancia|ganancias|utilidad|utilidades|efectivo|caja|banco|facturas|ingresos|gastos|cifras)\b/.test(normalize(question)) && !/\b(como|registrar|registro|agregar|leo|interpretar|leer)\b/.test(normalize(question))) {
     return {answer:'Por ahora puedo explicarte en qué pantalla ver tus cifras y cómo leerlas; no consulto datos de tu empresa. Tema de la guía: '+(selected[0]?.titulo || 'Panel: Resumen del periodo')+'. Pregunta cómo usar esa pantalla.'};
   }
-  if (!selected.length) return {answer:'No tengo esa información en la guía. Puedes preguntar por los primeros pasos o por las opciones de impresión.'};
+  if (!selected.length) {
+    const topics = assistantGuide.filter(section => canRead(access,section)).slice(0,3).map(section => section.titulo);
+    return {answer:'No tengo esa información en la guía. Puedes preguntar por: '+topics.join('; ')+'.'};
+  }
   const provider = env('ASSISTANT_PROVIDER') || 'anthropic';
-  if (provider !== 'anthropic' || !env('ASSISTANT_API_KEY')) return {answer:'La ayuda con IA no está disponible en este momento. Puedes usar las preguntas rápidas o intentarlo más tarde.'};
+  if (provider !== 'anthropic' || !env('ASSISTANT_API_KEY')) {
+    const sections = selected.slice(0,2);
+    let answer = sections.map(section => '**'+section.titulo+'**\n'+section.texto.split('\n').filter(step => step.trim()).map((step,index) => (index+1)+'. '+step).join('\n')).join('\n\n');
+    if (sections.some(section => ['fiscal','contabilidad','personal','finanzas'].includes(section.modulo)) && !answer.trim().endsWith('verifica con tu contador')) answer+='\n\nverifica con tu contador';
+    return {answer};
+  }
   const history = (Array.isArray(body.history) ? body.history : []).slice(-4).filter(item => item && ['user','assistant'].includes(item.role) && typeof item.content === 'string').map(item => ({role:item.role,content:(sensitive(item.content)||/(?:contrase[ñn]a|password|clave|token|hash|secreto|credencial)/i.test(item.content))?'[mensaje privado omitido]':redact(item.content.slice(0,500))}));
+  // Reserve only when the next step is the provider call; local answers are free of quota.
+  await reserve(access,session,selected.map(section => section.id));
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method:'POST', signal:AbortSignal.timeout(15000),
