@@ -1,4 +1,4 @@
-import { validateProfile } from '../lib/business-profile.mjs';
+import { validateProfile, fixedBusinessProfile, restoredBusinessProfile } from '../lib/business-profile.mjs';
 import { assistantAnswer, assistantSettings, assistantOn, assistantAvailable } from '../lib/assistant.mjs';
 import { discountRoute } from '../lib/discounts.mjs';
 import '../../public/cloud-sync.js';
@@ -450,13 +450,13 @@ const handleRequest = async (request, context, metrics) => {
         const result = await updateCompany(companyId, session, body.revision, async (company, currentAccess, client) => {
           if (!allowed(currentAccess, 'ajustes', true) || !allData(currentAccess, true)) accessError('Sin permiso para restaurar respaldos.');
           let data = body.data, name = company.name, description = company.description, profilePatch={};
-          if(body.profile){if(!currentAccess.owner)accessError('Solo el dueño restaura el perfil.');profilePatch=validateProfile(body.profile.businessType,body.profile.businessCustomization)}
+          if(body.profile){if(!currentAccess.owner)accessError('Solo el dueño restaura el perfil.');profilePatch=restoredBusinessProfile(company,body.profile,isAdmin)}
           if (body.id) {
             if (!/^[a-f0-9-]{36}$/.test(body.id)) accessError('Respaldo no encontrado.', 404);
             const [backup] = await client.select().from(companyBackups).where(and(eq(companyBackups.id, body.id), eq(companyBackups.companyId, companyId)));
             if (!backup?.data) accessError('Respaldo vacío o no encontrado.', 404);
             data = scopeBranch(backup.data, currentAccess); name = backup.name; description = backup.description;
-            if(currentAccess.owner)profilePatch=validateProfile(backup.businessType,backup.businessCustomization);
+            if(currentAccess.owner)profilePatch=restoredBusinessProfile(company,backup,isAdmin);
           }
           mergeData(company.data, data, { owner: true });
           guardLedgerMutation(company.data, data, currentAccess);
@@ -559,7 +559,7 @@ const handleRequest = async (request, context, metrics) => {
       const result=await updateCompany(url.searchParams.get('c'),session,body.revision,(company,access)=>{
         if(!access.owner)accessError('Solo el dueño personaliza el sistema.');
         requireModule(access,'ajustes',true);
-        return validateProfile(body.businessType,body.businessCustomization);
+        return fixedBusinessProfile(company,body,isAdmin);
       },'Perfil de negocio actualizado');
       return json(result);
     }

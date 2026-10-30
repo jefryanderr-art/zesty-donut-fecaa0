@@ -110,7 +110,7 @@ export async function customerAdmin(method, body, url, session) {
 async function customerDetail(email, condition) {
   const [client] = await db.select({ email: users.email, name: users.name, createdAt: users.createdAt, lastAccessAt: users.lastAccessAt, profile: users.profile, version: users.version }).from(users).where(and(eq(users.email, email), condition));
   if (!client) accessError('Cliente no encontrado.', 404);
-  const owned = await db.select({ id: companies.id, name: companies.name }).from(companies).where(eq(companies.ownerEmail, email));
+  const owned = await db.select({ id: companies.id, name: companies.name, businessType: companies.businessType, revision: companies.revision, archivedAt: companies.archivedAt }).from(companies).where(eq(companies.ownerEmail, email));
   const memberships = await db.select({ id: companies.id, name: companies.name, role: companyMembers.role, active: companyMembers.active }).from(companyMembers).innerJoin(companies, eq(companies.id, companyMembers.companyId)).where(eq(companyMembers.email, email));
   const payments = await db.select().from(customerPayments).where(eq(customerPayments.email, email)).orderBy(desc(customerPayments.date)).limit(200);
   const events = await db.select().from(customerEvents).where(eq(customerEvents.email, email)).orderBy(desc(customerEvents.createdAt)).limit(100);

@@ -10,3 +10,11 @@ export function validateProfile(type='comercio',custom={}) {
  if(custom.labels!==undefined){if(!custom.labels||typeof custom.labels!=='object'||Array.isArray(custom.labels))invalid('Etiquetas inválidas.');result.labels={};for(const key of ['customer','product','document']){const value=custom.labels[key];if(value!==undefined){if(typeof value!=='string'||!value.trim()||value.length>40)invalid('Etiqueta inválida.');result.labels[key]=value.trim()}}}
  return {businessType:type,businessCustomization:result};
 }
+
+export function fixedBusinessProfile(company,body,isAdmin) {
+ if(!isAdmin&&body.businessType!==company.businessType)throw Object.assign(new Error('El tipo de negocio queda fijo. Para cambiarlo, contacta a Acontec.'),{status:403,publicMessage:'El tipo de negocio queda fijo. Para cambiarlo, contacta a Acontec.'});
+ return validateProfile(body.businessType,body.businessCustomization);
+}
+export function restoredBusinessProfile(company,backup,isAdmin) {
+ return validateProfile(isAdmin?backup.businessType:company.businessType,backup.businessCustomization);
+}
