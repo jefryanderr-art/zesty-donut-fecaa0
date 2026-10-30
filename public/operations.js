@@ -81,7 +81,7 @@ const openShifts=()=>S.shifts.filter(shift=>!shift.closedAt&&(shift.operatorId==
 const shiftLabel=shift=>`Turno de ${String(shift.operatorName||'Usuario').includes('@')?'Usuario':shift.operatorName||'Usuario'} · ${shift.date===today()?'hoy':shift.date} ${new Date(shift.openedAt).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'})}`;
 const shiftOptions=selected=>option('','Selecciona un turno')+openShifts().map(shift=>option(shift.id,shiftLabel(shift),shift.id===selected)).join('');
 const pillChoices=(name,choices,selected)=>`<div class="invoice-pills" role="group">${choices.map(([value,label])=>`<label><input type="radio" name="${esc(name)}" value="${esc(value)}" ${value===selected?'checked':''}><span>${esc(label)}</span></label>`).join('')}</div>`;
-const saleActions=entry=>`<div class="sale-action-menu"><button type="button" class="lk sale-actions-toggle" aria-expanded="false">Acciones</button><div class="sale-actions">${actionButton('discountDetail',entry.id,'Detalle')} ${actionButton('printEntry',entry.id,'Imprimir')} ${isSupervisor()?actionButton('creditNote',entry.id,'Anular'):''}</div></div>`;
+const saleActions=entry=>`<div class="sale-action-menu"><div class="sale-actions">${actionButton('discountDetail',entry.id,'Detalle')} ${actionButton('printEntry',entry.id,'Imprimir')} ${isSupervisor()?actionButton('creditNote',entry.id,'Anular'):''}</div></div>`;
 
 const paymentLabels={efectivo:'Efectivo',tarjeta:'Tarjeta',transferencia:'Transferencia',credito:'Crédito'};
 const operationalRound=value=>Math.round((Number(value)+Number.EPSILON)*100)/100;
@@ -149,7 +149,7 @@ view=function(){
     $('#module-search')?.insertAdjacentHTML('beforebegin',`<div class="customer-form-grid noprint">${selectField('saleMethod','Forma de pago',option('','Todas')+Object.entries(paymentLabels).map(([value,label])=>option(value,label,value===SALE_FILTERS.method)).join(''))}${selectField('saleOperator','Cajero / vendedor',option('','Todos')+[...operators].map(([value,label])=>option(value,label,value===SALE_FILTERS.operator)).join(''))}</div>`);
     const notes=matchingEntries('nota-credito');
     $('#main').insertAdjacentHTML('beforeend',`<h3 class="ledger-section">Notas de crédito y devoluciones</h3>`+accountingTable(['Nota','Fecha','Factura original','Motivo','Total','Acciones'],notes.map(note=>`<tr><td>${esc(note.reference)}</td><td>${esc(note.date)}</td><td>${esc(S.entries.find(entry=>entry.id===note.invoiceId)?.reference||note.invoiceId)}</td><td>${esc(note.reason)}</td><td>${money(note.total)}</td><td>${actionButton('printEntry',note.id,'Imprimir nota')}</td></tr>`).join('')));
-    $('#main').classList.add('billing-sales');decorateSaleCards();enforceAccessUI();
+    $('#main').classList.add('billing-sales');markSaleTables();enforceAccessUI();
   }
 };
 document.addEventListener('change',event=>{
@@ -158,15 +158,12 @@ document.addEventListener('change',event=>{
   if(event.target.name==='saleOperator'){SALE_FILTERS.operator=event.target.value;view()}
 });
 
-function decorateSaleCards(){
+function markSaleTables(){
  for(const menu of document.querySelectorAll('#main .sale-action-menu')){
-  const table=menu.closest('table');if(!table||table.classList.contains('sale-table'))continue;
-  table.classList.add('sale-table');table.closest('.tw')?.classList.add('sale-table-wrap');table.closest('.card')?.classList.add('sale-table-card');
-  const headers=[...table.querySelectorAll('thead th')].map(th=>th.textContent);
-  for(const row of table.querySelectorAll('tbody tr'))for(const [index,cell]of [...row.cells].entries())cell.dataset.label=headers[index]||'';
+  const table=menu.closest('table');if(!table)continue;
+  table.classList.add('sale-table');table.closest('.tw')?.classList.add('sale-table-wrap');
  }
 }
-document.addEventListener('click',event=>{const button=event.target.closest('.sale-actions-toggle');if(!button)return;const expanded=button.getAttribute('aria-expanded')!=='true';button.setAttribute('aria-expanded',String(expanded));button.closest('.sale-action-menu').classList.toggle('is-open',expanded)});
 function saleStatus(entry){
  const notes=S.entries.filter(record=>record.type==='nota-credito'&&record.invoiceId===entry.id);
  if(!notes.length)return 'Emitida';
