@@ -113,14 +113,14 @@ async function authenticateIdentity(operation) {
   };
   try { return await operation(); } finally { cookies.set = originalSet; }
 }
-async function ensureAccount(email, name, description = '', personName = '', businessType = 'comercio') {
+async function ensureAccount(email, name, description = '', personName = '', businessType = 'comercio', country = 'Nicaragua') {
   await db.insert(users).values({ email, profile: { state: 'sin_plan' } }).onConflictDoNothing();
   if (personName) await db.update(users).set({ name: String(personName).trim().slice(0, 200) }).where(eq(users.email, email));
   const owned = await db.select({ id: companies.id }).from(companies).where(eq(companies.ownerEmail, email)).limit(1);
   if (!owned.length) {
     const hash = createHash('sha256').update('acontec:' + email).digest('hex');
     const id = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
-    await db.insert(companies).values({ id, ownerEmail: email, name: companyName(name) || 'Mi empresa', ...validateProfile(businessType), onboardingDone:false, description: String(description || '').trim().slice(0, 2000) }).onConflictDoNothing();
+    await db.insert(companies).values({ id, ownerEmail: email, name: companyName(name) || 'Mi empresa', ...validateProfile(businessType,{invoiceCountry:country}), onboardingDone:false, description: String(description || '').trim().slice(0, 2000) }).onConflictDoNothing();
   }
 }
 async function limitAttempts(request, context) {
@@ -217,7 +217,7 @@ const handleRequest = async (request, context, metrics) => {
       const email = cleanEmail(identityUser?.email);
       if (!email) return fail('No se pudo restablecer la contraseña', 400);
       const isOwnerAdmin = email === adminEmail || email === PLATFORM_OWNER;
-      await ensureAccount(email, isOwnerAdmin ? 'Acontec' : identityUser.userMetadata?.company,'','',identityUser.userMetadata?.businessType||'comercio');
+      await ensureAccount(email, isOwnerAdmin ? 'Acontec' : identityUser.userMetadata?.company,'','',identityUser.userMetadata?.businessType||'comercio',identityUser.userMetadata?.country||'Nicaragua');
       if (isOwnerAdmin) {
         await db.update(users).set({ platformAdmin: true }).where(eq(users.email, email));
         await ensureAcontecCompany(email);
@@ -230,7 +230,7 @@ const handleRequest = async (request, context, metrics) => {
       const email = cleanEmail(identityUser.email);
       if (!email || !identityUser.confirmedAt) return fail('No se pudo confirmar la cuenta', 403);
       const isOwnerAdmin = email === adminEmail || email === PLATFORM_OWNER;
-      await ensureAccount(email, isOwnerAdmin ? 'Acontec' : identityUser.userMetadata?.company, identityUser.userMetadata?.description,'',identityUser.userMetadata?.businessType||'comercio');
+      await ensureAccount(email, isOwnerAdmin ? 'Acontec' : identityUser.userMetadata?.company, identityUser.userMetadata?.description,'',identityUser.userMetadata?.businessType||'comercio',identityUser.userMetadata?.country||'Nicaragua');
       if (isOwnerAdmin) {
         await db.update(users).set({ platformAdmin: true }).where(eq(users.email, email));
         await ensureAcontecCompany(email);
@@ -260,11 +260,11 @@ const handleRequest = async (request, context, metrics) => {
         const isOwnerAdmin = email === adminEmail || email === PLATFORM_OWNER;
         let identityUser;
         try {
-          identityUser = await authenticateIdentity(() => signup(email, password, { company: companyName(body.company), description: String(body.description || '').trim().slice(0, 2000),businessType:validateProfile(body.businessType||'comercio').businessType }));
+          identityUser = await authenticateIdentity(() => signup(email, password, { company: companyName(body.company), description: String(body.description || '').trim().slice(0, 2000),country:globalThis.AcontecInvoiceDesign.country(body.country||'Nicaragua'),businessType:validateProfile(body.businessType||'comercio').businessType }));
         } catch (error) {
           return fail(error?.message || 'No se pudo crear la cuenta', error?.status || 400);
         }
-        await ensureAccount(email, isOwnerAdmin ? 'Acontec' : body.company, body.description, '', body.businessType||'comercio');
+        await ensureAccount(email, isOwnerAdmin ? 'Acontec' : body.company, body.description, '', body.businessType||'comercio',body.country||'Nicaragua');
         if (isOwnerAdmin) {
           await db.update(users).set({ platformAdmin: true }).where(eq(users.email, email));
           await ensureAcontecCompany(email);
@@ -300,7 +300,7 @@ const handleRequest = async (request, context, metrics) => {
           return fail(error?.message || 'Error al iniciar sesión', error?.status || 400);
         }
         if (!identityUser.confirmedAt) return fail('Confirma tu correo antes de ingresar', 403);
-        await ensureAccount(email, identityUser.userMetadata?.company,'','',identityUser.userMetadata?.businessType||'comercio');
+        await ensureAccount(email, identityUser.userMetadata?.company,'','',identityUser.userMetadata?.businessType||'comercio',identityUser.userMetadata?.country||'Nicaragua');
         return await issueSession(email, false, request);
       }
       if (!googleClientId) return fail('Falta autorizar este sitio en Google. Consulta la guía de activación de Google.', 503);
@@ -312,7 +312,7 @@ const handleRequest = async (request, context, metrics) => {
       if (!googleUser?.email_verified || !googleUser.email) return fail('Google no confirmó tu correo', 401);
       const googleEmail = cleanEmail(googleUser.email);
       const isOwnerAdmin = googleEmail === adminEmail || googleEmail === PLATFORM_OWNER;
-      await ensureAccount(googleEmail, isOwnerAdmin ? 'Acontec' : body.company, '', googleUser.name,body.businessType||'comercio');
+      await ensureAccount(googleEmail, isOwnerAdmin ? 'Acontec' : body.company, '', googleUser.name,body.businessType||'comercio',body.country||'Nicaragua');
       if (isOwnerAdmin) {
         await db.update(users).set({ platformAdmin: true }).where(eq(users.email, googleEmail));
         await ensureAcontecCompany(googleEmail);
@@ -569,7 +569,7 @@ const handleRequest = async (request, context, metrics) => {
       const companyLimit=billing.plan?.limits?.companies;
       if(companyLimit!=null&&owned.filter(c=>c.owner).length>=companyLimit)return fail('Se alcanzó el límite de empresas del plan.',403);
       if (!companyName(body.name)) return fail('Escribe un nombre de empresa');
-      const company = await db.transaction(client => createOwnedCompany(client,session,{name:body.name,description:body.description,businessType:body.businessType||'comercio',companyLimit}));
+      const company = await db.transaction(client => createOwnedCompany(client,session,{name:body.name,description:body.description,businessType:body.businessType||'comercio',country:body.country||'Nicaragua',companyLimit}));
       return json({ id: company.id, companies: await accessibleCompanies(session) });
     }
     if (path === 'company' && method === 'DELETE') {
@@ -645,6 +645,10 @@ const handleRequest = async (request, context, metrics) => {
           }
           const visible=projectData(current.data,currentAccess);
           if(!equal(incoming?.businessRecords||[],visible?.businessRecords||[]))accessError('Usa los módulos de negocio para modificar sus registros.',403);
+          incoming.cfg ||= {};
+          if(current.data?.cfg?.invoiceCountry)incoming.cfg.invoiceCountry=current.data.cfg.invoiceCountry;
+          else if(!current.data)incoming.cfg.invoiceCountry=current.businessCustomization?.invoiceCountry||'Nicaragua';
+          else delete incoming.cfg.invoiceCountry;
           const data = mergeData(current.data, incoming, currentAccess);
           if(current.data?.businessRecords)data.businessRecords=structuredClone(current.data.businessRecords);
           guardLedgerMutation(current.data, data, currentAccess);

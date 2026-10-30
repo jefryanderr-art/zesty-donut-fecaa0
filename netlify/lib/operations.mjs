@@ -61,6 +61,7 @@ const invoiceDesign = globalThis.AcontecInvoiceDesign;
 function ensurePrintVersions(data, company, session) {
   if (data.cfg.print?.versions?.length) return;
   const settings = invoiceDesign.settings(data.cfg, company.name);
+  if (!data.cfg.print?.country && company.businessCustomization?.invoiceCountry) Object.assign(settings,invoiceDesign.switchCountry(settings,company.businessCustomization.invoiceCountry));
   data.cfg.print = { ...data.cfg.print, ...settings, versions: [{ id: randomUUID(), at: '0001-01-01T00:00:00.000Z', recordedAt: new Date().toISOString(), actor: actorName(session), legacy: true, settings }], legacyInvoiceIds: (company.data?.entries || []).filter(e => ['venta','nota-credito'].includes(e.type)).map(e => e.id) };
 }
 function savePrintVersion(data, settings, session) {
@@ -90,6 +91,24 @@ function validatePrintSettings(body, current) {
   requireValue(!result.email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(result.email),'Correo inválido.');
   requireValue(!result.website || /^https?:\/\/[^\s]+$/i.test(result.website),'Usa un sitio web con https:// o http://.');
   requireValue(!result.printerBooks || /^[1-9][0-9]{0,5}$/.test(result.printerBooks),'Cantidad de libretas inválida.');
+  if(Object.hasOwn(body,'country')){try{result.country=invoiceDesign.country(body.country)}catch(error){accessError(error.message,400)}}
+  const changed=result.country!==current.country;
+  if(changed)requireValue(body.confirmCountryChange===true,'Confirma el cambio de país: los datos fiscales anteriores se conservan en el historial de versiones.');
+  if(Object.hasOwn(body,'fiscalProfile')){
+    const source=body.fiscalProfile;
+    requireValue(source&&typeof source==='object'&&!Array.isArray(source),'Perfil fiscal inválido.');
+    const profile=invoiceDesign.profile(result.country);
+    for(const [key,[label,max]] of Object.entries(invoiceDesign.fiscalFields)){
+      requireValue(typeof source[key]==='string'&&source[key].length<=max&&!/[\u0000-\u001f]/.test(source[key]),'Revisa '+label+'.');profile[key]=source[key].trim();
+    }
+    requireValue(Number.isFinite(source.taxRate)&&source.taxRate>=0&&source.taxRate<=100,'Tasa inválida.');profile.taxRate=source.taxRate;
+    requireValue(typeof source.electronic==='boolean','Indica si exige facturación electrónica.');profile.electronic=source.electronic;
+    requireValue(Array.isArray(source.requiredFields)&&source.requiredFields.length<=10&&source.requiredFields.every(key=>['legalName','ruc','address','dgiNumber','dgiDate'].includes(key)),'Campos requeridos inválidos.');profile.requiredFields=[...new Set(source.requiredFields)];
+    if(result.country==='Nicaragua')Object.assign(profile,invoiceDesign.profiles.NI,{taxRate:source.taxRate,electronic:source.electronic});
+    result.fiscalProfile=profile;
+  }else if(changed)accessError('Configura el perfil fiscal del nuevo país.',400);
+  const profile=invoiceDesign.fiscal(result);
+  requireValue(profile.authority&&profile.taxIdLabel&&profile.taxName&&profile.authorizationLabel,'Completa las etiquetas fiscales.');
   return result;
 }
 function appendEntry(data, session, record) {
@@ -447,6 +466,8 @@ export async function runOperation(companyId, session, body) {
       } else if (operation === 'printSettings') {
         requirePermission(access,'diseno_factura');
         const current = invoiceDesign.settings(data.cfg, company.name), next = validatePrintSettings(body,current);
+        if ((!equal(next.fiscalProfile,current.fiscalProfile)||next.country!==current.country) && !access.owner) accessError('Solo el dueño cambia el país y el perfil fiscal.');
+        if (next.country!==current.country) for(const key of ['ruc','dgiNumber','dgiDate','printerRuc','printerOrder','printerDate','printerBooks','printerRange']) requireValue(!next[key],'Guarda el cambio de país con los datos fiscales anteriores vacíos.');
         if (next.showAcontec !== current.showAcontec) {
           const [admin] = await client.select({platformAdmin:users.platformAdmin}).from(users).where(eq(users.email,session.email));
           if (session.member || access.member || admin?.platformAdmin !== true) accessError('Solo el administrador de la plataforma cambia el pie Sistema Acontec.');

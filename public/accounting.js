@@ -182,7 +182,7 @@ V.kardex=()=>{
 };
 document.addEventListener('change',event=>{
   if(event.target.id==='kardex-product'){KARDEX_PRODUCT=event.target.value;view()}
-  if(event.target.name==='p'){const row=event.target.closest('.item'),rate=+event.target.selectedOptions[0]?.dataset.vat||0;row.querySelector('[name=taxed]').checked=rate>0;row.querySelector('[name=vatRate]').value=rate||S.cfg.fiscal.vatRate;updateInvoiceTotals()}
+  if(event.target.name==='p'){const row=event.target.closest('.item'),rate=+event.target.selectedOptions[0]?.dataset.vat||0;row.querySelector('[name=taxed]').checked=rate>0;row.querySelector('[name=vatRate]').value=rate||(S.cfg.print?.fiscalProfile?.taxRate??S.cfg.fiscal?.vatRate??AcontecInvoiceDesign.profile(S.cfg.invoiceCountry).taxRate);updateInvoiceTotals()}
 });
 document.addEventListener('input',event=>{if(event.target.closest('.item'))updateInvoiceTotals()});
 
