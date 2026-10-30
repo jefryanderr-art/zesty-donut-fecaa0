@@ -425,6 +425,11 @@ body.invoice-editor-open{overflow:hidden}
 .sale-actions{display:flex;align-items:center;flex-wrap:wrap;gap:0 4px;white-space:normal}
 .sale-actions .lk{font-size:13px;padding:8px 6px;min-height:44px;min-width:44px;border:0;background:none;color:var(--g);font-weight:500;text-decoration:underline;text-underline-offset:3px}
 .sale-actions .lk+.lk::before{content:'·';display:inline-block;margin-right:10px;color:var(--mut);text-decoration:none}
+@media screen{
+ .sale-table-wrap{max-width:100%;overflow-x:auto}
+ .sale-table .sale-actions{display:inline-flex;flex-wrap:nowrap;white-space:nowrap}
+ .sale-table .sale-actions .lk{flex:0 0 auto}
+}
 .sale-actions-toggle{display:none}.sale-confirmation{padding:18px;border-left:4px solid var(--g);margin:16px 0}.sale-confirmation strong{display:block;margin-bottom:8px}
 .md:has(#pos-items) input,.md:has(#pos-items) select,.md:has(#return-summary) input,.md:has(#return-summary) select,.md:has(.invoice-series) input,.md:has(.invoice-series) select{min-height:44px}
 .md:has(#pos-items) button,.md:has(#return-summary) button,.md:has(.invoice-series) button,.md:has(#pos-items) summary{min-height:44px;min-width:44px}
@@ -432,12 +437,6 @@ body.invoice-editor-open{overflow:hidden}
 .md:has(#pos-items) label.ck,.md:has(#return-summary) label.ck,.md:has(.invoice-series) label.ck{min-height:44px;align-items:center}
 [hidden]{display:none!important}
 @media(max-width:760px){
- .sale-table-card{background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important;overflow:visible!important}
- .sale-table-wrap{overflow:visible!important}.sale-table{display:block;width:100%;min-width:0!important}.sale-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
- .sale-table tbody{display:grid;grid-template-columns:1fr;gap:14px}.sale-table tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;padding:18px;border:1px solid var(--border,#c9d2c9);border-radius:12px;background:var(--card,var(--bg));min-width:0}
- .sale-table td{display:block;min-width:0;padding:0;border:0;white-space:normal;overflow-wrap:anywhere;text-align:left}.sale-table td::before{content:attr(data-label);display:block;font-size:11px;color:var(--mut);margin-bottom:5px}.sale-table td:last-child{grid-column:1/-1;border-top:1px solid var(--border,#c9d2c9);padding-top:8px}.sale-table td:last-child::before{display:none}
- .sale-actions-toggle{display:inline-flex;align-items:center;min-width:44px;min-height:44px;gap:12px}.sale-actions-toggle::after{content:'⌄'}.sale-actions-toggle[aria-expanded=true]::after{content:'⌃'}
- .sale-action-menu:not(.is-open) .sale-actions{display:none}.sale-action-menu .sale-actions{display:flex;gap:0 8px}.sale-action-menu .sale-actions .lk{flex:0 0 auto}.sale-action-menu .sale-actions .lk::before{display:none}
  .invoice-series-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.invoice-series-row label:nth-child(2){grid-column:2;grid-row:1}.invoice-series-row button{justify-self:start}.pos-item{gap:10px}.pos-item input,.pos-item select{min-width:0}
 }
 @media(max-width:380px){#return-refund .invoice-pills label{font-size:12px;padding:8px 4px;gap:4px}.pos-payments{grid-template-columns:1fr}.invoice-series-row{gap:8px}}
