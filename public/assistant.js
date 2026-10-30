@@ -87,7 +87,7 @@
     "1. Abre Facturación y localiza el documento emitido. Las facturas no se editan directamente: se corrigen con una nota de crédito autorizada.\n2. El perfil supervisor autorizado utiliza Nota de crédito. Si la acción no aparece, consulta al dueño; el asistente no concede esa autorización.\n3. En Nota de crédito / devolución revisa Fecha, Motivo y cantidades pendientes por producto. Puedes devolver cantidades parciales o las pendientes completas.\n4. Revisa Devolución del importe ya pagado y Turno de devolución (si hay reembolso). Pulsa Autorizar nota de crédito después de revisar.\n5. La nota conserva la factura y revierte los conceptos de las cantidades devueltas. Revisa el estado Anulada / devuelta o Devolución parcial; no registres otro cobro para simular la corrección."
   ]
 ];
-const assistantQuick=()=>{const profile=globalThis.AcontecProfiles?.get(CO?.businessType);return profile&&profile.id!=='comercio'?[...profile.quickQuestions.map(([module,label,answer])=>[module,label,answer]),...quick]:quick;};
+const assistantQuick=()=>{const profile=globalThis.AcontecProfiles?.get(CO?.businessType);return profile&&profile.id!=='comercio'?[...profile.quickQuestions.map(([module,label,answer])=>[module,label,CO?.billingPlan?.id==='facturacion'?answer.replace(' Usa Más módulos para consultar otras herramientas.',''):answer]),...quick]:quick;};
   const ready=()=>!!U&&!!CO&&R==='panel'&&!HOME&&CO.assistantAvailable&&!CO.support;
   const context=()=>[U?.email,CO?.id,CO?.memberId,CO?.branchId].join(':');
   function reset(){request?.abort();request=null;messages=[];opened=false;pending=false;generation++;document.getElementById('assistant-sheet')?.remove()}

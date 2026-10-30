@@ -141,3 +141,16 @@ No se ejecutaron pruebas, servidor ni compilaciones locales. Se revisaron estát
 16. Comprobar asistente desactivado/activado según sus controles existentes, preguntas rápidas por perfil sin consumo, cuotas intactas y ausencia de datos operativos en su solicitud.
 
 Para revertir la presentación, seleccionar Comercio y personalización automática. No eliminar la tabla, documentos o migraciones. Los datos de las capacidades siguen accesibles desde Más módulos conforme a permisos y plan.
+
+
+## Visibilidad según el plan y el perfil
+
+Básico, Estándar y Pro conservan en el menú todas las rutas base autorizadas, incluida Contabilidad y Estados financieros, para cualquier perfil. Se reutiliza el menú existente y `routeAllowed`; el perfil agrega sus capacidades y etiquetas sin conceder permisos. La personalización Oculto/Visible sigue prevaleciendo sobre las recomendaciones, sin habilitar módulos bloqueados. Básico mantiene sus bloqueos de Personal, Control del personal, Decisiones y Sucursales; Estándar y Pro conservan sus restricciones actuales. Más módulos permanece como respaldo en esos planes. Comercio conserva su presentación habitual.
+
+El Panel de los demás perfiles muestra todas sus capacidades autorizadas, sin el límite de cuatro, y un acceso a la primera ruta contable permitida. La cuadrícula tiene dos columnas en teléfono y se adapta en laptop; conserva el espacio inferior existente para la barra `.bnav`.
+
+Facturación, incluido el modo de prueba interna con ese plan efectivo, no muestra ni permite la ruta Más módulos; la navegación rechaza su apertura y usa la primera ruta permitida. No agrega la sección Mi negocio ni tarjetas de capacidades del perfil. Documentos de venta y Comprobantes adaptados conservan accesos en el menú y el Panel, sujetos a los permisos actuales. El selector de perfil, las etiquetas y el arranque opcional siguen disponibles. Las recomendaciones rápidas y la guía del asistente reflejan la disponibilidad de Más módulos según el plan.
+
+Las capacidades A–P, excepto Documentos de venta y Comprobantes adaptados, se agregaron a los bloqueos iniciales de Facturación. La comprobación del servidor también rechaza esas capacidades cuando recibe un plan Facturación guardado antes del cambio; no requiere modificar registros de planes, precios, límites, suscripciones ni documentos. La interfaz identifica el plan mediante `CO.billingPlan?.id`, respetando el plan efectivo que entrega el servidor durante la prueba gratuita o interna.
+
+Se añadieron pruebas para restaurante con Básico/Estándar/Pro, todos los perfiles con Facturación, planes guardados anteriores, prueba interna, personalización, redirección y comercio. Solo se revisó sintaxis con `node --check` y se inspeccionó el código; no se ejecutaron pruebas, compilaciones ni servidores locales. Quedan pendientes en la plataforma la ejecución de las pruebas y las comprobaciones funcionales de menú, Panel, URL/hash y API directa, además de teléfono/laptop, tema oscuro, etiquetas y ausencia de superposición de `.bnav`. No se cambiaron datos ni migraciones.
