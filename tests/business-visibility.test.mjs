@@ -68,3 +68,53 @@ test('todas las tarjetas autorizadas se muestran sin límite de cuatro y escapan
  for(const module of catalog.all)assert.ok(rendered.includes(`data-r="${module}"`));
  assert.ok(rendered.includes('&lt;nombre>'));assert.ok(!rendered.includes('<nombre>'));
 });
+
+test('Más módulos ofrece acciones independientes solo al dueño con ajustes y sin bloqueos',()=>{
+ const ui=browser('restaurante',DEFAULT_PLANS[3],{hidden:['diario']});
+ ui.context.main=html=>ui.html.push(html);ui.context.pageHead=()=>'';ui.context.notice=text=>text;
+ ui.run('V.businessMore()');
+ let rendered=ui.html.pop();
+ assert.match(rendered,/data-a="businessMenu" data-r="diario">Agregar a mi menú/);
+ assert.match(rendered,/data-a="businessMenu" data-r="mayor">Quitar de mi menú/);
+ assert.match(rendered,/data-a="nav" data-r="diario"/);
+ assert.ok(!rendered.includes('<button class="card business-module"'));
+ ui.run('CO.owner=false;V.businessMore()');assert.ok(!ui.html.pop().includes('data-a="businessMenu"'));
+ ui.run('CO.owner=true;CO.readOnlyLimit=true;V.businessMore()');assert.ok(!ui.html.pop().includes('data-a="businessMenu"'));
+ const limited=browser('restaurante',DEFAULT_PLANS[1]);
+ limited.context.main=html=>limited.html.push(html);limited.context.pageHead=()=>'';limited.context.notice=text=>text;
+ limited.run("MENU.push(['Gestión',[['personal','','Personal']]]);V.businessMore()");
+ assert.ok(!limited.html.pop().includes('data-a="businessMenu" data-r="personal"'));
+});
+
+test('agregar y quitar reutiliza guardado con revisión, conserva preferencias y no cambia accesos',async()=>{
+ const custom={hidden:['diario'],shown:['agenda'],labels:{customer:'Paciente'},timeZone:'America/Managua'};
+ const ui=browser('restaurante',DEFAULT_PLANS[3],structuredClone(custom));
+ const requests=[],messages=[];let chromeCalls=0;
+ Object.assign(ui.context,{REV:7,S:{},flush:async()=>true,rememberCloud(){},chrome(){chromeCalls++},api:async(path,method,body)=>{
+  requests.push({path,method,body});
+  if(method==='POST')return {revision:8};
+  return {company:{...ui.context.CO,businessCustomization:structuredClone(requests.at(-2).body.businessCustomization)},data:{},revision:8};
+ }});
+ ui.context.CO.id='company';ui.context.V.businessMore=message=>messages.push(message);
+ const button={disabled:false};ui.context.button=button;
+ await ui.run("ACT.businessMenu({r:'diario'},button)");
+ assert.equal(requests[0].path,'business-profile?c=company');assert.equal(requests[0].body.revision,7);
+ assert.equal(requests[0].body.businessType,'restaurante');
+ assert.deepEqual(JSON.parse(JSON.stringify(requests[0].body.businessCustomization)),{...custom,hidden:[],shown:['agenda','diario']});
+ assert.equal(ui.run("businessVisible('diario')"),true);assert.equal(button.disabled,false);
+ await ui.run("ACT.businessMenu({r:'diario'},button)");
+ assert.equal(requests[2].body.revision,8);
+ assert.equal(ui.run("businessVisible('diario')"),false);assert.equal(ui.run("routeAllowed('diario')"),true);
+ assert.deepEqual(messages,['Agregado a tu menú','Quitado de tu menú']);assert.equal(chromeCalls,2);
+ const saved=JSON.stringify(ui.context.CO);const previousRevision=ui.context.REV;
+ ui.context.api=async()=>{throw new Error('Revisión desactualizada')};
+ await assert.rejects(ui.run("ACT.businessMenu({r:'diario'},button)"),/Revisión desactualizada/);
+ assert.equal(JSON.stringify(ui.context.CO),saved);assert.equal(ui.context.REV,previousRevision);
+ assert.equal(button.disabled,false);assert.equal(chromeCalls,2);assert.equal(messages.length,2);
+ ui.context.flush=async()=>false;
+ await assert.rejects(ui.run("ACT.businessMenu({r:'diario'},button)"),/Guarda los cambios pendientes/);
+ assert.equal(JSON.stringify(ui.context.CO),saved);
+ ui.run('CO.owner=false');
+ await ui.run("ACT.businessMenu({r:'diario'},button)");
+ assert.equal(button.disabled,false);
+});

@@ -14,7 +14,7 @@ routeAllowed=function(route){if(route==='businessMore')return !!CO&&!businessInv
 const businessAllowedAction=actionAllowed;
 actionAllowed=function(action,data={}){
  if(action==='businessClear')return !!CO;
- if(action==='businessProfile'||action==='businessOnboard')return !!CO?.owner&&permission('ajustes',true);
+ if(action==='businessProfile'||action==='businessOnboard'||action==='businessMenu')return !!CO?.owner&&permission('ajustes',true);
  if(action==='businessDetails'||action==='businessPrint')return !!businessRecord(data.id)&&permission(businessRecord(data.id).module)&&(action!=='businessPrint'||permission('comprobantes'));
  if(action==='businessService')return permission('inventario',true);
  if(action.startsWith('business'))return permission(data.module||businessRecord(data.id)?.module||R,true);
@@ -37,16 +37,46 @@ chrome=function(){
  const active=businessInvoiceOnly()?['documentos_venta','comprobantes'].filter(id=>routeAllowed(id)):BUSINESS.all.filter(id=>businessVisible(id)&&routeAllowed(id));
  if(active.length)drawer.querySelector('.bot')?.insertAdjacentHTML('beforebegin',(businessInvoiceOnly()?'':'<h4>Mi negocio</h4>')+active.map(id=>`<button data-a="nav" data-r="${esc(id)}" class="${R===id?'on':''}"><span>◫</span>${esc(businessModuleName(id))}</button>`).join(''));
  if(routeAllowed('businessMore'))drawer.querySelector('.bot')?.insertAdjacentHTML('beforebegin','<button data-a="nav" data-r="businessMore" class="'+(R==='businessMore'?'on':'')+'"><span>＋</span>Más módulos</button>');
+ for(const button of $('#bnav')?.querySelectorAll('[data-r]')||[])if(!businessVisible(button.dataset.r))button.remove();
  if(businessProfile().id!=='comercio'){
-  for(const button of $('#bnav')?.querySelectorAll('[data-r]')||[])if(!businessVisible(button.dataset.r))button.remove();
   const labels=businessLabels(),names={clientes:labels.customer,productos:labels.product};
   for(const button of document.querySelectorAll('#drawer [data-r],#bnav [data-r]')){const label=names[button.dataset.r];if(label){const icon=button.querySelector('span');button.replaceChildren(...(icon?[icon]:[]),document.createTextNode(label.charAt(0).toUpperCase()+label.slice(1)+(button.dataset.r==='productos'?' · inventario':'')));}}
  }
 };
-V.businessMore=()=>{
+V.businessMore=(message='')=>{
  if(!routeAllowed('businessMore')){R=firstAllowedRoute();view();return}
- const existing=MENU.flatMap(([,list])=>list).filter(([route])=>routeAllowed(route));
- main(pageHead('Más módulos')+notice('El perfil organiza el menú. Ocultar una herramienta no bloquea el acceso ni elimina información. Los permisos y el plan siempre se aplican.')+`<div class="business-modules">${[...existing,...BUSINESS.all.filter(id=>routeAllowed(id)).map(id=>[id,'◫',businessModuleName(id)])].map(([route,icon,name])=>`<button class="card business-module" data-a="nav" data-r="${esc(route)}"><b>${esc(name)}</b><small>${esc(BUSINESS.capabilities[route]?.flow||'Abrir módulo existente')}</small></button>`).join('')}</div>`+(CO.owner?'<button class="btn ghost" data-a="businessProfile">Personalizar mi sistema</button>':''));
+ const existing=MENU.flatMap(([,list])=>list).filter(([route])=>routeAllowed(route)),canCustomize=CO.owner&&permission('ajustes',true);
+ main(pageHead('Más módulos')+notice('El perfil organiza el menú. Ocultar una herramienta no bloquea el acceso ni elimina información. Los permisos y el plan siempre se aplican.')+(message?notice(esc(message)):'')+`<div class="business-modules">${[...existing,...BUSINESS.all.filter(id=>routeAllowed(id)).map(id=>[id,'◫',businessModuleName(id)])].map(([route,icon,name])=>`<div class="card business-module"><button class="btn ghost" style="min-height:44px;white-space:normal;text-align:left" data-a="nav" data-r="${esc(route)}"><b>${esc(name)}</b></button><small>${esc(BUSINESS.capabilities[route]?.flow||'Abrir módulo existente')}</small>${canCustomize&&!businessFixedMenuRoutes.includes(route)?`<button class="btn ghost" style="min-height:44px;white-space:normal" data-a="businessMenu" data-r="${esc(route)}">${businessVisible(route)?'Quitar de mi menú':'Agregar a mi menú'}</button>`:''}</div>`).join('')}</div>`+(canCustomize?'<button class="btn ghost" data-a="businessProfile">Personalizar mi sistema</button>':''));
+};
+// Igual que en Personalizar mi sistema: los accesos fijos no se ocultan.
+const businessFixedMenuRoutes=['panel','ajustes','accesibilidad','auditoria'];
+let businessProfileSaving=false;
+async function businessSaveProfile(businessType,businessCustomization){
+ if(businessProfileSaving)throw new Error('Espera a que termine el guardado.');
+ businessProfileSaving=true;
+ const companyId=CO.id;
+ try{
+  if(!await flush())throw new Error('Guarda los cambios pendientes.');
+  if(CO?.id!==companyId)return false;
+  await api('business-profile?c='+companyId,'POST',{revision:REV,businessType,businessCustomization});
+  const fresh=await api('data?c='+companyId);
+  if(CO?.id!==companyId)return false;
+  CO=fresh.company;S=fresh.data;REV=fresh.revision;rememberCloud();
+  return true;
+ }finally{businessProfileSaving=false}
+}
+ACT.businessMenu=async({r:route},button)=>{
+ if(!CO?.owner||!permission('ajustes',true)||businessInvoiceOnly()||!routeAllowed(route)||businessFixedMenuRoutes.includes(route)||![...MENU.flatMap(([,list])=>list).map(([id])=>id),...BUSINESS.all].includes(route))return;
+ const visible=businessVisible(route),current=CO.businessCustomization||{};
+ const businessCustomization={...current,shown:(current.shown||[]).filter(id=>id!==route),hidden:(current.hidden||[]).filter(id=>id!==route)};
+ businessCustomization[visible?'hidden':'shown'].push(route);
+ if(button.disabled)return;
+ button.disabled=true;
+ try{
+  if(await businessSaveProfile(CO.businessType||'comercio',businessCustomization)){
+   chrome();if(R==='businessMore')V.businessMore(visible?'Quitado de tu menú':'Agregado a tu menú');
+  }
+ }finally{button.disabled=false}
 };
 const businessAuth=authView;
 authView=function(){businessAuth();if(!U)$('#af .reg')?.insertAdjacentHTML('beforeend',businessTypeField())};
@@ -55,9 +85,8 @@ V.ajustes=async function(){const id=CO.id;await businessSettings();if(R!=='ajust
 ACT.businessProfile=()=>{
  const current=CO.businessCustomization||{},routes=[...new Map([...MENU.flatMap(([,list])=>list).map(([id,,name])=>[id,name]),...Object.entries(BUSINESS.moduleLabels)]).entries()];
  const form=modal('Personalizar mi sistema',businessTypeField(CO.businessType||'comercio')+bField('businessTimeZone','Zona horaria IANA para tarifas',current.timeZone||'America/Managua','text','required maxlength="80"')+notice('Cambiar de rubro solo cambia la organización y las etiquetas. Ningún registro ni operación se convierte o elimina.')+'<p id="business-description"></p><h4>Módulos del menú</h4><p>Automático sigue el perfil. '+(businessInvoiceOnly()?'El plan y los permisos determinan los accesos disponibles.':'Oculto queda disponible en Más módulos según tus permisos y plan.')+'</p><div class="business-module-settings">'+routes.filter(([id])=>!['panel','ajustes','accesibilidad','auditoria'].includes(id)).map(([id,name])=>selectField('module_'+id,name,option('auto','Automático',!current.shown?.includes(id)&&!current.hidden?.includes(id))+option('show','Visible',current.shown?.includes(id))+option('hide','Oculto',current.hidden?.includes(id)))).join('')+'</div><h4>Etiquetas personalizadas (opcionales)</h4>'+['customer','product','document'].map((key,i)=>field('label_'+key,['Cliente / paciente / alumno','Producto / servicio','Factura / cuenta / recibo'][i],current.labels?.[key]||'','text','maxlength="40"')).join(''),async f=>{
-  if(!await flush())return 'Guarda los cambios pendientes.';
   const businessCustomization={shown:[],hidden:[],labels:{},timeZone:v(f,'businessTimeZone').trim()};for(const [id]of routes){const value=f.elements['module_'+id]?.value;if(value==='show')businessCustomization.shown.push(id);if(value==='hide')businessCustomization.hidden.push(id)}for(const key of ['customer','product','document'])if(v(f,'label_'+key).trim())businessCustomization.labels[key]=v(f,'label_'+key).trim();
-  const result=await api('business-profile?c='+CO.id,'POST',{revision:REV,businessType:v(f,'businessType'),businessCustomization});REV=result.revision;const fresh=await api('data?c='+CO.id);CO=fresh.company;S=fresh.data;REV=fresh.revision;rememberCloud();shell();view();
+  if(await businessSaveProfile(v(f,'businessType'),businessCustomization)){shell();view()}
  });
  const update=()=>{const p=BUSINESS.get(form.elements.businessType.value);form.querySelector('#business-description').textContent=p.description;};form.elements.businessType.addEventListener('change',update);update();
 };
