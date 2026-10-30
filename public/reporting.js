@@ -1,6 +1,7 @@
 'use strict';
 MENU.push(['Informes analíticos',[['compararsucursales','▥','Comparar sucursales'],['consolidado','▦','Consolidar empresas'],['dimensiones','◫','Centros de costo y proyectos']]]);Object.assign(ROUTE_MODULE,{compararsucursales:'finanzas',consolidado:'finanzas',dimensiones:'finanzas'});
-const analyticModal=modal;modal=function(...args){const form=analyticModal(...args);if(form.querySelector('#pos-items,.items,.lines')||form.elements.date||form.elements.dt){
+const dimensionsEnabled=()=>S.cfg.pos?.useDimensions??S.entries.some(e=>e.costCenter||e.project);
+const analyticModal=modal;modal=function(...args){const form=analyticModal(...args);if((form.querySelector('#pos-items,.items,.lines')||form.elements.date||form.elements.dt)&&(!['Crear factura','Anular factura'].includes(args[0])||dimensionsEnabled())){
  form.querySelector('.mb').insertAdjacentHTML('beforeend','<details class="analytic-fields"><summary>Centro de costo y proyecto (opcional)</summary>'+field('dimensionCenter','Centro de costo','','text','maxlength="100"')+field('dimensionProject','Proyecto','','text','maxlength="100"')+'</details>');
  const submit=form.onsubmit;form.onsubmit=async event=>{const companyId=CO.id,ids=new Set(S.entries.map(e=>e.id)),center=form.elements.dimensionCenter.value.trim(),project=form.elements.dimensionProject.value.trim();await submit(event);if(CO.id!==companyId)return;let changed=false;for(const entry of S.entries)if(!ids.has(entry.id)&&!entry.managed){if(center)entry.costCenter=center;if(project)entry.project=project;changed=changed||!!center||!!project}if(changed)save()};
  }return form};

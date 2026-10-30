@@ -101,3 +101,22 @@ export function businessContractLateItems(record,entries,products,day){
  for(const billed of record.billed||[]){const balanceCents=entries.filter(e=>e.id===billed.entryId||e.invoiceId===billed.entryId).flatMap(e=>e.lines||[]).filter(l=>l.a==='1201').reduce((s,l)=>s+moneyCents(l.d)-moneyCents(l.c),0),from=billed.lateThrough||billed.due;if(balanceCents>0&&day>from){const days=Math.floor((Date.parse(day)-Date.parse(from))/86400000);cents+=moneyCents(businessLateCharge(balanceCents/100,record.lateRate,days));updates.push(billed)}}
  if(!Number.isSafeInteger(cents))throw new AccountingValidationError('La mora supera el rango seguro.');return {items:cents?[{p:p.id,q:1,u:cents/100,vatRate:p.vatRate||0}]:[],updates};
 }
+
+export function creditReturnSummary(original, previousNotes, items, finalReturn, entries) {
+  const round = value => Math.round((value + Number.EPSILON) * 100) / 100;
+  let subtotal = round(items.reduce((sum, item) => sum + round(item.q * item.u), 0)), vat = round(items.reduce((sum, item) => sum + round(round(item.q * item.u) * (item.vatRate || 0) / 100), 0));
+
+  if (finalReturn) {
+    subtotal = round((original.subtotal ?? original.total - (original.vat || 0)) - previousNotes.reduce((sum, note) => sum + note.subtotal, 0));
+    vat = round((original.vat || 0) - previousNotes.reduce((sum, note) => sum + note.vat, 0));
+  }
+  const total = round(subtotal + vat);
+  const debt = round(entries.filter(entry => entry.id === original.id || entry.invoiceId === original.id).reduce((sum, entry) => sum + (entry.lines || []).filter(line => line.a === '1201').reduce((value, line) => value + line.d - line.c, 0), 0));
+  const debtReduction = Math.min(Math.max(0, debt), total), refund = round(total - debtReduction);
+  return {subtotal, vat, total, debtReduction, refund};
+}
+
+export function customerCreditBalance(customerId, entries){
+ const invoices=new Set(entries.filter(entry=>entry.customerId===customerId).map(entry=>entry.id));
+ return entries.filter(entry=>invoices.has(entry.id)||invoices.has(entry.invoiceId)).reduce((sum,entry)=>sum+(entry.lines||[]).filter(line=>line.a==='1201').reduce((total,line)=>total+line.d-line.c,0),0);
+}

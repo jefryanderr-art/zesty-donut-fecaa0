@@ -5,10 +5,10 @@ import { consumeDiscount } from './discounts.mjs';
 import { tradeOperation, TRADE_OPS } from './trade.mjs';
 import { countryTemplate } from './country.mjs';
 import { importRecords } from './importer.mjs';
-import { invoiceTotals, payrollTotals, allocateReturnItems } from './accounting-engine.mjs';
+import { invoiceTotals, payrollTotals, allocateReturnItems, creditReturnSummary, customerCreditBalance } from './accounting-engine.mjs';
 import { transferOperation, CROSS_BRANCH_OPS } from './transfers.mjs';
 import { advancedOperation, handlesAdvanced } from './advanced.mjs';
-import { companyBranches, recordBranch } from './branches.mjs';
+import { companyBranches, recordBranch, scopeBranch } from './branches.mjs';
 import { retainedCompanyData } from './accounting-storage.mjs';
 import { randomUUID, createHash } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
@@ -332,14 +332,20 @@ async function makeSale(data, access, session, body, client, companyId, trustedS
   for (const [id, quantity] of quantities) requireValue(data.products.find(product => product.id === id).stock >= quantity, 'Existencia insuficiente.');
   const {subtotal,vat,total}=invoiceTotals(items);
   requireValue(total > 0 && cents(payments.reduce((sum, payment) => sum + payment.amount, 0)) === cents(total), 'La suma de los pagos debe coincidir exactamente con el total.');
+  let cashTender;
+  if (body.cashTender !== undefined) {
+    const {receivedCents,changeCents}=body.cashTender||{},cashCents=cents(payments.find(p=>p.method==='efectivo')?.amount||0);
+    requireValue(cashCents>0 && Number.isSafeInteger(receivedCents) && Number.isSafeInteger(changeCents) && receivedCents<=99999999900 && receivedCents>=cashCents && changeCents===receivedCents-cashCents, 'Revisa el efectivo recibido y el cambio.');
+    cashTender={receivedCents,changeCents};
+  }
   const customer = data.customers.find(record => record.id === body.customerId);
   if (body.customerId) requireValue(customer && customer.status === 'activo', 'Selecciona un cliente activo.');
   const credit = payments.find(payment => payment.method === 'credito')?.amount || 0;
   const due = dateValue(body.due || date);
   requireValue(!credit || due >= date, 'Revisa el vencimiento del crédito.');
+  requireValue(!credit || (customer && customer.status === 'activo' && customer.name.trim().toLowerCase() !== 'cliente general'), 'El crédito requiere un cliente real activo.');
   if (credit && customer?.creditLimit > 0) {
-    const invoices = new Set(data.entries.filter(entry => entry.customerId === customer.id).map(entry => entry.id));
-    const balance = data.entries.filter(entry => invoices.has(entry.id) || invoices.has(entry.invoiceId)).reduce((sum, entry) => sum + (entry.lines || []).filter(line => line.a === '1201').reduce((total, line) => total + line.d - line.c, 0), 0);
+    const balance=customerCreditBalance(customer.id,data.entries);
     requireValue(round(balance + credit) <= customer.creditLimit, 'La venta supera el límite de crédito del cliente.');
   }
   const series = text(body.series || 'A', 16).toUpperCase();
@@ -361,7 +367,7 @@ async function makeSale(data, access, session, body, client, companyId, trustedS
   if (cost) lines.push(...linesBetween('5101', '1301', cost));
   const quotation=body.sourceQuotation?data.quotations?.find(q=>q.id===body.sourceQuotation):null;
   requireValue(!body.sourceQuotation||quotation?.status==='Pendiente','La cotización no está disponible para convertir.');
-  const entry = appendEntry(data, session, { date, due, reference, series, sequence, type: 'venta', origin: body.origin === 'ventas' ? 'ventas' : 'facturacion', desc: 'Venta - ' + (customer?.name || text(body.party) || 'Cliente general'), party: customer?.name || text(body.party) || 'Cliente general', customerId: customer?.id || '', customer: customer ? { name: customer.name, taxId: customer.taxId, address: customer.address, phone: customer.phone } : null, operatorId: operatorId(access, session), operatorName: actorName(session), shiftId: shift?.id || null, discount, discountAudit: discount > 0 ? {actor:actorName(session),userId:operatorId(access,session),percent:discount,amountCents:cents(round(invoiceTotals(items.map(item=>({...item,u:item.listPrice}))).total-total)),at:new Date().toISOString()} : null, items, payments, pay: credit ? '1201' : methods.has('efectivo') ? '1104' : '1102', subtotal, vat, total, creditAmount: credit, ...(businessAllocations.length?{businessAllocations}:{}), stock: items.filter(item=>!item.service).map(item => ({ pid: item.p, q: -item.q, unit: item.unit, unitCost: item.cost })), lines });
+  const entry = appendEntry(data, session, { date, due, reference, series, sequence, type: 'venta', origin: body.origin === 'ventas' ? 'ventas' : 'facturacion', desc: 'Venta - ' + (customer?.name || text(body.party) || 'Cliente general'), party: customer?.name || text(body.party) || 'Cliente general', customerId: customer?.id || '', customer: customer ? { name: customer.name, taxId: customer.taxId, address: customer.address, phone: customer.phone } : null, operatorId: operatorId(access, session), operatorName: actorName(session), shiftId: shift?.id || null, discount, discountAudit: discount > 0 ? {actor:actorName(session),userId:operatorId(access,session),percent:discount,amountCents:cents(round(invoiceTotals(items.map(item=>({...item,u:item.listPrice}))).total-total)),at:new Date().toISOString()} : null, items, payments, ...(cashTender?{cashTender}:{}), pay: credit ? '1201' : methods.has('efectivo') ? '1104' : '1102', subtotal, vat, total, creditAmount: credit, ...(businessAllocations.length?{businessAllocations}:{}), stock: items.filter(item=>!item.service).map(item => ({ pid: item.p, q: -item.q, unit: item.unit, unitCost: item.cost })), lines });
   if(entry.discountAudit) await audit(client,companyId,session,'Descuentos',[{area:'descuentos',event:'Factura con descuento',invoiceId:entry.id,reference:entry.reference,...entry.discountAudit}]);
   for(const a of businessAllocations){const r=data.businessRecords?.find(r=>r.id===a.id);if(r?.module==='variantes'){entry.businessVariants||=[];entry.businessVariants.push({id:r.id,productId:r.productId,serial:r.serial,warranty:r.warranty,size:r.size,color:r.color,model:r.model})}}
   if(quotation){quotation.status='Convertida';quotation.entryId=entry.id;}
@@ -387,15 +393,7 @@ function creditNote(data, access, session, body) {
   const previousNotes = data.entries.filter(entry => entry.type === 'nota-credito' && entry.invoiceId === original.id);
   const {items,finalReturn}=allocateReturnItems(original.items,previousNotes,body.items);
   requireValue(items.every(item=>data.products.some(product=>product.id===item.p)),'Uno de los productos de la devolución ya no existe.');
-  let subtotal = round(items.reduce((sum, item) => sum + round(item.q * item.u), 0)), vat = round(items.reduce((sum, item) => sum + round(round(item.q * item.u) * (item.vatRate || 0) / 100), 0));
-
-  if (finalReturn) {
-    subtotal = round((original.subtotal ?? original.total - (original.vat || 0)) - previousNotes.reduce((sum, note) => sum + note.subtotal, 0));
-    vat = round((original.vat || 0) - previousNotes.reduce((sum, note) => sum + note.vat, 0));
-  }
-  const total = round(subtotal + vat);
-  const debt = round(data.entries.filter(entry => entry.id === original.id || entry.invoiceId === original.id).reduce((sum, entry) => sum + (entry.lines || []).filter(line => line.a === '1201').reduce((value, line) => value + line.d - line.c, 0), 0));
-  const debtReduction = Math.min(Math.max(0, debt), total), refund = round(total - debtReduction);
+  const {subtotal,vat,total,debtReduction,refund}=creditReturnSummary(original,previousNotes,items,finalReturn,data.entries);
   const payments = [];
   if (debtReduction) payments.push({ method: 'credito', amount: debtReduction });
   let shift = null;
@@ -434,6 +432,13 @@ async function saveAttachment(data, companyId, body, record, addedKeys, historic
   record.receipt = { key, name: text(file.name, 180).replace(/[\x00-\x1f\x7f/\\]/g, '') || 'comprobante', type: file.type, size: bytes.length };
 }
 export async function runOperation(companyId, session, body) {
+  if(body.operation==='customerCredit')return db.transaction(async client=>{
+    const access=await companyAccess(client,companyId,session,true);requirePermission(access,'facturacion');
+    const data=scopeBranch(access.company.data,access),customer=data?.customers?.find(c=>c.id===body.customerId&&c.status==='activo');
+    requireValue(customer,'Selecciona un cliente activo.');
+    const balance=customerCreditBalance(customer.id,data.entries||[]);
+    return {customerId:customer.id,limitCents:cents(customer.creditLimit),availableCents:customer.creditLimit>0?Math.max(0,cents(round(customer.creditLimit-balance))):null};
+  });
   if(body.operation==='invoiceDownload')return db.transaction(async client=>{
     const access=await companyAccess(client,companyId,session,true);
     requireValue(allowed(access,'ventas')||allowed(access,'facturacion'),'Sin permiso para ver facturas.');
@@ -498,6 +503,7 @@ export async function runOperation(companyId, session, body) {
         if(body.advance)requirePermission(access,'fiscal');
         if (!access.owner) accessError('Solo el dueño configura cajas, series, descuentos y anticipos.');
         if (body.pos) {
+          if(Object.hasOwn(body.pos,'useDimensions'))requireValue(typeof body.pos.useDimensions==='boolean','Configuración avanzada inválida.');
           const series = body.pos.series;
           requireValue(Array.isArray(series) && series.length > 0 && series.length <= 50, 'Configura de 1 a 50 series.');
           const codes = new Set();
@@ -510,7 +516,7 @@ export async function runOperation(companyId, session, body) {
           const logo = text(body.pos.logo, 200);
           requireValue(!logo || /^\/api\/image\?key=[a-f0-9-]+\.webp$/.test(logo), 'Logo no autorizado.');
           const logoChanged = logo !== (data.cfg.pos?.logo || '');
-          data.cfg.pos = { series: series.map(record => ({ code: record.code, name: text(record.name, 80), branchId:record.branchId||data.cfg.pos?.series?.find(s=>s.code===record.code)?.branchId||access.branchId||'principal' })), discountLimits: limits, packagingCostId, packagingPay: body.pos.packagingPay || '2101', logo };
+          data.cfg.pos = { useDimensions: body.pos.useDimensions ?? data.cfg.pos?.useDimensions ?? data.entries.some(e=>e.costCenter||e.project), series: series.map(record => ({ code: record.code, name: text(record.name, 80), branchId:record.branchId||data.cfg.pos?.series?.find(s=>s.code===record.code)?.branchId||access.branchId||'principal' })), discountLimits: limits, packagingCostId, packagingPay: body.pos.packagingPay || '2101', logo };
           if (logoChanged) savePrintVersion(data,{...invoiceDesign.settings(data.cfg),logo},operationSession);
           for (const record of series) if (record.next !== undefined) { const next = Number(record.next); requireValue(Number.isSafeInteger(next) && next >= (data.invoiceSequences[record.code] || 0) + 1 && next <= 999999999, 'El próximo número no puede retroceder.'); data.invoiceSequences[record.code] = next - 1; }
         }

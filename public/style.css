@@ -403,3 +403,49 @@ body.invoice-editor-open{overflow:hidden}
 }
 
 @media print{body.pm-color #rcpt.invoice-color :is(th,td){border-color:var(--invoice-accent)!important}}
+
+/* Facturación: controles táctiles y lectura sin desplazamiento lateral. */
+.invoice-pills{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 18px;min-width:0}
+.invoice-pills label{display:flex;align-items:center;gap:8px;min-height:44px;margin:0;padding:8px 12px;border:1px solid var(--border,#c9d2c9);border-radius:24px;cursor:pointer;box-sizing:border-box;font-size:13px}
+.invoice-pills label:has(input:checked){border-color:var(--g);background:var(--g);color:#fff}
+.invoice-pills input{width:18px;height:18px;min-height:18px;margin:0;accent-color:var(--g);flex-shrink:0}
+.invoice-pills label:focus-within{outline:2px solid var(--gold);outline-offset:3px}
+#return-refund .invoice-pills{flex-wrap:nowrap;gap:6px}
+#return-refund .invoice-pills label{flex:1;justify-content:center;padding:8px;min-width:0}
+.pos-total small{display:block;font-family:inherit;font-size:13px;color:var(--mut);line-height:1.7}
+.pos-total strong{display:block;font-size:clamp(30px,6vw,44px);line-height:1.3;margin:6px 0}
+#pos-cash{padding:16px;margin:16px 0;background:var(--bg);border:1px solid var(--g)}
+#pos-cash p{display:flex;justify-content:space-between;gap:12px}#pos-change{font-size:20px}
+.cash-shortcuts{display:flex;gap:6px;flex-wrap:wrap}.cash-shortcuts button{border:1px solid var(--border,#c9d2c9);border-radius:8px;padding:8px 12px}
+.invoice-info summary{display:flex;width:44px;min-height:44px;align-items:center;justify-content:center;cursor:pointer;font-size:22px;color:var(--g)}
+.invoice-info p{font-size:13px;line-height:1.6;color:var(--mut)}
+.invoice-series{min-width:0;border:1px solid var(--border,#c9d2c9);border-radius:10px;padding:12px;margin-bottom:18px}
+.invoice-series-row{display:grid;grid-template-columns:minmax(70px,1fr) minmax(90px,2fr) minmax(110px,1fr) auto;gap:10px;align-items:end;border-bottom:1px solid var(--border,#c9d2c9);padding:10px 0}
+.invoice-series-row label{min-width:0;margin:0}.invoice-series-row input{width:100%;min-width:0}
+.sale-actions{display:flex;align-items:center;flex-wrap:wrap;gap:0 4px;white-space:normal}
+.sale-actions .lk{font-size:13px;padding:8px 6px;min-height:44px;min-width:44px;border:0;background:none;color:var(--g);font-weight:500;text-decoration:underline;text-underline-offset:3px}
+.sale-actions .lk+.lk::before{content:'·';display:inline-block;margin-right:10px;color:var(--mut);text-decoration:none}
+.sale-actions-toggle{display:none}.sale-confirmation{padding:18px;border-left:4px solid var(--g);margin:16px 0}.sale-confirmation strong{display:block;margin-bottom:8px}
+.md:has(#pos-items) input,.md:has(#pos-items) select,.md:has(#return-summary) input,.md:has(#return-summary) select,.md:has(.invoice-series) input,.md:has(.invoice-series) select{min-height:44px}
+.md:has(#pos-items) button,.md:has(#return-summary) button,.md:has(.invoice-series) button,.md:has(#pos-items) summary{min-height:44px;min-width:44px}
+.md:has(#pos-items) input[type=checkbox],.md:has(#pos-items) input[type=radio],.md:has(#return-summary) input[type=radio],.md:has(.invoice-series) input[type=checkbox]{min-height:18px;width:18px;height:18px}
+.md:has(#pos-items) label.ck,.md:has(#return-summary) label.ck,.md:has(.invoice-series) label.ck{min-height:44px;align-items:center}
+[hidden]{display:none!important}
+@media(max-width:760px){
+ .sale-table-card{background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important;overflow:visible!important}
+ .sale-table-wrap{overflow:visible!important}.sale-table{display:block;width:100%;min-width:0!important}.sale-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+ .sale-table tbody{display:grid;grid-template-columns:1fr;gap:14px}.sale-table tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;padding:18px;border:1px solid var(--border,#c9d2c9);border-radius:12px;background:var(--card,var(--bg));min-width:0}
+ .sale-table td{display:block;min-width:0;padding:0;border:0;white-space:normal;overflow-wrap:anywhere;text-align:left}.sale-table td::before{content:attr(data-label);display:block;font-size:11px;color:var(--mut);margin-bottom:5px}.sale-table td:last-child{grid-column:1/-1;border-top:1px solid var(--border,#c9d2c9);padding-top:8px}.sale-table td:last-child::before{display:none}
+ .sale-actions-toggle{display:inline-flex;align-items:center;min-width:44px;min-height:44px;gap:12px}.sale-actions-toggle::after{content:'⌄'}.sale-actions-toggle[aria-expanded=true]::after{content:'⌃'}
+ .sale-action-menu:not(.is-open) .sale-actions{display:none}.sale-action-menu .sale-actions{display:flex;gap:0 8px}.sale-action-menu .sale-actions .lk{flex:0 0 auto}.sale-action-menu .sale-actions .lk::before{display:none}
+ .invoice-series-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.invoice-series-row label:nth-child(2){grid-column:2;grid-row:1}.invoice-series-row button{justify-self:start}.pos-item{gap:10px}.pos-item input,.pos-item select{min-width:0}
+}
+@media(max-width:380px){#return-refund .invoice-pills label{font-size:12px;padding:8px 4px;gap:4px}.pos-payments{grid-template-columns:1fr}.invoice-series-row{gap:8px}}
+@media print{.sale-actions-toggle,.sale-confirmation{display:none!important}}
+.billing-sales button,.billing-sales input,.billing-sales select,.md:has([name=packagingCostId]) button,.md:has([name=packagingCostId]) select{min-height:44px}
+.billing-sales button{min-width:44px}
+.invoice-design-dialog label:has([name=showCashTender]){min-height:44px;align-items:center}
+
+#return-refund .invoice-pills label{position:relative}
+#return-refund .invoice-pills input{position:absolute;opacity:0;width:1px!important;height:1px!important;min-height:1px!important}
+#return-refund .invoice-pills span{white-space:nowrap}
