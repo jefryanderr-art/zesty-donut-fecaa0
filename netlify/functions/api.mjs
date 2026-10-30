@@ -262,7 +262,15 @@ const handleRequest = async (request, context, metrics) => {
         try {
           identityUser = await authenticateIdentity(() => signup(email, password, { company: companyName(body.company), description: String(body.description || '').trim().slice(0, 2000),country:globalThis.AcontecInvoiceDesign.country(body.country||'Nicaragua'),businessType:validateProfile(body.businessType||'comercio').businessType }));
         } catch (error) {
-          return fail(error?.message || 'No se pudo crear la cuenta', error?.status || 400);
+          // Translate known Identity failures without exposing provider internals.
+          if (error instanceof MissingIdentityError) throw error;
+          if (error instanceof AuthError) {
+            if (/already (registered|exists)|user.*exists|email.*(taken|in use)/i.test(error.message)) return fail('Ese correo ya está registrado. Ingresa con tu correo y contraseña.', 422);
+            if (/password.*(short|least|minimum)|weak password/i.test(error.message)) return fail('La contraseña debe tener al menos 8 caracteres', 422);
+            if (error.status === 403) return fail('El registro por correo no está disponible. Contacta con la administración del sitio.', 403);
+            if ([400, 422].includes(error.status)) return fail('No se pudo crear la cuenta. Revisa el correo, la contraseña y el nombre de tu empresa. Si ya te registraste, confirma tu correo e ingresa.', 400);
+          }
+          return fail('No se pudo crear la cuenta. Revisa tu conexión e inténtalo de nuevo.', 503);
         }
         await ensureAccount(email, isOwnerAdmin ? 'Acontec' : body.company, body.description, '', body.businessType||'comercio',body.country||'Nicaragua');
         if (isOwnerAdmin) {

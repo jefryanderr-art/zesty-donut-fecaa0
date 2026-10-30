@@ -1,0 +1,16 @@
+# Registro y confirmación de correo
+
+La revisión del 30 de octubre de 2026 encontró la causa en `6afe3acc9257125ccc4f21c2b4a23d63b7ac8378` (perfiles fiscales por país). El cambio añadió País como primer elemento `.reg` y dejó Nombre como segundo elemento `.reg` oculto. La pestaña solo mostraba el primer elemento y marcaba `co` como obligatorio. La validación nativa impedía enviar el formulario con un campo obligatorio invisible, sin llegar al manejador de errores. Descripción y Tipo de negocio también se insertaban dentro del primer elemento, que era un `label`. Ahora hay un único contenedor de registro con etiquetas independientes.
+
+Se consultó mediante GET el endpoint público `https://acontec.company/.netlify/identity/settings`: el registro estaba abierto (`disable_signup: false`) y la confirmación automática estaba desactivada (`autoconfirm: false`). La API usa `signup` de `@netlify/identity`; el correo lo gestiona Identity. Una respuesta de registro correcta no prueba la entrega al destinatario. No se creó ninguna cuenta ni se envió un correo de prueba durante esta revisión.
+
+## Comprobaciones tras el despliegue
+
+1. En Crear cuenta, dejar vacío Nombre y enviar. El navegador debe enfocar Nombre sin hacer POST a `/api/register`. Repetir con correo vacío/inválido y contraseña de menos de ocho caracteres. Confirmar el orden Contraseña, Nombre, País, Descripción y Tipo de negocio, también en móvil.
+2. Completar el formulario con un correo nuevo de una bandeja controlada por quien hace la comprobación. Durante el envío debe aparecer «Creando cuenta…» desactivado. Tras responder debe recuperarse el botón y aparecer «Cuenta creada. Revisa tu correo (también spam) y abre el enlace de confirmación para ingresar.»
+3. Revisar entrada y spam. Comprobar en Netlify, configuración del proyecto → Identity, que el usuario esté pendiente de confirmación y que la confirmación automática siga desactivada. Si no llega, revisar la configuración de correo/plantilla de confirmación de Identity y, si usa SMTP propio, sus registros de envío y rechazo. No confundir este correo con la cola SMTP comercial de Acontec.
+4. Abrir el enlace recibido desde el dominio correcto, comprobar la confirmación y acceder. La recepción y la confirmación efectiva son las pruebas de extremo a extremo; el GET de configuración solo verifica que se exige confirmar.
+5. Probar Ingresar con contraseña incorrecta; el error debe quedar encima del botón. Probar un correo registrado en Crear cuenta: si Identity informa duplicado, debe aparecer el mensaje en español. Identity puede evitar revelar la existencia de usuarios y responder como confirmación pendiente; no debe inferirse un duplicado consultando cuentas por otra vía.
+6. Simular desconexión o agotar el tiempo de espera de la solicitud: debe aparecer el mensaje de conexión, recuperarse el botón y poder reintentar. Revisar que el lector de pantalla anuncie la zona `role="status"`, y que los mensajes persistan hasta otra acción del usuario.
+
+Solo se realizó revisión estática del cambio y consulta de configuración pública. Las comprobaciones funcionales, de accesibilidad y entrega real quedan pendientes del despliegue; no se ejecutaron pruebas, servidores ni compilaciones locales.
