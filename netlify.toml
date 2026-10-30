@@ -1,4 +1,5 @@
 [build]
+  command = "node scripts/version-assets.mjs"
   publish = "public"
   ignore = "node scripts/ignore-build.mjs"
   functions = "netlify/functions"
