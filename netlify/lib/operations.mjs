@@ -14,7 +14,8 @@ import { randomUUID, createHash } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
 import { and, eq } from 'drizzle-orm';
 import { companyMembers, siteContent, users } from '../../db/schema.ts';
-import { allowed, requireModule, equal, accessError, updateCompany, actorName, audit } from './access.mjs';
+import { db } from '../../db/index.ts';
+import { companyAccess, projectData, allowed, requireModule, equal, accessError, updateCompany, actorName, audit } from './access.mjs';
 import { OPERATION_ARRAYS, operationalRole, salesAdministrator, supervisor, cashAdministrator, operatorId, receiptRecords } from './policies.mjs';
 
 const round = value => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -103,11 +104,22 @@ function validatePrintSettings(body, current) {
     }
     requireValue(Number.isFinite(source.taxRate)&&source.taxRate>=0&&source.taxRate<=100,'Tasa inválida.');profile.taxRate=source.taxRate;
     requireValue(typeof source.electronic==='boolean','Indica si exige facturación electrónica.');profile.electronic=source.electronic;
-    requireValue(Array.isArray(source.requiredFields)&&source.requiredFields.length<=10&&source.requiredFields.every(key=>['legalName','ruc','address','dgiNumber','dgiDate'].includes(key)),'Campos requeridos inválidos.');profile.requiredFields=[...new Set(source.requiredFields)];
-    if(result.country==='Nicaragua')Object.assign(profile,invoiceDesign.profiles.NI,{taxRate:source.taxRate,electronic:source.electronic});
+    requireValue(Array.isArray(source.requiredFields)&&source.requiredFields.length<=10&&source.requiredFields.every(key=>['legalName','ruc','address','dgiNumber','dgiDate',...Array.from({length:5},(_,i)=>'custom'+i)].includes(key)),'Campos requeridos inválidos.');profile.requiredFields=[...new Set(source.requiredFields)];
+    if(result.country==='Nicaragua')Object.assign(profile,invoiceDesign.profiles.NI,{taxRate:source.taxRate,electronic:source.electronic,requiredFields:profile.requiredFields});
     result.fiscalProfile=profile;
   }else if(changed)accessError('Configura el perfil fiscal del nuevo país.',400);
+  try {
+    if(Object.hasOwn(body,'customFields'))result.customFields=invoiceDesign.validateCustom(body.customFields);
+    if(Object.hasOwn(body,'design'))result.design=invoiceDesign.validateDesign(body.design);
+    if(Object.hasOwn(body,'savedDesigns')){
+      requireValue(Array.isArray(body.savedDesigns)&&body.savedDesigns.length<=3,'Máximo tres diseños guardados.');
+      result.savedDesigns=body.savedDesigns.map(d=>{requireValue(d&&Object.keys(d).every(k=>['id','name','design'].includes(k))&&/^[a-z0-9-]{1,40}$/.test(d.id)&&typeof d.name==='string'&&d.name.trim().length>0&&d.name.length<=80,'Nombre de diseño inválido.');return {id:d.id,name:d.name.trim(),design:invoiceDesign.validateDesign(d.design)}});
+      requireValue(new Set(result.savedDesigns.map(d=>d.id)).size===result.savedDesigns.length,'Diseños duplicados.');
+    }
+    if(Object.hasOwn(body,'designDefaults')){requireValue(body.designDefaults&&Object.keys(body.designDefaults).every(k=>['a4','letter','thermal'].includes(k))&&Object.values(body.designDefaults).every(id=>id===''||result.savedDesigns?.some(d=>d.id===id)),'Diseño predeterminado inválido.');result.designDefaults=body.designDefaults;}
+  }catch(error){accessError(error.message,400)}
   const profile=invoiceDesign.fiscal(result);
+  requireValue(profile.requiredFields.every(key=>!key.startsWith('custom')||result.customFields?.[Number(key.slice(6))]),'El campo fiscal requerido no existe.');
   requireValue(profile.authority&&profile.taxIdLabel&&profile.taxName&&profile.authorizationLabel,'Completa las etiquetas fiscales.');
   return result;
 }
@@ -422,6 +434,14 @@ async function saveAttachment(data, companyId, body, record, addedKeys, historic
   record.receipt = { key, name: text(file.name, 180).replace(/[\x00-\x1f\x7f/\\]/g, '') || 'comprobante', type: file.type, size: bytes.length };
 }
 export async function runOperation(companyId, session, body) {
+  if(body.operation==='invoiceDownload')return db.transaction(async client=>{
+    const access=await companyAccess(client,companyId,session,true);
+    requireValue(allowed(access,'ventas')||allowed(access,'facturacion'),'Sin permiso para ver facturas.');
+    const entry=projectData(access.company.data,access)?.entries?.find(e=>e.id===body.invoiceId&&['venta','nota-credito'].includes(e.type));
+    requireValue(entry,'Factura no encontrada o sin acceso.');
+    await audit(client,companyId,access.member?{...session,member:access.member}:session,'Descarga de factura PDF',[{area:'ventas',event:'Descarga PDF solicitada',invoiceId:entry.id,reference:entry.reference,at:new Date().toISOString()}]);
+    return {ok:true};
+  });
   const addedKeys = [];
   if(BUSINESS_OPS.includes(body.operation)&&!body.operationId)accessError('La operación requiere un identificador único.',400);
   let output = null;
@@ -466,13 +486,11 @@ export async function runOperation(companyId, session, body) {
       } else if (operation === 'printSettings') {
         requirePermission(access,'diseno_factura');
         const current = invoiceDesign.settings(data.cfg, company.name), next = validatePrintSettings(body,current);
-        if ((!equal(next.fiscalProfile,current.fiscalProfile)||next.country!==current.country) && !access.owner) accessError('Solo el dueño cambia el país y el perfil fiscal.');
+        if ((!equal(next,current)) && !access.owner) accessError('Solo el dueño cambia el diseño y el perfil fiscal.');
         if (next.country!==current.country) for(const key of ['ruc','dgiNumber','dgiDate','printerRuc','printerOrder','printerDate','printerBooks','printerRange']) requireValue(!next[key],'Guarda el cambio de país con los datos fiscales anteriores vacíos.');
-        if (next.showAcontec !== current.showAcontec) {
-          const [admin] = await client.select({platformAdmin:users.platformAdmin}).from(users).where(eq(users.email,session.email));
-          if (session.member || access.member || admin?.platformAdmin !== true) accessError('Solo el administrador de la plataforma cambia el pie Sistema Acontec.');
-        }
+        next.showAcontec=true;
         savePrintVersion(data,next,operationSession);
+        await audit(client,companyId,operationSession,'Diseño de factura',[{area:'diseno_factura',event:'Diseño guardado',at:new Date().toISOString()}]);
       } else if (operation === 'settings') {
         requirePermission(access,'ajustes');
         if(body.pos)requirePermission(access,'facturacion');
