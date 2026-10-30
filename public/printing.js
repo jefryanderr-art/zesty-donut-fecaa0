@@ -60,7 +60,7 @@ function printPlatformReport(){return choosePrintOptions(options=>{
 READ_ACTIONS.add('invoicePdf');READ_ACTIONS.add('invoiceShare');
 ACT.invoicePdf=data=>downloadInvoiceDocument(data.id);
 ACT.invoiceShare=data=>downloadInvoiceDocument(data.id,true);
-function invoiceDownloadButtons(id){return `<button type="button" class="btn ghost noprint" data-a="invoicePdf" data-id="${esc(id)}">Descargar factura (PDF)</button> ${navigator.share?`<button type="button" class="btn ghost noprint" data-a="invoiceShare" data-id="${esc(id)}">Compartir</button>`:''}`}
+function invoiceDownloadButtons(id){return `<button type="button" class="lk noprint" data-a="invoicePdf" data-id="${esc(id)}">PDF</button> <button type="button" class="lk noprint" data-a="invoiceShare" data-id="${esc(id)}">Compartir</button>`}
 const invoiceButtonsObserver=new MutationObserver(()=>{
  for(const button of document.querySelectorAll('[data-a="printEntry"]:not([data-pdf-added])')){
   button.dataset.pdfAdded='true';const entry=S?.entries?.find(e=>e.id===button.dataset.id);

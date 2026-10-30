@@ -1,6 +1,6 @@
 'use strict';
 let BUSINESS_MATH=null;
-const businessMath=()=>BUSINESS_MATH||=(import('/accounting-math.mjs?v=b94d4b1469b6c81b'));
+const businessMath=()=>BUSINESS_MATH||=(import('/accounting-math.mjs?v=57fe6cfecc1bbe03'));
 MENU.push(['Decisiones del negocio',[['simuladores','◇','Simuladores e inversiones'],['rentabilidad','▥','Rentabilidad y análisis ABC'],['pronostico','◷','Pronóstico y alertas']]]);Object.assign(ROUTE_MODULE,{simuladores:'finanzas',rentabilidad:'finanzas',pronostico:'finanzas'});
 V.simuladores=()=>{
  main(pageHead('Simuladores e inversiones')+notice('Herramientas de consulta: no crean asientos, contratos ni cambios de precios. Los flujos de inversión son anuales; la TIR puede ser ambigua con varios cambios de signo.')+`<form id="simulation-form" class="card">${selectField('kind','Simulador',option('loan','Préstamo / leasing')+option('investment','VAN, TIR y recuperación')+option('pricing','Precio y punto de equilibrio')+option('whatif','Qué pasa si · utilidad'))}<div id="simulation-fields"></div><button class="btn">Calcular</button><p class="err" role="status"></p></form><div id="simulation-result" aria-live="polite"></div>`);

@@ -23,6 +23,7 @@ export function branchStock(data,product,branchId){
 export function scopeBranch(data,access){
  if(!data)return data;
  const copy=structuredClone(data);copy.branches=access.branches;
+ copy.cfg||={};copy.cfg.pos||={};copy.cfg.pos.useDimensions??=(data.entries||[]).some(e=>e.costCenter||e.project);
  if(!access.branchId)return copy;
  for(const name of BRANCH_ARRAYS)if(Array.isArray(copy[name]))copy[name]=copy[name].filter(row=>name==='stockTransfers'?(row.sourceId===access.branchId||row.destinationId===access.branchId):recordBranch(row)===access.branchId);
  const totals=new Map(),local=new Map();

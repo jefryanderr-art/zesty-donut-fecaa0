@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 const root=resolve(import.meta.dirname,'../public');
 const hash=path=>createHash('sha256').update(readFileSync(path)).digest('hex').slice(0,16);
 // Primero las dependencias cargadas dinámicamente, después los scripts que las referencian.
-for(const name of ['analytics.js','access.js','imports.js','barcodes.js']){
+for(const name of ['analytics.js','access.js','imports.js','barcodes.js','operations.js']){
  const file=resolve(root,name),source=readFileSync(file,'utf8');
  writeFileSync(file,source.replace(/(['"])(\/(?:vendor\/)?[\w.-]+\.(?:m?js))(?:\?v=[\w.-]+)?\1/g,(all,quote,url)=>{
   const asset=resolve(root,'.'+url);return existsSync(asset)?quote+url+'?v='+hash(asset)+quote:all;
