@@ -45,7 +45,7 @@ async function api(path,method='GET',body){
   }
   const r=await fetch('/api/'+path,{method,credentials:'same-origin',headers,body:payload,signal:AbortSignal.timeout(45000)});
   const j=await r.json().catch(()=>null);
-  if(!r.ok||!j){const error=new Error(j?.error||'No se pudo confirmar la operación. Intenta guardar de nuevo.');error.status=r.ok?0:r.status;error.supportCode=j?.supportCode;throw error}
+  if(!r.ok||!j){const error=new Error(j?.error||'No se pudo confirmar la operación. Intenta guardar de nuevo.');error.status=r.ok?0:r.status;error.supportCode=j?.supportCode;error.code=j?.code;error.confirmationGrant=j?.confirmationGrant;throw error}
   return j;
 }
 let st,saveVersion=0,savedVersion=0,saving=null,receiptMutation=null,retryCount=0,saveStatus='Guardado en la nube';
@@ -191,21 +191,28 @@ function promptResetPassword(token){
   },'Actualizar contraseña');
 }
 async function boot(){
-  let configError='';
+  let configError='',confirmedEmail='';
   const confirmation=new URLSearchParams(location.hash.slice(1)).get('confirmation_token');
-  if(confirmation){history.replaceState(null,'',location.pathname);try{await api('confirm','POST',{token:confirmation})}catch(error){configError=error.message}}
+  if(confirmation){history.replaceState(null,'',location.pathname+location.search);try{const result=await api('confirm','POST',{token:confirmation});if(result.confirmed)confirmedEmail=result.email}catch(error){configError=error.message}}
   const hashParams=new URLSearchParams(location.hash.slice(1));
   const searchParams=new URLSearchParams(location.search);
   const recovery=hashParams.get('recovery_token')||searchParams.get('recovery_token')||(hashParams.get('type')==='recovery'?hashParams.get('access_token'):null);
   if(recovery)history.replaceState(null,'',location.pathname);
   try{const config=await api('config');SITE={...DEF,...config.site};SITE_REV=config.siteRevision;GID=config.googleClientId}catch(error){configError='No se pudo conectar con el servicio. Recarga la página para volver a intentar.'}
   applyTheme();
+  if(confirmedEmail){U=null;authView();ACT.tab({m:'login'});$('#af [name=em]').value=confirmedEmail;authStatus('Correo confirmado. Ya puedes ingresar','success');return}
   try{const result=await api('me');U=result.user;COS=result.companies;return await openCompany(localStorage.getItem('co')||COS[0]?.id)}catch(error){U=null}
   authView();
-  if(configError)$('#af .err').textContent=configError;
+  if(configError)authStatus(configError);
   if(recovery)setTimeout(()=>promptResetPassword(recovery),50);
 }
-async function session(result){if(result.confirmationRequired){ACT.tab({m:'login'});$('#af [name=pw]').value='';$('#af .err').textContent='Cuenta creada. Revisa tu correo (también spam) y abre el enlace de confirmación para ingresar.';return}const account=await api('me');U=account.user;COS=account.companies;await openCompany(COS[0]?.id);if(sessionStorage.getItem('edit')){sessionStorage.removeItem('edit');if(U.editor){authView();ACT.gear()}}}
+let confirmationResend = null,authNoticeVersion=0;
+function authStatus(message='',tone='error') {
+  const target=$('#auth-status');if(!target)return;
+  target.textContent=message;target.dataset.tone=tone;
+}
+function clearAuthStatus(){authNoticeVersion++;authStatus();confirmationResend=null;const button=$('#resend-confirmation');if(button)button.hidden=true}
+async function session(result){if(result.confirmationRequired){ACT.tab({m:'login'});$('#af [name=pw]').value='';authStatus('Cuenta creada. Revisa tu correo (también spam) y abre el enlace de confirmación para ingresar.','success');return}const account=await api('me');U=account.user;COS=account.companies;await openCompany(COS[0]?.id);if(sessionStorage.getItem('edit')){sessionStorage.removeItem('edit');if(U.editor){authView();ACT.gear()}}}
 async function openCompany(id){
   if(CO&&!await flush())throw new Error('Guarda los cambios pendientes antes de cambiar de empresa.');
   const company=COS.find(item=>item.id==id)||COS[0];
@@ -256,21 +263,27 @@ function authView(){
   <label>Contraseña<input type="password" name="pw" required minlength="1" maxlength="256" autocomplete="current-password" placeholder="Tu contraseña"></label>
   <div id="auth-forgot" class="auth-forgot"><button type="button" class="lk" data-a="forgotPassword">¿Olvidaste tu contraseña?</button></div>
   <div class="reg" hidden><label>Nombre de tu empresa<input name="co" maxlength="80" autocomplete="organization" placeholder="Mi empresa S.A." aria-describedby="company-name-help"><small id="company-name-help">Mi empresa S.A.</small></label><label>País de la empresa<input name="country" value="Nicaragua" maxlength="80" list="invoice-countries"><datalist id="invoice-countries"><option value="Nicaragua"></datalist><small>Otros países usan un perfil genérico configurable.</small></label></div>
-  <div id="auth-status" class="err" role="status" aria-live="polite" aria-atomic="true"></div><button type="submit" class="btn full" id="submit-auth" aria-describedby="auth-status">Ingresar <span aria-hidden="true">→</span></button><div class="or">o continúa con</div><div id="gbtn"><button type="button" class="btn ghost full" data-a="google" ${GID?'':'disabled aria-describedby="google-help"'}><b class="google-letter">G</b> Continuar con Google</button></div>${GID?'':'<p id="google-help" class="mut">Google requiere autorizar este sitio una sola vez. <a href="/configurar-google.html">Guía paso a paso para activarlo</a>. Mientras tanto, puedes crear tu cuenta con correo y contraseña.</p>'}</form><p class="access-note"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.5"/></svg> Tu información es privada. Solo tú accedes a tu empresa.</p></section>`}</main>${contactSection()}<footer class="auth-footer"><span>${esc(SITE.brand)} · ${esc(SITE.tagline)}</span><span>${esc(SITE.footer)}</span>${U?.editor?`<button type="button" class="footer-settings" data-a="gear" aria-label="Editar página principal de Acontec" title="Editar textos, información, imágenes y logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-.7 2.1-2.1 1.2-2.2-.4-2 3.4 1.5 1.7v2L2 14.7l2 3.4 2.2-.4 2.1 1.2L9 21h4l.7-2.1 2.1-1.2 2.2.4 2-3.4-1.5-1.7v-2L20 9.3l-2-3.4-2.2.4-2.1-1.2L13 3Z"/><circle cx="11" cy="12" r="3"/></svg></button>`:''}</footer></div>`;
+  <div id="auth-status" class="err" role="status" aria-live="polite" aria-atomic="true"></div><button type="button" class="lk auth-resend" id="resend-confirmation" data-a="resendConfirmation" hidden>Reenviar correo de confirmación</button><button type="submit" class="btn full" id="submit-auth" aria-describedby="auth-status">Ingresar <span aria-hidden="true">→</span></button><div class="or">o continúa con</div><div id="gbtn"><button type="button" class="btn ghost full" data-a="google" ${GID?'':'disabled aria-describedby="google-help"'}><b class="google-letter">G</b> Continuar con Google</button></div>${GID?'':'<p id="google-help" class="mut">Google requiere autorizar este sitio una sola vez. <a href="/configurar-google.html">Guía paso a paso para activarlo</a>. Mientras tanto, puedes crear tu cuenta con correo y contraseña.</p>'}</form><p class="access-note"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.5"/></svg> Tu información es privada. Solo tú accedes a tu empresa.</p></section>`}</main>${contactSection()}<footer class="auth-footer"><span>${esc(SITE.brand)} · ${esc(SITE.tagline)}</span><span>${esc(SITE.footer)}</span>${U?.editor?`<button type="button" class="footer-settings" data-a="gear" aria-label="Editar página principal de Acontec" title="Editar textos, información, imágenes y logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-.7 2.1-2.1 1.2-2.2-.4-2 3.4 1.5 1.7v2L2 14.7l2 3.4 2.2-.4 2.1 1.2L9 21h4l.7-2.1 2.1-1.2 2.2.4 2-3.4-1.5-1.7v-2L20 9.3l-2-3.4-2.2.4-2.1-1.2L13 3Z"/><circle cx="11" cy="12" r="3"/></svg></button>`:''}</footer></div>`;
   if(U)return;
+  clearAuthStatus();
+  $('#af').addEventListener('input',clearAuthStatus);
+  $('#af').addEventListener('invalid',event=>{authStatus(event.target.validationMessage)},true);
   $('#af').onsubmit=async event=>{
     event.preventDefault();
-    const form=event.currentTarget,fields=form.elements,error=form.querySelector('.err'),button=form.querySelector('#submit-auth'),mode=AM;
+    const form=event.currentTarget,fields=form.elements,button=form.querySelector('#submit-auth'),mode=AM;
     if(button.disabled||!form.reportValidity())return;
-    error.textContent='';button.disabled=true;form.setAttribute('aria-busy','true');
+    clearAuthStatus();const noticeVersion=authNoticeVersion;button.disabled=true;form.setAttribute('aria-busy','true');
     const controls=[...form.querySelectorAll('[data-a="tab"]')];controls.forEach(control=>control.disabled=true);
     button.textContent=mode==='reg'?'Creando cuenta…':'Ingresando…';
     try{
       const result=await api(mode==='login'?'login':'register','POST',{email:fields.em.value,password:fields.pw.value,company:fields.co.value,description:fields.description?.value||'',country:fields.country?.value||'Nicaragua',businessType:fields.businessType?.value||'comercio'});
       form.removeAttribute('aria-busy');
+      if(result.confirmationRequired&&noticeVersion!==authNoticeVersion)return;
       await session(result);
     }catch(problem){
-      error.textContent=problem.status?problem.message:(mode==='reg'?'No se pudo crear la cuenta. Revisa tu conexión e inténtalo de nuevo.':'No se pudo ingresar. Revisa tu conexión e inténtalo de nuevo.');
+      if(noticeVersion!==authNoticeVersion)return;
+      authStatus(problem.status?problem.message:(mode==='reg'?'No se pudo crear la cuenta. Revisa tu conexión e inténtalo de nuevo.':'No se pudo ingresar. Revisa tu conexión e inténtalo de nuevo.'));
+      if(mode==='login'&&problem.code==='EMAIL_UNCONFIRMED'&&problem.confirmationGrant){confirmationResend={email:fields.em.value,grant:problem.confirmationGrant};$('#resend-confirmation').hidden=false}
     }finally{
       button.disabled=false;form.removeAttribute('aria-busy');controls.forEach(control=>control.disabled=false);
       button.innerHTML=(AM==='login'?'Ingresar':'Crear cuenta')+' <span aria-hidden="true">→</span>';
@@ -400,7 +413,16 @@ V.pagina=()=>{main(`<div class="ph"><h2>Página principal de Acontec</h2><button
 const ACT={
  nav:(d)=>{R=d.r;menu(false);view();scrollTo(0,0)},menu:()=>menu(!$('#drawer').classList.contains('open')),close:()=>{$('#modal').innerHTML=''},
  google:()=>{if(GID)renderGoogle();else location.href='/configurar-google.html'},
- tab:(data)=>{if($('#af')?.getAttribute('aria-busy')==='true')return;AM=data.m;$$('.tabs button').forEach(button=>button.classList.toggle('on',button.dataset.m==AM));$('.reg').hidden=AM=='login';const forgot=$('#auth-forgot');if(forgot)forgot.hidden=AM!='login';$('#af [name=co]').required=AM!='login';$('#af [name=pw]').minLength=AM=='login'?1:8;$('#af [name=pw]').autocomplete=AM=='login'?'current-password':'new-password';$('#auth-help').innerHTML=AM=='login'?'¿Es tu primer acceso? <button type="button" class="lk" data-a="tab" data-m="reg">Crea tu cuenta de cliente</button> antes de ingresar.':'Escribe tu correo, una contraseña de al menos 8 caracteres y el nombre de tu empresa. Después, confirma el correo que recibas para acceder.';$('#submit-auth').innerHTML=(AM=='login'?'Ingresar':'Crear cuenta')+' <span aria-hidden="true">→</span>';$('#af .err').textContent=''},
+ tab:(data)=>{if($('#af')?.getAttribute('aria-busy')==='true')return;AM=data.m;$$('.tabs button').forEach(button=>button.classList.toggle('on',button.dataset.m==AM));$('.reg').hidden=AM=='login';const forgot=$('#auth-forgot');if(forgot)forgot.hidden=AM!='login';$('#af [name=co]').required=AM!='login';$('#af [name=pw]').minLength=AM=='login'?1:8;$('#af [name=pw]').autocomplete=AM=='login'?'current-password':'new-password';$('#auth-help').innerHTML=AM=='login'?'¿Es tu primer acceso? <button type="button" class="lk" data-a="tab" data-m="reg">Crea tu cuenta de cliente</button> antes de ingresar.':'Escribe tu correo, una contraseña de al menos 8 caracteres y el nombre de tu empresa. Después, confirma el correo que recibas para acceder.';$('#submit-auth').innerHTML=(AM=='login'?'Ingresar':'Crear cuenta')+' <span aria-hidden="true">→</span>';clearAuthStatus()},
+ resendConfirmation:async(data,button)=>{
+   const form=$('#af'),pending=confirmationResend;if(!pending||button.disabled||form.getAttribute('aria-busy')==='true')return;
+   const email=form.elements.em.value,password=form.elements.pw.value;
+   if(email!==pending.email){clearAuthStatus();return}
+   button.disabled=true;form.setAttribute('aria-busy','true');$('#submit-auth').disabled=true;
+   try{const result=await api('resend-confirmation','POST',{email,password,grant:pending.grant});if(confirmationResend===pending)authStatus(result.message,'success')}
+   catch(error){if(confirmationResend===pending)authStatus(error.status?error.message:'No se pudo solicitar otro correo. Revisa tu conexión e inténtalo de nuevo.')}
+   finally{button.disabled=false;form.removeAttribute('aria-busy');$('#submit-auth').disabled=false}
+ },
  forgotPassword:()=>{
    const em=$('#af [name=em]')?.value||'';
    modal('Recuperar contraseña',`<p class="mut">Escribe tu correo electrónico registrado. Te enviaremos un enlace seguro para restablecer y cambiar tu contraseña directamente desde la página web.</p><label>Correo electrónico<input type="email" name="em" required autocomplete="email" placeholder="correo@ejemplo.com" value="${esc(em)}"></label>`,async form=>{

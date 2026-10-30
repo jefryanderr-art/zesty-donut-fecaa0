@@ -1,3 +1,4 @@
+import { UNCONFIRMED_MESSAGE, RESEND_MESSAGE, identityStatus, loginFailure, resendConfirmation } from '../lib/email-auth.mjs';
 import { validateProfile, fixedBusinessProfile, restoredBusinessProfile } from '../lib/business-profile.mjs';
 import { assistantAnswer, assistantSettings, assistantOn, assistantAvailable } from '../lib/assistant.mjs';
 import { discountRoute } from '../lib/discounts.mjs';
@@ -12,7 +13,7 @@ import { integrityReport } from '../lib/accounting-engine.mjs';
 import { scopeBranch } from '../lib/branches.mjs';
 import { retainedCompanyData } from '../lib/accounting-storage.mjs';
 import { getStore } from '@netlify/blobs';
-import { login, signup, confirmEmail, requestPasswordRecovery, recoverPassword, AuthError, MissingIdentityError } from '@netlify/identity';
+import { getSettings, login, signup, confirmEmail, requestPasswordRecovery, recoverPassword, AuthError, MissingIdentityError } from '@netlify/identity';
 import { OAuth2Client } from 'google-auth-library';
 import { timingSafeEqual, createHash, randomBytes, randomUUID } from 'node:crypto';
 import { and, desc, eq, gt, lt, or, sql, isNull } from 'drizzle-orm';
@@ -135,6 +136,32 @@ async function limitAttempts(request, context) {
   return attempt.count <= 30;
 }
 
+// The existing attempts table also holds hashed, short-lived resend grants.
+// These are not sessions and cannot authenticate a user.
+const confirmationGrantKey = (email, grant) => hashToken('confirmation-grant:' + email + ':' + grant);
+async function unconfirmedLogin(email) {
+  const grant = randomBytes(32).toString('hex');
+  await db.insert(loginAttempts).values({ key: confirmationGrantKey(email, grant), count: 0, expiresAt: new Date(Date.now() + 900000) });
+  return json({ error: UNCONFIRMED_MESSAGE, code: 'EMAIL_UNCONFIRMED', confirmationGrant: grant }, 403);
+}
+async function confirmationAttempt(scope, value, maximum, milliseconds = 900000) {
+  const window = Math.floor(Date.now() / milliseconds);
+  const key = hashToken('confirmation-limit:' + scope + ':' + value + ':' + window);
+  const [attempt] = await db.insert(loginAttempts).values({ key, expiresAt: new Date((window + 1) * milliseconds) })
+    .onConflictDoUpdate({ target: loginAttempts.key, set: { count: sql`${loginAttempts.count} + 1` } })
+    .returning({ count: loginAttempts.count });
+  return attempt.count <= maximum;
+}
+async function consumeConfirmationGrant(email, grant) {
+  if (!/^[a-f0-9]{64}$/.test(grant)) return false;
+  const [attempt] = await db.update(loginAttempts).set({ count: sql`${loginAttempts.count} + 1` })
+    .where(and(eq(loginAttempts.key, confirmationGrantKey(email, grant)), gt(loginAttempts.expiresAt, new Date()), lt(loginAttempts.count, 3)))
+    .returning({ count: loginAttempts.count });
+  if (!attempt) return false;
+  if (!await confirmationAttempt('email', email, 3)) return false;
+  return await confirmationAttempt('cooldown', email, 1, 60000);
+}
+
 const handleRequest = async (request, context, metrics) => {
   const url = new URL(request.url);
   const path = url.pathname.replace(/^\/api\//, '').replace(/\/$/, '');
@@ -179,6 +206,16 @@ const handleRequest = async (request, context, metrics) => {
     if (rawBody) {
       try { body = JSON.parse(rawBody); } catch { return fail('JSON inválido'); }
       if (!body || Array.isArray(body) || typeof body !== 'object') return fail('JSON inválido');
+    }
+    if (path === 'resend-confirmation' && method === 'POST') {
+      const address = context?.ip || request.headers.get('x-nf-client-connection-ip') || 'unknown';
+      if (!await confirmationAttempt('ip', address, 5)) return fail('Demasiados intentos. Espera 15 minutos antes de solicitar otro correo.', 429);
+      const email = cleanEmail(body.email), password = String(body.password || ''), grant = String(body.grant || '');
+      if (email.length <= 254 && /^\S+@\S+\.\S+$/.test(email) && password.length >= 8 && password.length <= 256 && email !== adminEmail && email !== PLATFORM_OWNER) {
+        await resendConfirmation({ email, password, grant, consume: consumeConfirmationGrant,
+          settings: getSettings, signup: (email, password) => authenticateIdentity(() => signup(email, password, {})) });
+      }
+      return json({ ok: true, message: RESEND_MESSAGE });
     }
     if (path === 'forgot-password' && method === 'POST') {
       if (!await limitAttempts(request, context)) return fail('Demasiados intentos. Espera 15 minutos.', 429);
@@ -230,6 +267,7 @@ const handleRequest = async (request, context, metrics) => {
       const email = cleanEmail(identityUser.email);
       if (!email || !identityUser.confirmedAt) return fail('No se pudo confirmar la cuenta', 403);
       const isOwnerAdmin = email === adminEmail || email === PLATFORM_OWNER;
+      if (!isOwnerAdmin) return json({ ok: true, confirmed: true, email });
       await ensureAccount(email, isOwnerAdmin ? 'Acontec' : identityUser.userMetadata?.company, identityUser.userMetadata?.description,'',identityUser.userMetadata?.businessType||'comercio',identityUser.userMetadata?.country||'Nicaragua');
       if (isOwnerAdmin) {
         await db.update(users).set({ platformAdmin: true }).where(eq(users.email, email));
@@ -302,12 +340,12 @@ const handleRequest = async (request, context, metrics) => {
         try {
           identityUser = await authenticateIdentity(() => login(email, password));
         } catch (error) {
-          if (error?.status === 401 || error?.status === 400 || error?.status === 422) {
-            return fail('Correo o contraseña incorrectos', 401);
-          }
-          return fail(error?.message || 'Error al iniciar sesión', error?.status || 400);
+          if (error instanceof MissingIdentityError) throw error;
+          const failure = loginFailure(error);
+          if (failure.code === 'EMAIL_UNCONFIRMED') return await unconfirmedLogin(email);
+          return json({ error: failure.error }, failure.status);
         }
-        if (!identityUser.confirmedAt) return fail('Confirma tu correo antes de ingresar', 403);
+        if (!identityUser.confirmedAt) return await unconfirmedLogin(email);
         await ensureAccount(email, identityUser.userMetadata?.company,'','',identityUser.userMetadata?.businessType||'comercio',identityUser.userMetadata?.country||'Nicaragua');
         return await issueSession(email, false, request);
       }
@@ -714,17 +752,16 @@ const handleRequest = async (request, context, metrics) => {
     if (error.publicMessage) return fail(error.publicMessage, error.status);
     if (error instanceof MissingIdentityError) return fail('El servicio de acceso todavía no está activado', 503);
     if (error instanceof AuthError) {
-      if (/email not confirmed/i.test(error.message)) return fail('Confirma tu correo antes de ingresar. Revisa tu bandeja de entrada y la carpeta de spam.', 403);
-      if (path === 'login' && [400, 401].includes(error.status)) return fail('Correo o contraseña incorrectos. Si es tu primer acceso, selecciona Crear cuenta y confirma tu correo.', 401);
+      if (path === 'login') { const failure = loginFailure(error); return json({ error: failure.error }, failure.status); }
       if (path === 'register' && error.status === 403) return fail('El registro por correo no está disponible. Contacta con la administración del sitio.', 403);
       if (path === 'register' && [400, 422].includes(error.status)) return fail('No se pudo crear la cuenta. Revisa los datos; si ya te registraste, confirma tu correo y selecciona Ingresar.', 400);
-      if (path === 'confirm' && [400, 401, 403, 404, 422].includes(error.status)) return fail('El enlace de confirmación no es válido o ha caducado. Vuelve a Crear cuenta con los mismos datos para solicitar otro correo.', 400);
+      if (path === 'confirm' && [400, 401, 403, 404, 422].includes(identityStatus(error))) return fail('El enlace de confirmación no es válido o ha caducado. Intenta ingresar para solicitar otro correo de confirmación.', 400);
       return fail('El servicio de acceso no está disponible en este momento. Intenta de nuevo más tarde.', 503);
     }
     console.error('Acontec API:', error.code || error.name || 'Error');
     return fail('No se pudo completar la operación. Intenta de nuevo.', 500);
   } finally {
-    if (method === 'POST' && ['register', 'login', 'confirm', 'google'].includes(path)) {
+    if (method === 'POST' && ['register', 'login', 'confirm', 'google', 'resend-confirmation'].includes(path)) {
       context.cookies.delete('nf_jwt');
       context.cookies.delete('nf_refresh');
     }
