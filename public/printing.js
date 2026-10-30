@@ -2,9 +2,9 @@
 
 // Preferencias efímeras: no se escriben en el navegador ni en los documentos.
 let PRINT_OPTIONS={color:'bw',paper:'a4',orientation:'portrait'},PRINT_CHOSEN=false;
-function choosePrintOptions(callback,{invoice=false,receipt=false}={}){
+function choosePrintOptions(callback,{invoice=false,receipt=false,invoiceConfig=null}={}){
  const initial={...PRINT_OPTIONS};
- if(invoice&&!PRINT_CHOSEN)initial.paper=({thermal:'80',letter:'letter',a4:'a4'})[S.cfg.print?.format]||'a4';
+ if(invoice)initial.paper=({thermal:'80',letter:'letter',a4:'a4'})[(invoiceConfig||S.cfg.print)?.format]||'a4';
  const columns=Math.max(0,...[...document.querySelectorAll('#main table tr')].map(row=>[...row.cells].reduce((total,cell)=>total+cell.colSpan,0)));
  const form=modal('Opciones de impresión',selectField('color','Color de impresión',option('bw','Blanco y negro',initial.color==='bw')+option('color','A color',initial.color==='color'))+selectField('paper','Tamaño de papel',option('a4','A4',initial.paper==='a4')+option('letter','Carta',initial.paper==='letter')+option('80','Ticket 80 mm',initial.paper==='80'))+'<div data-print-orientation>'+selectField('orientation','Orientación',option('portrait','Vertical',initial.orientation==='portrait')+option('landscape','Horizontal',initial.orientation==='landscape'))+'</div><p class="accounting-notice" data-print-warning hidden>Este reporte tiene muchas columnas; en 80 mm puede verse apretado. Se recomienda A4 o Carta horizontal.</p>'+notice('Selecciona el mismo papel en la impresora y desactiva los encabezados y pies del navegador.'),async f=>{
   const options={color:v(f,'color'),paper:v(f,'paper'),orientation:v(f,'paper')==='80'?'portrait':v(f,'orientation')};
@@ -48,7 +48,7 @@ function printInvoiceDocument(entry){return choosePrintOptions(options=>{
  $('#rcpt')?.remove();const format=options.paper==='80'?'thermal':options.paper;
  document.body.insertAdjacentHTML('beforeend',invoiceMarkup(entry,format,options.color));
  return printWithOptions(options,{receipt:true,invoice:true});
-},{invoice:true,receipt:true})}
+},{invoice:true,receipt:true,invoiceConfig:invoiceSettings(entry)})}
 function printPlatformReport(){return choosePrintOptions(options=>{
  const section=document.createElement('section');section.id='platform-print';
  section.innerHTML='<h1>Acontec · Cobros del servicio</h1>'+accountingTable(['Mes','Plan','Método','Moneda','Estado','Entorno','Cantidad','Monto'],platformExportRows().map(row=>'<tr>'+row.map(cell=>'<td>'+esc(cell)+'</td>').join('')+'</tr>').join(''));

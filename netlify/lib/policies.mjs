@@ -8,6 +8,7 @@ export const operatorId = (access, session) => access.member?.id || session.emai
 export const receiptRecords = data => ['taxes', 'pettyVouchers', 'cashMovements', 'costs'].flatMap(name => (data?.[name] || []).filter(record => record.receipt));
 export function roleAllows(access, module) {
   if (access.owner) return true;
+  if (module === 'diseno_factura') return true;
   const role = operationalRole(access);
   if (module === 'ventas' && role !== 'contador') return false;
   if (['cajero', 'vendedor', 'supervisor'].includes(role) && ['contabilidad', 'finanzas', 'personal', 'fiscal', 'ajustes', 'auditoria', 'accesibilidad'].includes(module)) return false;

@@ -1,9 +1,10 @@
 'use strict';
 
-const ACCESS_MODULES=[['ventas','Ventas'],['compras','Compras'],['gastos','Gastos'],['inventario','Productos e inventario'],['contabilidad','Contabilidad y cuentas por cobrar / pagar'],['finanzas','Estados financieros'],['personal','Personal, nómina y liquidaciones'],['fiscal','Fiscal y reglas'],['ajustes','Ajustes y respaldo completo'],['accesibilidad','Administración de accesos'],['auditoria','Bitácora de auditoría']];
+const ACCESS_MODULES=[['ventas','Ventas'],['compras','Compras'],['gastos','Gastos'],['inventario','Productos e inventario'],['contabilidad','Contabilidad y cuentas por cobrar / pagar'],['finanzas','Estados financieros'],['personal','Personal, nómina y liquidaciones'],['fiscal','Fiscal y reglas'],['ajustes','Ajustes y respaldo completo'],['accesibilidad','Administración de accesos'],['auditoria','Bitácora de auditoría'],['diseno_factura','Edición de factura']];
 const ROUTE_MODULE={ventas:'ventas',compras:'compras',gastos:'gastos',productos:'inventario',kardex:'inventario',apertura:'contabilidad',diario:'contabilidad',mayor:'contabilidad',cuentas:'contabilidad',cobrar:'contabilidad',pagar:'contabilidad',balanza:'finanzas',resultados:'finanzas',balance:'finanzas',flujo:'finanzas',personal:'personal',nomina:'personal',liquidaciones:'personal',provisiones:'personal',fiscal:'fiscal',impuestos:'fiscal',propiedades:'fiscal',reglas:'fiscal',ajustes:'ajustes',accesibilidad:'accesibilidad',auditoria:'auditoria'};
 const permission=(module,write=false)=>{
   if(!CO)return false;if(CO.support&&write)return false;if(CO.readOnlyLimit&&write)return false;if(CO.billingPlan?.blockedModules?.includes(module))return false;if(CO.owner)return true;
+  if(module==='diseno_factura'){const level=CO.permissions?.[module];return level==='escritura'||(!write&&level==='lectura')}
   const role=String(CO.role||'').trim().toLowerCase();
   if(module==='ventas'&&role!=='contador')return false;
   if(['cajero','vendedor','supervisor'].includes(role)&&['contabilidad','finanzas','personal','fiscal','ajustes','auditoria','accesibilidad'].includes(module))return false;
@@ -94,8 +95,8 @@ function memberForm(member){
       let level='ninguno';
       if(['sales','seller','supervisor'].includes(preset)&&module==='facturacion')level='escritura';if(['sales','seller'].includes(preset)&&module==='inventario')level='lectura';if(['sales','seller'].includes(preset)&&module==='cajas')level='escritura';if(preset==='supervisor'&&['cajas','inventario','costos','proveedores','compras','gastos'].includes(module))level='escritura';
 
-      if(preset==='reader'&&module!=='accesibilidad')level='lectura';
-      if(preset==='accountant'&&module!=='accesibilidad')level=module==='auditoria'?'lectura':'escritura';
+      if(preset==='reader'&&!['accesibilidad','diseno_factura'].includes(module))level='lectura';
+      if(preset==='accountant'&&!['accesibilidad','diseno_factura'].includes(module))level=module==='auditoria'?'lectura':'escritura';
       const select=form.elements['perm_'+module];
       select.value=level!=='ninguno'&&!permission(module,level==='escritura')?'ninguno':level;
     }

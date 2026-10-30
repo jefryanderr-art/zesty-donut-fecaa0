@@ -19,7 +19,7 @@ import { db } from '../../db/index.ts';
 import { companies, companyMembers, companyBackups, auditEvents, sessions, saveOperations } from '../../db/schema.ts';
 import { OPERATION_ARRAYS, roleAllows, salesAdministrator, cashAdministrator, operatorId, receiptRecords } from './policies.mjs';
 
-export const MODULES = [...catalog.all, 'ventas', 'compras', 'gastos', 'inventario', 'contabilidad', 'finanzas', 'personal', 'fiscal', 'ajustes', 'accesibilidad', 'auditoria', 'facturacion', 'cajas', 'costos', 'proveedores'];
+export const MODULES = [...catalog.all, 'ventas', 'compras', 'gastos', 'inventario', 'contabilidad', 'finanzas', 'personal', 'fiscal', 'ajustes', 'accesibilidad', 'auditoria', 'facturacion', 'cajas', 'costos', 'proveedores', 'diseno_factura'];
 const DATA_MODULES = ['compras', 'gastos', 'inventario', 'contabilidad', 'finanzas', 'personal', 'fiscal'];
 const deriveKey = promisify(scrypt);
 const round = value => Math.round(value * 100) / 100;
@@ -439,7 +439,7 @@ export function validatePermissions(permissions, access, role) {
     result[module] = level;
   }
   const prospective = { owner: false, permissions: result, member: { role } };
-  const availableData=write=>MODULES.filter(m=>(!catalog.all.includes(m)||(access.company?.data?.businessRecords||[]).some(r=>r.module===m))&&!['ajustes','auditoria','accesibilidad'].includes(m)&&(!access.billingPlan||moduleIncluded(access.billingPlan,m))).every(m=>allowed(prospective,m,write));
+  const availableData=write=>MODULES.filter(m=>(!catalog.all.includes(m)||(access.company?.data?.businessRecords||[]).some(r=>r.module===m))&&!['ajustes','auditoria','accesibilidad','diseno_factura'].includes(m)&&(!access.billingPlan||moduleIncluded(access.billingPlan,m))).every(m=>allowed(prospective,m,write));
   if (result.ajustes !== 'ninguno' && !allData(prospective)) accessError('Los respaldos de Ajustes requieren lectura de todos los módulos por contener información completa.', 400);
   if (result.ajustes === 'escritura' && !allData(prospective, true)) accessError('Restaurar respaldos requiere escritura en todos los módulos.', 400);
   if(result.auditoria!=='ninguno'&&!availableData(false))accessError('La auditoría requiere lectura de los módulos incluidos.',400);

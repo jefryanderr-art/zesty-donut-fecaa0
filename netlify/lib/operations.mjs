@@ -1,3 +1,4 @@
+import '../../public/invoice-design.js';
 import {BUSINESS_OPS,businessOperation,prepareBusinessSale,restoreBusinessReturn,validateBusinessRecords} from './business.mjs';
 import { normalizeItemQuantity } from './accounting-engine.mjs';
 import { consumeDiscount } from './discounts.mjs';
@@ -12,7 +13,7 @@ import { retainedCompanyData } from './accounting-storage.mjs';
 import { randomUUID, createHash } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
 import { and, eq } from 'drizzle-orm';
-import { companyMembers, siteContent } from '../../db/schema.ts';
+import { companyMembers, siteContent, users } from '../../db/schema.ts';
 import { allowed, requireModule, equal, accessError, updateCompany, actorName, audit } from './access.mjs';
 import { OPERATION_ARRAYS, operationalRole, salesAdministrator, supervisor, cashAdministrator, operatorId, receiptRecords } from './policies.mjs';
 
@@ -56,9 +57,49 @@ export function initializeOperations(data) {
   ]) if (!data.accounts.some(account => account.code === code)) data.accounts.push({ code, name, tipo, nat, sub });
   return data;
 }
+const invoiceDesign = globalThis.AcontecInvoiceDesign;
+function ensurePrintVersions(data, company, session) {
+  if (data.cfg.print?.versions?.length) return;
+  const settings = invoiceDesign.settings(data.cfg, company.name);
+  data.cfg.print = { ...data.cfg.print, ...settings, versions: [{ id: randomUUID(), at: '0001-01-01T00:00:00.000Z', recordedAt: new Date().toISOString(), actor: actorName(session), legacy: true, settings }], legacyInvoiceIds: (company.data?.entries || []).filter(e => ['venta','nota-credito'].includes(e.type)).map(e => e.id) };
+}
+function savePrintVersion(data, settings, session) {
+  if (equal(invoiceDesign.settings(data.cfg), settings)) return;
+  const version = { id: randomUUID(), at: new Date().toISOString(), actor: actorName(session), settings };
+  data.cfg.print = { ...data.cfg.print, ...settings, versions: [...data.cfg.print.versions, version] };
+}
+function validatePrintSettings(body, current) {
+  const result = { ...current };
+  for (const [key, [label, maximum]] of Object.entries(invoiceDesign.fields)) {
+    if (!Object.hasOwn(body,key)) continue;
+    requireValue(typeof body[key] === 'string' && body[key].length <= maximum && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(body[key]), 'Revisa '+label+' (máximo '+maximum+' caracteres).');
+    result[key] = body[key].trim();
+  }
+  for (const key of [...Object.keys(invoiceDesign.toggles),'showAcontec']) if (Object.hasOwn(body,key)) {
+    requireValue(typeof body[key] === 'boolean','Interruptor inválido.'); result[key] = body[key];
+  }
+  for (const [key, values] of Object.entries({format:['a4','letter','thermal'],logoPosition:['left','center','right']})) if (Object.hasOwn(body,key)) {
+    requireValue(values.includes(body[key]),'Formato o posición inválidos.'); result[key] = body[key];
+  }
+  for (const [key,min,max] of [['copies',1,2],['logoSize',24,180]]) if (Object.hasOwn(body,key)) {
+    requireValue(Number.isInteger(body[key]) && body[key]>=min && body[key]<=max,'Tamaño o número de copias inválido.'); result[key] = body[key];
+  }
+  if (Object.hasOwn(body,'accent')) { requireValue(typeof body.accent==='string' && /^#[0-9a-f]{6}$/i.test(body.accent),'Color inválido.'); result.accent=body.accent; }
+  if (Object.hasOwn(body,'logo')) { requireValue(typeof body.logo==='string' && (body.logo==='' || /^\/api\/image\?key=[a-f0-9-]+\.webp$/.test(body.logo)),'Logo inválido.'); result.logo=body.logo; }
+  for (const key of ['dgiDate','printerDate']) if (result[key]) dateValue(result[key]);
+  requireValue(!result.email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(result.email),'Correo inválido.');
+  requireValue(!result.website || /^https?:\/\/[^\s]+$/i.test(result.website),'Usa un sitio web con https:// o http://.');
+  requireValue(!result.printerBooks || /^[1-9][0-9]{0,5}$/.test(result.printerBooks),'Cantidad de libretas inválida.');
+  return result;
+}
 function appendEntry(data, session, record) {
   const entry = { id: randomUUID(), actor: actorName(session), managed: true, ...record };
   dateValue(entry.date);
+  if (['venta','nota-credito'].includes(entry.type)) {
+    entry.issuedAt = new Date().toISOString();
+    const cutoff = entry.date < entry.issuedAt.slice(0,10) ? entry.date+'T23:59:59.999Z' : entry.issuedAt;
+    entry.printVersionId = [...(data.cfg.print?.versions||[])].reverse().find(v=>v.at<=cutoff)?.id || null;
+  }
   requireValue(Array.isArray(entry.lines) && entry.lines.every(line => Number.isFinite(line.d) && Number.isFinite(line.c) && line.d >= 0 && line.c >= 0 && !(line.d && line.c)), 'Asiento inválido.');
   for (const line of entry.lines) accountExists(data, line.a);
   requireValue(Math.abs(entry.lines.reduce((total, line) => total + line.d - line.c, 0)) < 0.011, 'El asiento no cuadra.');
@@ -103,7 +144,7 @@ export function guardLedgerMutation(previous, next, access) {
     const empty = name === 'invoiceSequences' ? {} : [];
     requireValue(equal(previous?.[name] || empty, next[name] || empty), 'Usa la operación específica para modificar facturación, cajas o costos.');
   }
-  requireValue(equal(previous?.cfg?.print || {}, next.cfg?.print || {}), 'Configura la impresión desde Ajustes.');
+  requireValue(equal(previous?.cfg?.print || {}, next.cfg?.print || {}), 'Configura la impresión desde Edición de factura.');
   requireValue(equal(previous?.cfg?.pos || {}, next.cfg?.pos || {}) && equal(previous?.cfg?.cash || {}, next.cfg?.cash || {}) && equal(previous?.cfg?.advance || {}, next.cfg?.advance || {}), 'Los parámetros operativos solo se modifican desde su configuración.');
   const before = new Map((previous?.entries || []).map(entry => [entry.id, entry]));
   const after = new Map(next.entries.map(entry => [entry.id, entry]));
@@ -228,6 +269,7 @@ function registerCost(data, access, session, body) {
   return record;
 }
 async function makeSale(data, access, session, body, client, companyId, trustedSourceId=null) {
+  ensurePrintVersions(data,access.company,session);
   requirePermission(access, 'facturacion');
   const date = dateValue(body.date), payments = body.payments;
   requireValue(Array.isArray(payments) && payments.length > 0 && payments.length <= 4, 'Indica las formas de pago.');
@@ -306,6 +348,9 @@ function creditNote(data, access, session, body) {
   const original = data.entries.find(entry => entry.id === body.id && entry.type === 'venta');
   requireValue(original && original.items?.length && text(body.reason), 'Selecciona una factura e indica el motivo.');
   requireValue(original.items.every(item => Number.isFinite(item.cost)), 'La factura histórica no guarda costos por producto. Conserva el original y registra un ajuste contable documentado con el contador.');
+  const reasonCategories = ['el cliente no la compró','error de precio','devolución','otro'];
+  requireValue(reasonCategories.includes(body.reasonCategory),'Selecciona un motivo de anulación o devolución.');
+  requireValue(typeof body.reason === 'string' && body.reason.length <= 1000,'El motivo admite hasta 1000 caracteres.');
   const date = dateValue(body.date);
   requireValue(date >= original.date, 'La nota no puede ser anterior a la factura.');
   const previousNotes = data.entries.filter(entry => entry.type === 'nota-credito' && entry.invoiceId === original.id);
@@ -337,7 +382,7 @@ function creditNote(data, access, session, body) {
   if (finalReturn) cost = round(original.lines.filter(line => line.a === '5101').reduce((sum, line) => sum + line.d - line.c, 0) - previousNotes.reduce((sum, note) => sum + note.lines.filter(line => line.a === '5101').reduce((total, line) => total + line.c - line.d, 0), 0));
   if (cost) lines.push(...linesBetween('1301', '5101', cost));
   const number = (data.invoiceSequences.NC || 0) + 1; data.invoiceSequences.NC = number;
-  const note = appendEntry(data, session, { date, type: 'nota-credito', invoiceId: original.id, reference: 'NC-' + String(number).padStart(8, '0'), desc: 'Nota de crédito - ' + (original.reference || original.id), party: original.party, customerId: original.customerId || '', reason: text(body.reason, 1000), supervisor: actorName(session), originalOperatorId: original.operatorId || null, originalOperatorName: original.operatorName || original.actor || 'Histórico', operatorId: operatorId(access, session), shiftId: shift?.id || null, items, payments, debtReduction, refund, subtotal, vat, total, stock: items.filter(item=>!item.service).map(item => ({ pid: item.p, q: item.q, unit: item.unit || 'unidad', unitCost: item.cost })), lines });
+  const note = appendEntry(data, session, { date, type: 'nota-credito', invoiceId: original.id, reference: 'NC-' + String(number).padStart(8, '0'), desc: 'Nota de crédito - ' + (original.reference || original.id), party: original.party, customerId: original.customerId || '', reason: text(body.reason, 1000), reasonCategory: body.reasonCategory, supervisor: actorName(session), originalOperatorId: original.operatorId || null, originalOperatorName: original.operatorName || original.actor || 'Histórico', operatorId: operatorId(access, session), shiftId: shift?.id || null, items, payments, debtReduction, refund, subtotal, vat, total, stock: items.filter(item=>!item.service).map(item => ({ pid: item.p, q: item.q, unit: item.unit || 'unidad', unitCost: item.cost })), lines });
   for (const item of items.filter(item=>!item.service)) { const product = data.products.find(record => record.id === item.p), value = product.stock * product.cost + item.q * item.cost; product.stock = Math.round((product.stock + item.q) * 1e6) / 1e6; product.cost = round(value / product.stock); }
   restoreBusinessReturn(data,access,original,note,body,{check:requireValue,permit:requirePermission});
   return note;
@@ -372,6 +417,7 @@ export async function runOperation(companyId, session, body) {
       const beforeIds=new Set(data.entries.map(e=>e.id));
       let businessPatch={};
       const operation = body.operation, userId = operatorId(access, session);
+      if (['printSettings','settings','creditNote'].includes(operation)) ensurePrintVersions(data, access.company, operationSession);
       if(operation==='sale') await consumeDiscount(client,companyId,access,operationSession,body);
       if(BUSINESS_OPS.includes(operation)){
         output=await businessOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,amount,date:dateValue,entry:appendEntry,financialCash,registerCost,sale:(b,id)=>makeSale(data,access,operationSession,b,client,companyId,id)});
@@ -399,10 +445,13 @@ export async function runOperation(companyId, session, body) {
         if(!old){ data.cfg.pos||={series:[{code:'A',name:'Principal',branchId:'principal'}]};data.cfg.pos.series||=[{code:'A',name:'Principal',branchId:'principal'}];requireValue(!data.cfg.pos.series.some(s=>s.code===code),'El código coincide con una serie existente. Usa otro código de sucursal.');data.cfg.pos.series.push({code,name,branchId:branch.id});}
         data.branches=old?branches.map(b=>b.id===old.id?branch:b):[...branches,branch];output=branch.id;
       } else if (operation === 'printSettings') {
-        requirePermission(access,'ajustes');
-        if (!access.owner) accessError('Solo el dueño configura la impresión.');
-        requireValue(['a4','letter','thermal'].includes(body.format), 'Formato inválido.');
-        data.cfg.print = Object.fromEntries(['format','address','phone','email','creditTerms','legalText','thanks'].map(key => [key, text(body[key], 2000)]));
+        requirePermission(access,'diseno_factura');
+        const current = invoiceDesign.settings(data.cfg, company.name), next = validatePrintSettings(body,current);
+        if (next.showAcontec !== current.showAcontec) {
+          const [admin] = await client.select({platformAdmin:users.platformAdmin}).from(users).where(eq(users.email,session.email));
+          if (session.member || access.member || admin?.platformAdmin !== true) accessError('Solo el administrador de la plataforma cambia el pie Sistema Acontec.');
+        }
+        savePrintVersion(data,next,operationSession);
       } else if (operation === 'settings') {
         requirePermission(access,'ajustes');
         if(body.pos)requirePermission(access,'facturacion');
@@ -421,7 +470,9 @@ export async function runOperation(companyId, session, body) {
           if (packagingCostId) requireValue(data.costCatalog.some(cost => cost.id === packagingCostId && cost.active) && ['1101', '1102', '2101'].includes(body.pos.packagingPay), 'Revisa el costo de empaque y su forma de pago.');
           const logo = text(body.pos.logo, 200);
           requireValue(!logo || /^\/api\/image\?key=[a-f0-9-]+\.webp$/.test(logo), 'Logo no autorizado.');
+          const logoChanged = logo !== (data.cfg.pos?.logo || '');
           data.cfg.pos = { series: series.map(record => ({ code: record.code, name: text(record.name, 80), branchId:record.branchId||data.cfg.pos?.series?.find(s=>s.code===record.code)?.branchId||access.branchId||'principal' })), discountLimits: limits, packagingCostId, packagingPay: body.pos.packagingPay || '2101', logo };
+          if (logoChanged) savePrintVersion(data,{...invoiceDesign.settings(data.cfg),logo},operationSession);
           for (const record of series) if (record.next !== undefined) { const next = Number(record.next); requireValue(Number.isSafeInteger(next) && next >= (data.invoiceSequences[record.code] || 0) + 1 && next <= 999999999, 'El próximo número no puede retroceder.'); data.invoiceSequences[record.code] = next - 1; }
         }
         if (body.cash) data.cfg.cash = { receiptsEnabled: body.cash.receiptsEnabled === true };

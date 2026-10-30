@@ -651,7 +651,7 @@ export const assistantGuide = [
       "ticket",
       "cajero"
     ],
-    "texto": "1. Abre Facturación y revisa la empresa y la sucursal. Para un pago inmediato, pulsa Abrir turno y completa la apertura antes de emitir.\n2. Pulsa + Crear factura. Revisa Fecha, Turno de caja, Serie / sucursal, cliente y Vencimiento del crédito.\n3. Usa + Agregar producto; confirma Producto, Cantidad y Precio unitario sin IVA. Revisa la base, el IVA y el total mostrados.\n4. En Pago mixto reparte el total entre las formas disponibles. Completar saldo en efectivo completa el resto; revisa el reparto antes de confirmar.\n5. Pulsa Emitir factura y registrar asiento. La factura emitida queda inmutable; Imprimir y Detalle permiten revisarla. Una corrección requiere Nota de crédito autorizada."
+    "texto": "1. Abre Facturación y revisa la empresa y la sucursal. Para un pago inmediato, pulsa Abrir turno y completa la apertura antes de emitir.\n2. Pulsa + Crear factura. Revisa Fecha, Turno de caja, Serie / sucursal, cliente y Vencimiento del crédito.\n3. Usa + Agregar producto; confirma Producto, Cantidad y Precio unitario sin IVA. Revisa la base, el IVA y el total mostrados.\n4. En Pago mixto reparte el total entre las formas disponibles. Completar saldo en efectivo completa el resto; revisa el reparto antes de confirmar.\n5. Pulsa Emitir factura y registrar asiento. La factura emitida queda inmutable; Imprimir y Detalle permiten revisarla. Una corrección requiere Anular factura / Devolución (nota de crédito), con motivo y autorización de supervisor."
   },
   {
     "id": "cobrar",
@@ -723,7 +723,7 @@ export const assistantGuide = [
       "cancelar factura",
       "autorizar nota"
     ],
-    "texto": "1. Abre Facturación y localiza el documento emitido. Las facturas no se editan directamente: se corrigen con una nota de crédito autorizada.\n2. El perfil supervisor autorizado utiliza Nota de crédito. Si la acción no aparece, consulta al dueño; el asistente no concede esa autorización.\n3. En Nota de crédito / devolución revisa Fecha, Motivo y cantidades pendientes por producto. Puedes devolver cantidades parciales o las pendientes completas.\n4. Revisa Devolución del importe ya pagado y Turno de devolución (si hay reembolso). Pulsa Autorizar nota de crédito después de revisar.\n5. La nota conserva la factura y revierte los conceptos de las cantidades devueltas. Revisa el estado Anulada / devuelta o Devolución parcial; no registres otro cobro para simular la corrección."
+    "texto": "1. Abre Facturación y localiza el documento emitido. Las facturas no se editan directamente: se corrigen con una nota de crédito autorizada.\n2. El perfil supervisor autorizado utiliza Anular factura / Devolución (nota de crédito). Si la acción no aparece, consulta al dueño; el asistente no concede esa autorización.\n3. En Anular factura / Devolución (nota de crédito) revisa Fecha, selecciona Motivo (el cliente no la compró, error de precio, devolución u otro) y revisa las cantidades pendientes por producto. Puedes devolver cantidades parciales o las pendientes completas.\n4. Revisa Devolución del importe ya pagado y Turno de devolución (si hay reembolso). Pulsa Autorizar nota de crédito después de revisar.\n5. La nota conserva la factura y revierte los conceptos de las cantidades devueltas. Revisa el estado ANULADA (con sello en original y copia) o Devolución parcial; no registres otro cobro para simular la corrección."
   },
   {
     "id": "periodos",
@@ -1565,5 +1565,31 @@ export const assistantGuide = [
       "impresora"
     ],
     "texto": "1. Para una factura, abre Facturación o Ventas y pulsa Imprimir en el documento autorizado. La guía no abre ni descarga tus comprobantes.\n2. En las acciones compatibles aparece Opciones de impresión: elige Color de impresión, Tamaño de papel y Orientación.\n3. Revisa A4, Carta o Ticket 80 mm según el documento y confirma Imprimir / guardar PDF para abrir el diálogo del navegador. Selecciona el mismo papel en la impresora y revisa la vista previa.\n4. En cuentas por cobrar o pagar, Historial muestra los abonos vinculados. No hay que suponer que ese diálogo tenga un botón de recibo individual. Usa la impresión del reporte cuando esté disponible.\n5. Comprobante o Descargar en Caja corresponde al archivo adjunto existente. No equivale a crear automáticamente un recibo nuevo."
-  }
+  },
+  {
+    "id": "diseno-factura",
+    "modulo": "diseno_factura",
+    "titulo": "Edición de factura y diseño de impresión",
+    "palabras_clave": [
+        "diseño",
+        "edición de factura",
+        "logo",
+        "razón social",
+        "autorización dgi",
+        "imprenta",
+        "copias",
+        "color",
+        "pie de factura",
+        "nombre comercial",
+        "tamaño logo",
+        "formato",
+        "carta",
+        "ticket",
+        "restablecer",
+        "agradecimiento",
+        "texto legal",
+        "monto en letras"
+    ],
+    "texto": "1. Abre Edición de factura desde el menú. Todos los planes lo incluyen. Solo el dueño tiene acceso inicial; Accesibilidad permite conceder lectura o escritura a otros roles.\n2. Pulsa Editar diseño. Completa razón social, nombre comercial, RUC y contactos. Agrega autorización DGI, fecha y pie de imprenta si corresponde. Sin autorización aparece DOCUMENTO NO FISCAL — SIN AUTORIZACIÓN DGI abajo a la derecha.\n3. Ajusta título, leyendas, condiciones, textos, logo y color. Los interruptores muestran u ocultan columnas, sucursal, cajero, monto en letras, firma y datos del cliente.\n4. Elige A4, Carta o ticket de 80 mm y una o dos copias. Revisa la muestra en vivo. Restablecer valores por defecto prepara los campos; Guardar diseño confirma y registra usuario y fecha. Solo el administrador de plataforma cambia Sistema Acontec.\n5. Reimprimir conserva la versión fiscal. El historial parte de la configuración existente; no reconstruye cambios anteriores. Anular factura / Devolución (nota de crédito) exige supervisor, motivo y cantidades. La devolución completa muestra ANULADA en original y copia; conserva el documento. Verifica con tu contador."
+}
 ];
