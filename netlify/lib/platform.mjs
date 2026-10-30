@@ -1,3 +1,4 @@
+import {validateProfile} from './business-profile.mjs';
 import {createHash} from 'node:crypto';
 import {createOwnedCompany,audit} from './access.mjs';
 import {and,eq,desc,sql,isNull} from 'drizzle-orm';
@@ -36,6 +37,7 @@ export async function platformSummary(url){
 const clean=(value,max=200)=>String(value||'').trim().slice(0,max);
 export async function platformAction(session,body){
  if(body.confirmed!==true||clean(body.reason,1000).length<3)billingError('Confirma la acción e indica el motivo.');
+ if(body.operation==='businessTypes')return correctBusinessTypes(session,body);
  if(body.operation==='cancelSubscription'){const email=clean(body.email,254).toLowerCase();const sub=await subscription(email);if(sub.version!==body.version)billingError('La suscripción cambió. Recarga.',409);await cancelSubscription({email},session.email);await event(db,email,session.email,'Baja de suscripción',{reason:clean(body.reason,1000)});return {ok:true};}
  return db.transaction(async client=>{
   const reason=clean(body.reason,1000),email=clean(body.email,254).toLowerCase();
@@ -141,5 +143,28 @@ export async function testCompaniesRoute(session,method,operation,body={}){
   }
   await audit(client,company.id,session,plan?'Plan de prueba interna asignado':'Plan de prueba interna retirado',[{area:'testPlan',before:company.testPlan||null,after:plan?.id||null,reason}],company.revision||0);
   return {ok:true,id:company.id};
+ });
+}
+
+export async function correctBusinessTypes(session,body) {
+ await requirePlatform(session,session.activeCompanyId);
+ if(body.confirmed!==true||clean(body.reason,1000).length<3)billingError('Confirma la acción e indica el motivo.');
+ if(!Array.isArray(body.companies)||!body.companies.length||new Set(body.companies.map(c=>c.id)).size!==body.companies.length)billingError('Empresas inválidas.');
+ return db.transaction(async client=>{
+  await requirePlatform(session,session.activeCompanyId,client);
+  for(const item of [...body.companies].sort((a,b)=>String(a.id).localeCompare(String(b.id)))){
+   if(!/^[a-f0-9-]{36}$/.test(item.id||''))billingError('Empresa inválida.');
+   const [company]=await client.select({id:companies.id,ownerEmail:companies.ownerEmail,businessType:companies.businessType,revision:companies.revision,archivedAt:companies.archivedAt,isPlatformCompany:companies.isPlatformCompany}).from(companies).where(eq(companies.id,item.id)).for('update');
+   if(!company||company.archivedAt||company.isPlatformCompany||company.ownerEmail!==body.email)billingError('Empresa de cliente no disponible.',403);
+   if(!Number.isInteger(item.revision)||item.revision!==company.revision||item.previousType!==company.businessType)billingError('La empresa cambió. Recarga la ficha.',409);
+   const {businessType}=validateProfile(item.businessType);
+   if(businessType===company.businessType)continue;
+   // Metadata only: preserve accounting/storage revisions, documents and customization.
+   await client.update(companies).set({businessType,updatedAt:new Date()}).where(and(eq(companies.id,company.id),eq(companies.revision,item.revision),eq(companies.businessType,item.previousType)));
+   const changes=[{area:'businessType',before:company.businessType,after:businessType,reason:clean(body.reason,1000)}];
+   await audit(client,company.id,session,'Tipo de negocio corregido por Acontec',changes,company.revision);
+   await event(client,company.ownerEmail,session.email,'Tipo de negocio corregido por Acontec',{companyId:company.id,changes});
+  }
+  return {ok:true};
  });
 }
