@@ -373,8 +373,8 @@ const handleRequest = async (request, context, metrics) => {
     if (path === 'operations' && method === 'POST') return json(await runOperation(url.searchParams.get('c'), session, body));
     if (path === 'company-logo' && method === 'POST') {
       const access = await companyAccess(db, url.searchParams.get('c'), session);
-      requireModule(access,'ajustes',true);
-      if (!access.owner) return fail('Solo el dueño configura el logo.', 403);
+      if (!(access.owner && allowed(access,'ajustes',true))) requireModule(access,'diseno_factura',true);
+      if (access.support || access.readOnlyLimit) return fail('Este acceso es de solo lectura.',403);
       if (body.revision !== access.company.revision) return fail('La empresa cambió. Recarga antes de subir el logo.', 409);
       try { return json({ logo: await storeImage(body.image, 300000) }); } catch { return fail('El logo debe ser una imagen WebP válida de hasta 300 KB.'); }
     }
