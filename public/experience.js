@@ -116,7 +116,7 @@ function invoicePreview(target,cfg,previewLogo=''){
  if(!target)return;
  const sample=invoiceSample(),rate=AcontecInvoiceDesign.fiscal(cfg).taxRate;sample.vat=r2(sample.subtotal*rate/100);sample.total=r2(sample.subtotal+sample.vat);sample.payments[0].amount=sample.total;const editor=target.closest('form'),paper=editor?.elements.preview_paper?.value||cfg.format,color=editor?.elements.preview_color?.value||'color';const markup=invoiceMarkup(sample,paper,color,cfg);
  // El iframe aísla la hoja de papel y reutiliza las mismas reglas de impresión.
- const frame=document.createElement('iframe');frame.title='Vista previa de factura de ejemplo';frame.setAttribute('sandbox','allow-same-origin');
+ const frame=document.createElement('iframe');frame.title='Vista previa de factura de ejemplo';frame.setAttribute('sandbox','allow-same-origin');frame.tabIndex=-1;
  target.replaceChildren(frame);
  const css=[...document.querySelectorAll('link[rel="stylesheet"]')].map(link=>`<link rel="stylesheet" href="${esc(link.href)}" media="all">`).join('');
  frame.srcdoc=`<!doctype html><html lang="es"><head><meta charset="utf-8">${css}<style>body{margin:0;padding:18px;background:#fff;color:#21342b}#rcpt{display:block!important;width:100%!important;max-width:none!important}body.rc{padding:18px}body.rc:has(.invoice-thermal){width:80mm}body.rc #rcpt.invoice-thermal{width:72mm!important}.invoice-copy+.invoice-copy{border-top:1px dashed #aaa;margin-top:24px;padding-top:24px}table{width:100%;border-collapse:collapse}img{max-width:100%}</style></head><body class="rc">${markup}</body></html>`;
@@ -126,8 +126,19 @@ function invoicePreview(target,cfg,previewLogo=''){
   for(const sheet of doc.styleSheets){try{for(const rule of [...sheet.cssRules])if(rule.type===CSSRule.MEDIA_RULE&&rule.conditionText==='print'){const style=doc.createElement('style');style.textContent=[...rule.cssRules].map(r=>r.cssText).join('\n');doc.head.append(style)}}catch{}}
   const pageWidth=paper==='thermal'?80:paper==='letter'?215.9:210,margin=AcontecInvoiceDesign.effectiveDesign(cfg,paper)?.margin||(paper==='thermal'?4:14);
   const sheet=doc.createElement('style');sheet.textContent=`html{width:${pageWidth}mm}body.rc{box-sizing:content-box!important;width:${pageWidth-2*margin}mm!important;padding:${margin}mm!important;margin:0!important}body.rc #rcpt,body.rc #rcpt.invoice-thermal{width:100%!important}`;doc.head.append(sheet);
-  const fit=()=>{const scale=Math.min(1,frame.clientWidth/(pageWidth*96/25.4));doc.documentElement.style.zoom=scale;frame.style.height=Math.ceil(doc.body.scrollHeight*scale+40)+'px'};fit();for(const image of doc.images)image.addEventListener('load',fit,{once:true});
-  if(previewLogo)for(const business of doc.querySelectorAll('.invoice-business')){let img=business.querySelector('.invoice-logo');if(!img){const box=doc.createElement('div');box.className='invoice-logo-box';box.style.textAlign=cfg.logoPosition;img=doc.createElement('img');img.className='invoice-logo';img.alt='Logo de factura';img.style.width=Math.max(24,Math.min(180,cfg.logoSize||90))+'px';img.style.maxHeight=img.style.width;box.append(img);business.prepend(box)}img.src=previewLogo}
+  const fit=()=>{
+   if(!frame.isConnected||!frame.clientWidth)return;
+   const scale=Math.min(1,frame.clientWidth/(pageWidth*96/25.4))*(editor?.invoiceZoom||1);
+   doc.documentElement.style.zoom=scale;
+   frame.style.height=Math.ceil(Math.max(doc.body.scrollHeight,doc.body.getBoundingClientRect().height/scale)*scale+4)+'px';
+   frame.scrolling='no';
+   const output=editor?.querySelector('[data-preview-scale]');if(output)output.textContent=Math.round(scale*100)+' %';
+  };
+  target.invoiceFit=fit;fit();for(const image of doc.images)image.addEventListener('load',fit,{once:true});
+  const resize=new ResizeObserver(fit);resize.observe(target);
+  const cleanup=new MutationObserver(()=>{if(!frame.isConnected){resize.disconnect();cleanup.disconnect();if(target.invoiceFit===fit)delete target.invoiceFit}});cleanup.observe(target,{childList:true});
+  if(previewLogo)for(const business of doc.querySelectorAll('.invoice-business')){let img=business.querySelector('.invoice-logo');if(!img){const box=doc.createElement('div');box.className='invoice-logo-box';box.style.textAlign=cfg.logoPosition;img=doc.createElement('img');img.className='invoice-logo';img.alt='Logo de factura';img.style.width=Math.max(24,Math.min(180,cfg.logoSize||90))+'px';img.style.maxHeight=img.style.width;box.append(img);business.prepend(box)}img.addEventListener('load',fit,{once:true});img.src=previewLogo}
+  doc.fonts?.ready.then(()=>{if(frame.isConnected)fit()});
  };
 }
 ACT.printSettings=()=>{
@@ -162,7 +173,6 @@ const experienceSettings=V.ajustes;V.ajustes=async()=>{await experienceSettings(
 
 function mountInvoiceEditor(form,current,owner){
  const section=form.querySelector('.invoice-editor-layout>section'),D=AcontecInvoiceDesign;
- if(!document.getElementById('invoice-editor-responsive')){const style=document.createElement('style');style.id='invoice-editor-responsive';style.textContent='.invoice-design-dialog summary{min-height:44px;padding:12px 0;cursor:pointer;font-weight:700}.invoice-design-dialog details{border-bottom:1px solid #ccd4ce;padding:4px 0}.invoice-design-dialog input,.invoice-design-dialog select{min-height:44px}@media(max-width:759px){.invoice-design-dialog .invoice-editor-layout{display:flex;flex-direction:column}.invoice-design-dialog .invoice-preview{order:-1;position:sticky;top:0;max-height:40vh;overflow:auto;z-index:2}.invoice-design-dialog .invoice-preview iframe{min-height:200px}}';document.head.append(style)}
 
  let design=structuredClone(current.design||D.classic),saved=structuredClone(current.savedDesigns||[]);
  form.invoiceState={design,saved,defaults:{...current.designDefaults}};
@@ -183,10 +193,67 @@ function mountInvoiceEditor(form,current,owner){
  draw();
  controls.addEventListener('input',e=>{if(['design_baseSize','design_margin'].includes(e.target.name)){const prefix=e.target.name==='design_baseSize'?'size_':'margin_';for(const k of ['a4','letter','thermal'])form.elements[prefix+k].value=e.target.value}});
  controls.addEventListener('change',e=>{if(e.target.name==='design_template'){form.invoiceState.design=structuredClone(D.templates[e.target.value]);draw();form.dispatchEvent(new Event('input',{bubbles:true}))}});
- controls.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;try{readInvoiceEditor(form,current);const state=form.invoiceState;if(b.hasAttribute('data-template-reset'))state.design=structuredClone(D.templates[state.design.template]);if(b.dataset.move!==undefined){const i=+b.dataset.move,j=i+(+b.dataset.direction);[state.design.order[i],state.design.order[j]]=[state.design.order[j],state.design.order[i]]}if(b.hasAttribute('data-save-design')){const name=v(form,'design_name').trim();if(!name)throw new Error('Escribe un nombre.');const existing=state.saved.find(d=>d.name===name);if(!existing&&state.saved.length>=3)throw new Error('Máximo tres diseños.');if(existing)existing.design=structuredClone(state.design);else state.saved.push({id:crypto.randomUUID(),name,design:structuredClone(state.design)})}if(b.dataset.loadDesign!==undefined)state.design=structuredClone(state.saved[+b.dataset.loadDesign].design);if(b.dataset.deleteDesign!==undefined){const [removed]=state.saved.splice(+b.dataset.deleteDesign,1);for(const k of Object.keys(state.defaults))if(state.defaults[k]===removed.id)state.defaults[k]=''}draw();form.dispatchEvent(new Event('input',{bubbles:true}))}catch(error){wrapper.querySelector('[data-design-error]').textContent=error.message}});
+ controls.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;try{readInvoiceEditor(form,current);const state=form.invoiceState;if(b.hasAttribute('data-template-reset'))state.design=structuredClone(D.templates[state.design.template]);if(b.dataset.move!==undefined){const i=+b.dataset.move,j=i+(+b.dataset.direction);[state.design.order[i],state.design.order[j]]=[state.design.order[j],state.design.order[i]]}if(b.hasAttribute('data-save-design')){const name=v(form,'design_name').trim();if(!name)throw new Error('Escribe un nombre.');const existing=state.saved.find(d=>d.name===name);if(!existing&&state.saved.length>=3)throw new Error('Máximo tres diseños.');if(existing)existing.design=structuredClone(state.design);else state.saved.push({id:crypto.randomUUID(),name,design:structuredClone(state.design)})}if(b.dataset.loadDesign!==undefined)state.design=structuredClone(state.saved[+b.dataset.loadDesign].design);if(b.dataset.deleteDesign!==undefined){const [removed]=state.saved.splice(+b.dataset.deleteDesign,1);for(const k of Object.keys(state.defaults))if(state.defaults[k]===removed.id)state.defaults[k]=''}draw();form.dispatchEvent(new Event('input',{bubbles:true}))}catch(error){form.querySelector('[data-design-error]').textContent=error.message}});
  const preview=form.querySelector('.invoice-preview');preview.insertAdjacentHTML('afterbegin',selectField('preview_paper','Vista previa',option('a4','A4',true)+option('letter','Carta')+option('thermal','Ticket 80 mm'))+selectField('preview_color','Color',option('color','Color',true)+option('bw','Blanco y negro')));
- form.querySelectorAll('input,select,button').forEach(el=>el.style.minHeight='44px');
+ mountInvoiceEditorLayout(form,section,wrapper,controls);
 }
+// Solo organiza el borrador del editor; no interviene en impresión ni PDF.
+function mountInvoiceEditorLayout(form,section,wrapper,controls){
+ const preview=form.querySelector('.invoice-preview'),layout=form.querySelector('.invoice-editor-layout');
+ const titles=['Datos de la empresa','Datos fiscales','Textos y leyendas','Logo y colores','Columnas y opciones','Campos fiscales personalizados'];
+ const groups=titles.map((title,i)=>{const detail=document.createElement('details');detail.className='invoice-editor-group';detail.setAttribute('name','invoice-editor-sections');detail.open=i===0;const summary=document.createElement('summary');summary.textContent=title;detail.append(summary);return detail});
+ const add=(i,node)=>groups[i].append(node);
+ // Conserva los mismos controles y sus valores, sin reconstruir el formulario.
+ const original=[...section.children];
+ for(const node of original){
+  if(node===wrapper)continue;
+  if(node.tagName==='DETAILS'){
+   const title=node.querySelector('summary').textContent;
+   const fields=node.querySelector('fieldset');
+   if(title==='Identidad y contacto')for(const child of [...fields.children])add(child.querySelector('[name="ruc"]')?1:0,child);
+   else add(title==='Textos del documento'?2:1,fields);
+  }else{
+   const name=node.matches('button')?node.dataset.countryApply!==undefined?'country':'reset':node.querySelector('[name]')?.name;
+   add(name==='country'||node.hasAttribute('data-fiscal-missing')||node.hasAttribute('data-electronic-notice')||node.tagName==='FIELDSET'&&node.querySelector('[name^="fiscal_"]')?1:
+    ['logoFile','removeLogo','logoSize','logoPosition','accent'].includes(name)?3:
+    node.tagName==='P'&&node.textContent.includes('Perfil:')?1:4,node);
+  }
+ }
+ const custom=wrapper.firstElementChild,style=custom.nextElementSibling;
+ add(5,custom.querySelector('fieldset'));
+ // Los cinco campos quedan juntos, sin un segundo acordeón anidado.
+ for(const detail of [...groups[5].querySelectorAll('details')]){const heading=document.createElement('h4');heading.textContent=detail.querySelector('summary').textContent;detail.querySelector('summary').remove();detail.replaceWith(heading,...detail.childNodes)}
+ add(4,style.querySelector('fieldset'));add(4,style.querySelector('[data-design-error]'));
+ wrapper.remove();section.replaceChildren(...groups);
+ section.classList.add('invoice-editor-fields');section.id='invoice-editor-fields';preview.id='invoice-editor-preview';
+ section.addEventListener('toggle',event=>{const opened=event.target;if(opened.parentElement===section&&opened.open)for(const other of groups)if(other!==opened)other.open=false},true);
+ const tabs=document.createElement('div');tabs.className='invoice-editor-tabs';tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label','Edición de factura');
+ tabs.innerHTML='<button type="button" role="tab" id="invoice-tab-edit" aria-controls="invoice-editor-fields" aria-selected="true" data-editor-tab="edit">Editar</button><button type="button" role="tab" id="invoice-tab-preview" aria-controls="invoice-editor-preview" aria-selected="false" tabindex="-1" data-editor-tab="preview">Vista previa</button>';
+ layout.before(tabs);form.dataset.editorTab='edit';
+ const setTab=key=>{form.dataset.editorTab=key;for(const button of tabs.children){const selected=button.dataset.editorTab===key;button.setAttribute('aria-selected',selected);button.tabIndex=selected?0:-1}syncPanels();};
+ tabs.addEventListener('click',event=>{const button=event.target.closest('button');if(button)setTab(button.dataset.editorTab)});
+ tabs.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const key=event.key==='Home'?'edit':event.key==='End'?'preview':form.dataset.editorTab==='edit'?'preview':'edit';setTab(key);tabs.querySelector('[aria-selected="true"]').focus()});
+ const wide=matchMedia('(min-width: 900px), (min-width: 640px) and (orientation: landscape)');
+ function syncPanels(){for(const [panel,key] of [[section,'edit'],[preview,'preview']]){panel.hidden=!wide.matches&&form.dataset.editorTab!==key;if(wide.matches){panel.removeAttribute('role');panel.removeAttribute('aria-labelledby')}else{panel.setAttribute('role','tabpanel');panel.setAttribute('aria-labelledby',key==='edit'?'invoice-tab-edit':'invoice-tab-preview')}}requestAnimationFrame(()=>form.querySelector('[data-invoice-preview]')?.invoiceFit?.())}
+ wide.addEventListener('change',syncPanels);syncPanels();
+ const zoom=document.createElement('div');zoom.className='invoice-preview-zoom';zoom.setAttribute('role','group');zoom.setAttribute('aria-label','Zoom de vista previa');
+ zoom.innerHTML='<button type="button" class="btn ghost" data-zoom="out" aria-label="Reducir vista previa">−</button><output data-preview-scale aria-live="polite">100 %</output><button type="button" class="btn ghost" data-zoom="in" aria-label="Ampliar vista previa">+</button><button type="button" class="btn ghost" data-zoom="fit">Ajustar</button>';
+ preview.querySelector('[data-invoice-preview]').before(zoom);form.invoiceZoom=1;
+ zoom.addEventListener('click',event=>{const action=event.target.closest('[data-zoom]')?.dataset.zoom;if(!action)return;form.invoiceZoom=action==='fit'?1:Math.max(.4,Math.min(1,Math.round((form.invoiceZoom+(action==='in' ? .1 : -.1))*10)/10));zoom.querySelector('[data-zoom="in"]').disabled=form.invoiceZoom>=1;zoom.querySelector('[data-zoom="out"]').disabled=form.invoiceZoom<=.4;form.querySelector('[data-invoice-preview]')?.invoiceFit?.()});
+ zoom.querySelector('[data-zoom="in"]').disabled=true;
+ let dirty=false;
+ form.addEventListener('input',event=>{if(!event.target.name?.startsWith('preview_'))dirty=true});
+ form.addEventListener('change',event=>{if(!event.target.name?.startsWith('preview_'))dirty=true});
+ form.addEventListener('click',event=>{if(event.target.closest('[data-invoice-reset],[data-template-reset],[data-load-design],[data-delete-design],[data-save-design],[data-move]'))dirty=true;if(event.target.closest('[data-a="close"]')){event.preventDefault();event.stopPropagation();close()}},true);
+ const close=()=>{if(!dirty||window.confirm('Hay cambios sin guardar. ¿Cerrar y descartarlos?'))document.querySelector('#modal').replaceChildren()};
+ const keydown=event=>{if(event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();close()}if(event.key==='Tab'){const focusable=[...form.querySelectorAll('button,input,select,textarea,summary,[tabindex="0"]')].filter(el=>!el.disabled&&el.tabIndex!==-1&&el.getClientRects().length);const first=focusable[0],last=focusable.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}}};
+ document.addEventListener('keydown',keydown,true);
+ form.setAttribute('role','dialog');form.setAttribute('aria-modal','true');form.querySelector('.mh h3').id='invoice-editor-title';form.setAttribute('aria-labelledby','invoice-editor-title');
+ const previousFocus=document.activeElement;form.querySelector('.mh button').focus();
+ document.body.classList.add('invoice-editor-open');
+ const cleanup=new MutationObserver(()=>{if(!form.isConnected){wide.removeEventListener('change',syncPanels);document.removeEventListener('keydown',keydown,true);document.body.classList.remove('invoice-editor-open');cleanup.disconnect();if(previousFocus?.isConnected)previousFocus.focus()}});cleanup.observe(document.querySelector('#modal'),{childList:true,subtree:true});
+}
+
 function readInvoiceEditor(form,current){
  const D=AcontecInvoiceDesign,state=form.invoiceState;if(!state)return {};
  const d=state.design;

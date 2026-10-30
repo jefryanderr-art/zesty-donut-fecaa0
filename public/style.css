@@ -339,13 +339,52 @@ button{transition:background .15s,transform .15s}button:not(:disabled):active{tr
 
 /* El editor reutiliza la hoja impresa dentro de una vista previa aislada. */
 .invoice-editor-layout{display:grid;grid-template-columns:minmax(240px,.8fr) minmax(0,1.4fr);gap:24px;align-items:start}
-.invoice-design-dialog{max-width:1100px}
-.invoice-design-dialog fieldset{border:1px solid var(--line);border-radius:10px;padding:16px;margin:0 0 20px}
-.invoice-design-dialog legend{font-weight:700;color:var(--g);padding:0 6px}
 .invoice-preview{min-width:0;background:#e9e9df;border:1px solid var(--line);padding:18px;border-radius:12px}
+@media(max-width:759px){.invoice-editor-layout{grid-template-columns:1fr}.invoice-preview{padding:8px}.invoice-preview iframe{height:620px}}
+/* El diálogo tiene un solo desplazamiento principal y acciones fuera de él. */
+body.invoice-editor-open{overflow:hidden}
+.invoice-design-dialog{width:100%;max-width:1100px;max-height:94vh;max-height:94dvh;min-height:0;overflow:hidden}
+.invoice-design-dialog>.mh,.invoice-design-dialog>.mf{flex-shrink:0;background:inherit}
+.invoice-design-dialog>.mh{gap:12px}.invoice-design-dialog>.mh h3{overflow-wrap:anywhere}
+.invoice-design-dialog>.mb{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding-bottom:24px;scroll-padding-block:16px}
+.invoice-design-dialog>.mf{padding-bottom:calc(14px + env(safe-area-inset-bottom,0px));flex-wrap:wrap}
+.invoice-design-dialog>.err:empty{display:none}
+.invoice-design-dialog .invoice-editor-layout{display:grid;grid-template-columns:1fr;gap:20px;align-items:start}
+.invoice-design-dialog .invoice-editor-layout>section{min-width:0;max-width:100%;overflow-wrap:anywhere}
+.invoice-design-dialog fieldset{min-width:0;border:1px solid var(--line);border-radius:10px;padding:12px;margin:0 0 16px}
+.invoice-design-dialog legend{font-weight:700;color:var(--g);padding:0 6px;max-width:100%;white-space:normal}
+.invoice-design-dialog details{border-bottom:1px solid var(--line);padding:4px 0}
+.invoice-design-dialog summary{min-height:44px;padding:12px 4px;cursor:pointer;font-weight:700;overflow-wrap:anywhere}
+.invoice-design-dialog .invoice-editor-group>summary{font-size:1rem}
+.invoice-design-dialog :is(input:not([type=checkbox]),select,textarea){min-height:44px;max-width:100%;min-width:0;font-size:16px;box-sizing:border-box}
+.invoice-design-dialog label{overflow-wrap:anywhere}
+.invoice-design-dialog label.ck{min-height:44px;display:flex;align-items:center;gap:8px}
+.invoice-design-dialog input[type=checkbox]{min-height:0;flex-shrink:0}
+.invoice-design-dialog :is(button,summary){touch-action:manipulation}
+.invoice-design-dialog button{min-height:44px;cursor:pointer;white-space:normal}
+.invoice-design-dialog button:disabled{cursor:default;opacity:.55}
+.invoice-design-dialog :is(button,summary,input,select,textarea):focus-visible{outline:3px solid var(--g);outline-offset:3px}
+.invoice-editor-tabs{display:flex;gap:8px;margin:4px 0 16px}
+.invoice-editor-tabs button{flex:1;border:1px solid var(--line);border-radius:8px;padding:10px;background:transparent;color:inherit;font:inherit}
+.invoice-editor-tabs button[aria-selected=true]{background:var(--g);color:#fff}
+.invoice-design-dialog .invoice-preview{position:static;min-width:0;max-height:none;overflow:visible;background:#e9e9df;border:1px solid var(--line);padding:8px;border-radius:12px;color:#21342b}
 .invoice-preview iframe{display:block;border:0;background:white;width:100%;height:760px;border-radius:3px}
-.invoice-design-dialog .invoice-preview{position:sticky;top:0}
-@media(max-width:759px){.invoice-editor-layout{grid-template-columns:1fr}.invoice-design-dialog .invoice-preview{position:static}.invoice-preview{padding:8px}.invoice-preview iframe{height:620px}}
+@media(max-width:759px){.invoice-preview iframe{height:620px}}
+.invoice-design-dialog .invoice-preview iframe{height:1px;min-height:0}
+.invoice-preview-zoom{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:12px 0}
+.invoice-preview-zoom output{min-width:4ch;text-align:center;font-variant-numeric:tabular-nums}
+.invoice-design-dialog [hidden]{display:none!important}
+@media(min-width:640px){.invoice-design-dialog .invoice-preview{padding:18px}.invoice-design-dialog fieldset{padding:16px}.invoice-editor-tabs button{padding:14px}}
+@media(min-width:900px),(min-width:640px) and (orientation:landscape){
+ .invoice-design-dialog .invoice-editor-layout{grid-template-columns:minmax(0,.8fr) minmax(0,1.4fr);gap:24px}
+ .invoice-editor-tabs{display:none}
+ .invoice-design-dialog .invoice-preview{position:sticky;top:0;max-height:calc(94vh - 190px);max-height:calc(94dvh - 190px);overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+}
+@media(min-width:1440px){.invoice-design-dialog{max-width:1100px;margin:auto}}
+@media(max-width:639px){.invoice-design-dialog{margin:0;border-radius:18px 18px 0 0}.invoice-design-dialog>.mb{padding-inline:12px}.invoice-design-dialog>.mf{padding-inline:12px}.invoice-design-dialog .invoice-preview{position:static;overflow:visible;max-height:none}}
+@media(hover:hover){.invoice-design-dialog summary:hover{background:color-mix(in srgb,var(--g) 8%,transparent)}.invoice-design-dialog button:not(:disabled):hover{filter:brightness(.94)}}
+@media(prefers-color-scheme:dark){.invoice-design-dialog .invoice-preview{background:#25352e;color:#e8eee9}}
+[data-theme="dark"] .invoice-design-dialog .invoice-preview{background:#25352e;color:#e8eee9}
 @media print{
  #rcpt .invoice-copy{position:relative}
  #rcpt .invoice-copy+.invoice-copy{break-before:page;page-break-before:always}
