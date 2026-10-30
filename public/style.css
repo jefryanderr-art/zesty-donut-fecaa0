@@ -448,3 +448,6 @@ body.invoice-editor-open{overflow:hidden}
 #return-refund .invoice-pills label{position:relative}
 #return-refund .invoice-pills input{position:absolute;opacity:0;width:1px!important;height:1px!important;min-height:1px!important}
 #return-refund .invoice-pills span{white-space:nowrap}
+
+/* Mensajes persistentes de acceso y registro. */
+#auth-status{min-height:24px;padding:0 0 8px;overflow-wrap:anywhere}#auth-status:not(:empty){padding:12px;margin-bottom:12px;border:1px solid currentColor;border-radius:8px;background:#fff5f2;color:#852b23}
