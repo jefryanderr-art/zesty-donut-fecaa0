@@ -53,10 +53,24 @@ test('original y copia se imprimen con sello, fiscalidad, logo seguro y texto es
  const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const render=vm.runInNewContext(fragment+';invoiceMarkup',{AcontecInvoiceDesign:design,S:{cfg,entries:[]},CO:{name:'Empresa'},esc:escape,r2:n=>Math.round(n*100)/100,operationalRound:n=>Math.round(n*100)/100,customerById:()=>null,prod:()=>null,invoiceDate:v=>v||'',invoiceOperator:()=>'<Cajero>',saleStatus:()=> 'ANULADA',money:n=>'C$ '+n,formatQuantity:n=>n,printAmountWords:()=> 'Monto en letras',paymentLabels:{},PAY:{}});
  const settings={...changed,title:'<script>no</script>',notes:'<img src=x onerror=alert(1)>',showCode:false,showUnit:false,showDiscount:false,showCustomerName:false,showCustomerTaxId:false,logo:'javascript:alert(1)'};
- const html=render({type:'venta',date:'2026-10-30',total:10,items:[{name:'<Producto>',q:1,u:10}],customer:{name:'Cliente privado',taxId:'ID-privado'}},'a4','color',settings);
+ const entry={type:'venta',date:'2026-10-30',total:10,items:[{name:'<Producto>',q:1,u:10}],customer:{name:'Cliente privado',taxId:'ID-privado'}};
+ const html=render(entry,'a4','color',settings);
  assert.equal((html.match(/class="invoice-annulled"/g)||[]).length,2);
  assert.match(html,/Original: cliente/);assert.match(html,/Copia: emisor/);
- assert.equal((html.match(/DOCUMENTO NO FISCAL — SIN AUTORIZACIÓN DGI/g)||[]).length,2);
+ assert.equal(design.defaults().printMissingAuthorization,false);
+ assert.doesNotMatch(html,/DOCUMENTO NO FISCAL — SIN AUTORIZACIÓN DGI|invoice-dgi|Dirección General de Ingresos/);
+ for(const type of ['venta','nota-credito']){
+  const document={...entry,type};
+  const optedIn=render(document,'a4','color',{...settings,printMissingAuthorization:true});
+  assert.equal((optedIn.match(/DOCUMENTO NO FISCAL — SIN AUTORIZACIÓN DGI/g)||[]).length,2);
+  assert.doesNotMatch(optedIn,/invoice-dgi|Dirección General de Ingresos/);
+  const optedOut=render(document,'a4','color',{...settings,printMissingAuthorization:false});
+  assert.doesNotMatch(optedOut,/DOCUMENTO NO FISCAL — SIN AUTORIZACIÓN DGI|invoice-dgi|Dirección General de Ingresos/);
+  const authorized=render(document,'a4','color',{...settings,printMissingAuthorization:true,dgiNumber:'AUT-123'});
+  assert.equal((authorized.match(/class="invoice-dgi"/g)||[]).length,2);
+  assert.equal((authorized.match(/AUT-123/g)||[]).length,2);
+  assert.doesNotMatch(authorized,/DOCUMENTO NO FISCAL — SIN AUTORIZACIÓN DGI/);
+ }
  assert.equal((html.match(/Sistema Acontec/g)||[]).length,2);
  assert.match(html,/&lt;script&gt;/);assert.match(html,/&lt;Producto&gt;/);
  for(const forbidden of ['<script>','<img src=x','javascript:','Cliente privado','ID-privado','<th>Código</th>','<th>Unidad</th>','<th class="n">Descuento</th>'])assert.equal(html.includes(forbidden),false,forbidden);
