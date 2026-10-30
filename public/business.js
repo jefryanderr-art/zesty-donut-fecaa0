@@ -8,8 +8,9 @@ const businessRecords=(module)=>((S?.businessRecords)||[]).filter(r=>!module||r.
 const businessRecord=id=>businessRecords().find(r=>r.id===id);
 const businessModuleName=module=>BUSINESS.capabilities[module]?.name||module;
 for(const id of BUSINESS.all){ACCESS_MODULES.push([id,businessModuleName(id)]);BILLING_MODULES.push([id,businessModuleName(id)]);ROUTE_MODULE[id]=id;}
+const businessInvoiceOnly=()=>CO?.billingPlan?.id==='facturacion';
 const businessAllowedRoute=routeAllowed;
-routeAllowed=function(route){if(route==='businessMore')return !!CO;return businessAllowedRoute(route)};
+routeAllowed=function(route){if(route==='businessMore')return !!CO&&!businessInvoiceOnly();if(businessInvoiceOnly()&&BUSINESS.all.includes(route)&&!['documentos_venta','comprobantes'].includes(route))return false;return businessAllowedRoute(route)};
 const businessAllowedAction=actionAllowed;
 actionAllowed=function(action,data={}){
  if(action==='businessClear')return !!CO;
@@ -22,9 +23,10 @@ actionAllowed=function(action,data={}){
 for(const a of ['businessDetails','businessPrint'])READ_ACTIONS.add(a);
 READ_ACTIONS.add('businessClear');
 function businessVisible(route){
+ if(!routeAllowed(route))return false;
  if(['panel','ajustes','accesibilidad','auditoria','businessMore'].includes(route))return true;
  const custom=CO.businessCustomization||{};if(custom.hidden?.includes(route))return false;if(custom.shown?.includes(route))return true;
- const p=businessProfile();if(p.id==='comercio')return !BUSINESS.all.includes(route);return p.modules.includes(route);
+ const p=businessProfile();if(p.id==='comercio')return !BUSINESS.all.includes(route);return MENU.some(([,items])=>items.some(([id])=>id===route))||p.modules.includes(route);
 }
 const businessChrome=chrome;
 chrome=function(){
@@ -32,9 +34,9 @@ chrome=function(){
  const drawer=$('#drawer');if(!drawer)return;
  for(const button of drawer.querySelectorAll('[data-a="nav"]'))if(!businessVisible(button.dataset.r)&&button.dataset.r!=='control'&&button.dataset.r!=='administracion')button.remove();
  for(const heading of drawer.querySelectorAll('h4')){if(heading.nextElementSibling?.tagName==='H4')heading.remove()}
- const active=BUSINESS.all.filter(id=>businessVisible(id)&&routeAllowed(id));
- if(active.length)drawer.querySelector('.bot')?.insertAdjacentHTML('beforebegin','<h4>Mi negocio</h4>'+active.map(id=>`<button data-a="nav" data-r="${esc(id)}" class="${R===id?'on':''}"><span>◫</span>${esc(businessModuleName(id))}</button>`).join(''));
- drawer.querySelector('.bot')?.insertAdjacentHTML('beforebegin','<button data-a="nav" data-r="businessMore" class="'+(R==='businessMore'?'on':'')+'"><span>＋</span>Más módulos</button>');
+ const active=businessInvoiceOnly()?['documentos_venta','comprobantes'].filter(id=>routeAllowed(id)):BUSINESS.all.filter(id=>businessVisible(id)&&routeAllowed(id));
+ if(active.length)drawer.querySelector('.bot')?.insertAdjacentHTML('beforebegin',(businessInvoiceOnly()?'':'<h4>Mi negocio</h4>')+active.map(id=>`<button data-a="nav" data-r="${esc(id)}" class="${R===id?'on':''}"><span>◫</span>${esc(businessModuleName(id))}</button>`).join(''));
+ if(routeAllowed('businessMore'))drawer.querySelector('.bot')?.insertAdjacentHTML('beforebegin','<button data-a="nav" data-r="businessMore" class="'+(R==='businessMore'?'on':'')+'"><span>＋</span>Más módulos</button>');
  if(businessProfile().id!=='comercio'){
   for(const button of $('#bnav')?.querySelectorAll('[data-r]')||[])if(!businessVisible(button.dataset.r))button.remove();
   const labels=businessLabels(),names={clientes:labels.customer,productos:labels.product};
@@ -42,6 +44,7 @@ chrome=function(){
  }
 };
 V.businessMore=()=>{
+ if(!routeAllowed('businessMore')){R=firstAllowedRoute();view();return}
  const existing=MENU.flatMap(([,list])=>list).filter(([route])=>routeAllowed(route));
  main(pageHead('Más módulos')+notice('El perfil organiza el menú. Ocultar una herramienta no bloquea el acceso ni elimina información. Los permisos y el plan siempre se aplican.')+`<div class="business-modules">${[...existing,...BUSINESS.all.filter(id=>routeAllowed(id)).map(id=>[id,'◫',businessModuleName(id)])].map(([route,icon,name])=>`<button class="card business-module" data-a="nav" data-r="${esc(route)}"><b>${esc(name)}</b><small>${esc(BUSINESS.capabilities[route]?.flow||'Abrir módulo existente')}</small></button>`).join('')}</div>`+(CO.owner?'<button class="btn ghost" data-a="businessProfile">Personalizar mi sistema</button>':''));
 };
@@ -51,7 +54,7 @@ const businessSettings=V.ajustes;
 V.ajustes=async function(){const id=CO.id;await businessSettings();if(R!=='ajustes'||CO?.id!==id)return;$('#main').insertAdjacentHTML('afterbegin',`<section class="card"><h3>Mi tipo de negocio</h3><p>${esc(businessProfile().name)}</p><p>${esc(businessProfile().salesFlow)}</p>${CO.owner?'<button class="btn ghost" data-a="businessProfile">Personalizar mi sistema</button>':''}</section>`);enforceAccessUI()};
 ACT.businessProfile=()=>{
  const current=CO.businessCustomization||{},routes=[...new Map([...MENU.flatMap(([,list])=>list).map(([id,,name])=>[id,name]),...Object.entries(BUSINESS.moduleLabels)]).entries()];
- const form=modal('Personalizar mi sistema',businessTypeField(CO.businessType||'comercio')+bField('businessTimeZone','Zona horaria IANA para tarifas',current.timeZone||'America/Managua','text','required maxlength="80"')+notice('Cambiar de rubro solo cambia la organización y las etiquetas. Ningún registro ni operación se convierte o elimina.')+'<p id="business-description"></p><h4>Módulos del menú</h4><p>Automático sigue el perfil. Oculto queda disponible en Más módulos según tus permisos y plan.</p><div class="business-module-settings">'+routes.filter(([id])=>!['panel','ajustes','accesibilidad','auditoria'].includes(id)).map(([id,name])=>selectField('module_'+id,name,option('auto','Automático',!current.shown?.includes(id)&&!current.hidden?.includes(id))+option('show','Visible',current.shown?.includes(id))+option('hide','Oculto',current.hidden?.includes(id)))).join('')+'</div><h4>Etiquetas personalizadas (opcionales)</h4>'+['customer','product','document'].map((key,i)=>field('label_'+key,['Cliente / paciente / alumno','Producto / servicio','Factura / cuenta / recibo'][i],current.labels?.[key]||'','text','maxlength="40"')).join(''),async f=>{
+ const form=modal('Personalizar mi sistema',businessTypeField(CO.businessType||'comercio')+bField('businessTimeZone','Zona horaria IANA para tarifas',current.timeZone||'America/Managua','text','required maxlength="80"')+notice('Cambiar de rubro solo cambia la organización y las etiquetas. Ningún registro ni operación se convierte o elimina.')+'<p id="business-description"></p><h4>Módulos del menú</h4><p>Automático sigue el perfil. '+(businessInvoiceOnly()?'El plan y los permisos determinan los accesos disponibles.':'Oculto queda disponible en Más módulos según tus permisos y plan.')+'</p><div class="business-module-settings">'+routes.filter(([id])=>!['panel','ajustes','accesibilidad','auditoria'].includes(id)).map(([id,name])=>selectField('module_'+id,name,option('auto','Automático',!current.shown?.includes(id)&&!current.hidden?.includes(id))+option('show','Visible',current.shown?.includes(id))+option('hide','Oculto',current.hidden?.includes(id)))).join('')+'</div><h4>Etiquetas personalizadas (opcionales)</h4>'+['customer','product','document'].map((key,i)=>field('label_'+key,['Cliente / paciente / alumno','Producto / servicio','Factura / cuenta / recibo'][i],current.labels?.[key]||'','text','maxlength="40"')).join(''),async f=>{
   if(!await flush())return 'Guarda los cambios pendientes.';
   const businessCustomization={shown:[],hidden:[],labels:{},timeZone:v(f,'businessTimeZone').trim()};for(const [id]of routes){const value=f.elements['module_'+id]?.value;if(value==='show')businessCustomization.shown.push(id);if(value==='hide')businessCustomization.hidden.push(id)}for(const key of ['customer','product','document'])if(v(f,'label_'+key).trim())businessCustomization.labels[key]=v(f,'label_'+key).trim();
   const result=await api('business-profile?c='+CO.id,'POST',{revision:REV,businessType:v(f,'businessType'),businessCustomization});REV=result.revision;const fresh=await api('data?c='+CO.id);CO=fresh.company;S=fresh.data;REV=fresh.revision;rememberCloud();shell();view();
@@ -61,8 +64,12 @@ ACT.businessProfile=()=>{
 const businessPanel=V.panel;
 V.panel=function(){
  businessPanel();if(!CO||HOME)return;const p=businessProfile();
+ if(businessInvoiceOnly())$('#main .accounting-actions')?.insertAdjacentHTML('beforeend',['documentos_venta','comprobantes'].filter(id=>routeAllowed(id)).map(id=>`<button class="btn ghost" data-a="nav" data-r="${esc(id)}">${esc(businessModuleName(id))}</button>`).join(''));
  if(CO.owner&&!CO.onboardingDone)$('#main').insertAdjacentHTML('afterbegin',`<section class="card business-start"><h3>Empieza a tu ritmo</h3><p>Selecciona tu rubro y revisa las sugerencias. El catálogo de ejemplo se agrega sin precios, IVA ni existencias.</p><div class="accounting-actions"><button class="btn ghost" data-a="businessProfile">Elegir tipo de negocio</button><button class="btn" data-a="businessOnboard">Ver arranque opcional</button></div></section>`);
- if(p.id!=='comercio')$('#main').insertAdjacentHTML('afterbegin',`<section class="card"><span class="section-eyebrow">${esc(p.group)}</span><h3>${esc(p.name)}</h3><p>${esc(p.salesFlow)}</p><div class="accounting-actions">${p.capabilities.filter(id=>routeAllowed(id)).slice(0,4).map(id=>`<button class="btn ghost" data-a="nav" data-r="${esc(id)}">${esc(businessModuleName(id))}</button>`).join('')}</div></section>`);
+ if(p.id!=='comercio'&&!businessInvoiceOnly()){
+  const accounting=MENU.find(([name])=>name==='Contabilidad')?.[1].find(([route])=>routeAllowed(route));
+  $('#main').insertAdjacentHTML('afterbegin',`<section class="card"><span class="section-eyebrow">${esc(p.group)}</span><h3>${esc(p.name)}</h3><p>${esc(p.salesFlow)}</p><div class="business-panel-modules">${p.capabilities.filter(id=>routeAllowed(id)).map(id=>`<button class="btn ghost" data-a="nav" data-r="${esc(id)}">${esc(businessModuleName(id))}</button>`).join('')}${accounting?`<button class="btn ghost" data-a="nav" data-r="${esc(accounting[0])}">Contabilidad</button>`:''}</div></section>`);
+ }
 };
 ACT.businessOnboard=()=>{
  const p=businessProfile();modal('Arranque opcional · '+esc(p.name),notice('Solo para empresas nuevas sin productos ni movimientos. Los ejemplos son editables y no incluyen precios, impuestos ni saldos.')+`<p>Categorías: ${esc(p.startup.categories.join(', '))}</p><p>Unidades: ${esc(p.startup.units.join(', '))}</p><ul>${p.startup.examples.map(e=>'<li>'+esc(e.name+' · '+e.unit)+'</li>').join('')}</ul>`+selectField('seed','Qué deseas hacer',option('no','Omitir y continuar sin ejemplos')+option('yes','Agregar estos ejemplos')),async f=>{await operate('businessOnboard',{seed:v(f,'seed')==='yes'});CO.onboardingDone=true;view()},'Continuar');

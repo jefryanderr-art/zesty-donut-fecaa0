@@ -1,3 +1,4 @@
+import {catalog} from '../netlify/lib/business-profile.mjs';
 import { fiscalAnnualTotals } from '../netlify/lib/fiscal-projection.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -67,7 +68,7 @@ test('los planes existentes conservan precios y límites; Básico incorpora Fisc
 });
 test('Facturación ocupa el primer lugar con precios confirmados y bloqueos precisos',()=>{
  const p=DEFAULT_PLANS[0];assert.equal(p.id,'facturacion');assert.equal(p.name,'Facturación');assert.equal(p.monthlyCents,3000);assert.equal(p.annualCents,31000);assert.equal(p.currency,'USD');assert.deepEqual(p.limits,{companies:1,branches:1});
- assert.deepEqual(p.blockedModules,['contabilidad','finanzas','cajas','personal','control_personal','decisiones','sucursales']);
+ assert.deepEqual(p.blockedModules,['contabilidad','finanzas','cajas','personal','control_personal','decisiones','sucursales',...catalog.all.filter(id=>!['documentos_venta','comprobantes'].includes(id))]);
  assert.deepEqual(DEFAULT_PLANS.map(p=>p.id),['facturacion','basico','estandar','pro']);
 });
 test('el editor acepta todos los módulos configurables y rechaza módulos desconocidos',()=>{
