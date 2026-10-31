@@ -425,7 +425,7 @@ const ACT={
  },
  forgotPassword:()=>{
    const em=$('#af [name=em]')?.value||'';
-   modal('Recuperar contraseña',`<p class="mut">Escribe tu correo electrónico registrado. Te enviaremos un enlace seguro para restablecer y cambiar tu contraseña directamente desde la página web.</p><label>Correo electrónico<input type="email" name="em" required autocomplete="email" placeholder="correo@ejemplo.com" value="${esc(em)}"></label>`,async form=>{
+   modal('Recuperar contraseña',`<p class="mut">Escribe tu correo electrónico registrado. Si el correo está registrado en el acceso por contraseña, recibirás un enlace para cambiarla.</p><p class="mut">Si tu cuenta se creó con Google: Esta cuenta ingresa con Google. Usa 'Continuar con Google'.</p><label>Correo electrónico<input type="email" name="em" required autocomplete="email" placeholder="correo@ejemplo.com" value="${esc(em)}"></label>`,async form=>{
      const email=v(form,'em').trim();
      if(!email)return 'Escribe un correo electrónico.';
      const res=await api('forgot-password','POST',{email});
