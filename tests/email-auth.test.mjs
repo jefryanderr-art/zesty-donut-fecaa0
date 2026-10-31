@@ -1,3 +1,4 @@
+import { RECOVERY_ERROR, RESET_ERROR, missingIdentityUser, accessMailError, attemptScopes } from '../netlify/lib/email-auth.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -35,7 +36,8 @@ function fixture(overrides = {}) {
   const dependencies = {
     process: { env: {} }, DEFAULT_GOOGLE_CLIENT_ID: '', configuredAdminEmail: () => '', adminPasswordLogin: () => true, cleanEmail: value => String(value || '').trim().toLowerCase(), companyName: value => String(value || '').trim(), validateProfile: () => ({businessType:'comercio'}),
     json, fail: (message, status = 400) => json({ error: message }, status), AuthError, MissingIdentityError,
-    UNCONFIRMED_MESSAGE, RESEND_MESSAGE, identityStatus, loginFailure, resendConfirmation,
+    UNCONFIRMED_MESSAGE, RESEND_MESSAGE, identityStatus, loginFailure, resendConfirmation, RECOVERY_ERROR, RESET_ERROR, missingIdentityUser, accessMailError, attemptScopes,
+    recordAccessMailError: async () => {}, requestPasswordRecovery: async () => {}, recoverPassword: async () => ({email:"confirmed@example.invalid",confirmedAt:"now"}),
     authenticateIdentity: operation => operation(), limitAttempts: async () => true,
     confirmationAttempt: async () => true,
     same: (a,b) => a === b,
@@ -106,7 +108,7 @@ test('reenvío no cambia metadatos y no opera con registro cerrado, autoconfirma
     await request('resend-confirmation', { email: 'pending@example.invalid', grant: 'valid-grant', password: 'example-password' });
     assert.equal(calls.signup.length, 0);
   }
-  const limited = fixture({ confirmationAttempt: async () => false });
+  const limited = fixture({ limitAttempts: async () => false });
   assert.equal((await limited.request('resend-confirmation', { email: 'pending@example.invalid', grant: 'valid-grant', password: 'example-password' })).status, 429);
   assert.equal(limited.calls.consume, 0); assert.equal(limited.calls.signup.length, 0);
 });
@@ -205,4 +207,66 @@ test('registro ordinario confirmado solo crea sesión sin privilegios',async()=>
   const response=await request('register',{email:'customer@example.invalid',password:String(Date.now()),company:'Ejemplo',admin:true,platformAdmin:true});
   assert.equal(response.status,200);assert.equal(calls.sessions,1);assert.equal(calls.adminSessions,0);
  }finally{globalThis.AcontecInvoiceDesign=previous;}
+});
+
+test('recuperación distingue usuario ausente de fallos sin crear cuentas', async () => {
+ for (const [message,status,expected] of [['User not found',404,200],['SMTP failed',500,503],['rate limited',429,429],['endpoint not found',404,503]]) {
+  const entries=[];
+  const f=fixture({requestPasswordRecovery:async()=>{throw providerError(message,status)},recordAccessMailError:async(action,error)=>entries.push(accessMailError(action,error))});
+  const response=await f.request('forgot-password',{email:'customer@example.invalid'});
+  assert.equal(response.status,expected);
+  const body=await response.json();
+  if(expected!==200){assert.equal(body.error,RECOVERY_ERROR);assert.equal(entries.length,1)}else assert.equal(entries.length,0);
+  assert.equal(f.calls.signup.length,0);assert.equal(f.calls.accounts,0);assert.equal(f.calls.sessions,0);
+ }
+});
+test('restablecimiento oculta mensajes del proveedor',async()=>{
+ const f=fixture({recoverPassword:async()=>{throw providerError('private provider response',422)}});
+ const response=await f.request('reset-password',{token:'expired',password:'new-password'});
+ assert.equal(response.status,400);assert.equal((await response.json()).error,RESET_ERROR);assert.equal(f.calls.sessions,0);
+});
+test('registro, correo, confirmación e ingreso conservan la secuencia',async()=>{
+ let confirmed=false;const sent=[];
+ const f=fixture({signup:async email=>{sent.push('confirmation');return {email}},confirmEmail:async()=>{confirmed=true;return {email:'confirmed@example.invalid',confirmedAt:'now'}},login:async()=>{if(!confirmed)throw providerError('Email not confirmed',400);return {email:'confirmed@example.invalid',confirmedAt:'now'}}});
+ const previous=globalThis.AcontecInvoiceDesign;globalThis.AcontecInvoiceDesign={country:x=>x};
+ try {
+  const result=await f.request('register',{email:'confirmed@example.invalid',password:'password-before',company:'Ejemplo'});
+  assert.equal((await result.json()).confirmationRequired,true);assert.deepEqual(sent,['confirmation']);assert.equal(f.calls.sessions,0);
+  assert.equal((await f.request('confirm',{token:'confirmation-link'})).status,200);assert.equal(f.calls.sessions,0);
+  assert.equal((await f.request('login',{email:'confirmed@example.invalid',password:'password-before'})).status,200);assert.equal(f.calls.sessions,1);
+ }finally{globalThis.AcontecInvoiceDesign=previous}
+});
+test('recuperación, enlace, nueva contraseña e ingreso',async()=>{
+ let password='password-before',link=false;
+ const f=fixture({requestPasswordRecovery:async()=>{link=true},recoverPassword:async(token,next)=>{assert.ok(link);assert.equal(token,'recovery-link');password=next;return {email:'confirmed@example.invalid',confirmedAt:'now'}},login:async(email,candidate)=>{if(candidate!==password)throw providerError('Invalid login credentials',400);return {email,confirmedAt:'now'}}});
+ assert.equal((await f.request('forgot-password',{email:'confirmed@example.invalid'})).status,200);
+ assert.equal((await f.request('reset-password',{token:'recovery-link',password:'password-after'})).status,200);
+ assert.equal((await f.request('login',{email:'confirmed@example.invalid',password:'password-before'})).status,401);
+ assert.equal((await f.request('login',{email:'confirmed@example.invalid',password:'password-after'})).status,200);
+});
+test('cuotas separan acción y cuenta sin dirección unknown compartida',()=>{
+ const request=new Request('https://example.invalid');
+ const a=attemptScopes(request,{ip:'192.0.2.1'},'login',{email:'a@example.invalid'});
+ const b=attemptScopes(request,{ip:'192.0.2.1'},'login',{email:'b@example.invalid'});
+ assert.notDeepEqual(a,b);assert.equal(a.maximum,30);
+ assert.equal(attemptScopes(request,{},'forgot-password',{email:'a@example.invalid'}).address,'');
+ assert.equal(attemptScopes(request,{},'forgot-password',{}).maximum,5);
+});
+test('errores técnicos nunca incorporan el mensaje ni código arbitrario',()=>{
+ const result=accessMailError('forgot-password',{status:500,code:'private@example.invalid',message:'private password'});
+ assert.deepEqual(result,{action:'forgot-password',status:500,code:'SERVICE_UNAVAILABLE'});
+});
+
+test('cuotas reales conservan aislamiento por acción, IP y usuario y límite total',async()=>{
+ const start=source.indexOf('async function limitAttempts('),end=source.indexOf('async function recordAccessMailError(',start);
+ const counts=new Map();
+ const limit=new Function('attemptScopes','confirmationAttempt',source.slice(start,end)+';return limitAttempts')(attemptScopes,async(scope,value,max)=>{const key=scope+':'+value;const count=(counts.get(key)||0)+1;counts.set(key,count);return count<=max});
+ const request=new Request('https://example.invalid');const context={ip:'192.0.2.1'};
+ for(let i=0;i<30;i++)assert.equal(await limit(request,context,'worker-login',{username:'worker-a'}),true);
+ assert.equal(await limit(request,context,'worker-login',{username:'worker-a'}),false);
+ assert.equal(await limit(request,context,'worker-login',{username:'worker-b'}),true);
+ assert.equal(await limit(request,context,'forgot-password',{email:'worker-a@example.invalid'}),true);
+ for(let i=0;i<267;i++)await limit(request,context,'login',{email:'unique-'+i+'@example.invalid'});
+ assert.equal(await limit(request,context,'login',{email:'another@example.invalid'}),false);
+ assert.equal(await limit(request,{ip:'192.0.2.2'},'login',{email:'another@example.invalid'}),true);
 });

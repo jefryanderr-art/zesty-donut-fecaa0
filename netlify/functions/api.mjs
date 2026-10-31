@@ -1,4 +1,4 @@
-import { UNCONFIRMED_MESSAGE, RESEND_MESSAGE, identityStatus, loginFailure, resendConfirmation } from '../lib/email-auth.mjs';
+import { UNCONFIRMED_MESSAGE, RESEND_MESSAGE, identityStatus, loginFailure, resendConfirmation, RECOVERY_ERROR, RESET_ERROR, missingIdentityUser, accessMailError, attemptScopes } from '../lib/email-auth.mjs';
 import { validateProfile, fixedBusinessProfile, restoredBusinessProfile } from '../lib/business-profile.mjs';
 import { assistantAnswer, assistantSettings, assistantOn, assistantAvailable } from '../lib/assistant.mjs';
 import { discountRoute } from '../lib/discounts.mjs';
@@ -125,16 +125,19 @@ async function ensureAccount(email, name, description = '', personName = '', bus
     await db.insert(companies).values({ id, ownerEmail: email, name: companyName(name) || 'Mi empresa', ...validateProfile(businessType,{invoiceCountry:country}), onboardingDone:false, description: String(description || '').trim().slice(0, 2000) }).onConflictDoNothing();
   }
 }
-async function limitAttempts(request, context) {
-  const address = context?.ip || request.headers.get('x-nf-client-connection-ip') || 'unknown';
-  const window = Math.floor(Date.now() / 900000);
-  const key = createHash('sha256').update(address + ':' + window).digest('hex');
-  // Expired windows never authorize requests; cleanup need not run on every attempt.
-  if (randomBytes(1)[0] < 8) await db.delete(loginAttempts).where(lt(loginAttempts.expiresAt, new Date()));
-  const [attempt] = await db.insert(loginAttempts).values({ key, expiresAt: new Date((window + 1) * 900000) })
-    .onConflictDoUpdate({ target: loginAttempts.key, set: { count: sql`${loginAttempts.count} + 1` } })
-    .returning({ count: loginAttempts.count });
-  return attempt.count <= 30;
+async function limitAttempts(request, context, action = 'google', body = {}) {
+  const { address, subject, maximum } = attemptScopes(request, context, action, body);
+  if (address && !await confirmationAttempt('access-ip-total', address, 300)) return false;
+  return confirmationAttempt('access-action:' + action, JSON.stringify([address, subject]), maximum);
+}
+async function recordAccessMailError(action, error) {
+  const entry = { ...accessMailError(action, error), at: new Date().toISOString() };
+  console.error('Acontec access mail:', JSON.stringify(entry));
+  try {
+    await db.insert(siteContent).values({ id: 'access-mail-error:' + randomUUID(), content: entry });
+  } catch {
+    console.error('Acontec access mail history: WRITE_FAILED');
+  }
 }
 
 // The existing attempts table also holds hashed, short-lived resend grants.
@@ -153,14 +156,14 @@ async function confirmationAttempt(scope, value, maximum, milliseconds = 900000)
     .returning({ count: loginAttempts.count });
   return attempt.count <= maximum;
 }
-async function consumeConfirmationGrant(email, grant) {
+async function consumeConfirmationGrant(email, grant, scope = email) {
   if (!/^[a-f0-9]{64}$/.test(grant)) return false;
   const [attempt] = await db.update(loginAttempts).set({ count: sql`${loginAttempts.count} + 1` })
     .where(and(eq(loginAttempts.key, confirmationGrantKey(email, grant)), gt(loginAttempts.expiresAt, new Date()), lt(loginAttempts.count, 3)))
     .returning({ count: loginAttempts.count });
   if (!attempt) return false;
-  if (!await confirmationAttempt('email', email, 3)) return false;
-  return await confirmationAttempt('cooldown', email, 1, 60000);
+  if (!await confirmationAttempt('email', scope, 3)) return false;
+  return await confirmationAttempt('cooldown', scope, 1, 60000);
 }
 
 const handleRequest = async (request, context, metrics) => {
@@ -210,48 +213,39 @@ const handleRequest = async (request, context, metrics) => {
       if (!body || Array.isArray(body) || typeof body !== 'object') return fail('JSON inválido');
     }
     if (path === 'resend-confirmation' && method === 'POST') {
-      const address = context?.ip || request.headers.get('x-nf-client-connection-ip') || 'unknown';
-      if (!await confirmationAttempt('ip', address, 5)) return fail('Demasiados intentos. Espera 15 minutos antes de solicitar otro correo.', 429);
+      if (!await limitAttempts(request, context, path, body)) return fail('Demasiados intentos. Espera 15 minutos antes de solicitar otro correo.', 429);
       const email = cleanEmail(body.email), password = String(body.password || ''), grant = String(body.grant || '');
       if (email.length <= 254 && /^\S+@\S+\.\S+$/.test(email) && password.length >= 8 && password.length <= 256 && email !== adminEmail) {
-        await resendConfirmation({ email, password, grant, consume: consumeConfirmationGrant,
-          settings: getSettings, signup: (email, password) => authenticateIdentity(() => signup(email, password, {})) });
+        await resendConfirmation({ email, password, grant, consume: (email, grant) => consumeConfirmationGrant(email, grant, JSON.stringify([attemptScopes(request, context, path, body).address, email])),
+          report: error => recordAccessMailError(path, error), settings: getSettings, signup: (email, password) => authenticateIdentity(() => signup(email, password, {})) });
       }
       return json({ ok: true, message: RESEND_MESSAGE });
     }
     if (path === 'forgot-password' && method === 'POST') {
-      if (!await limitAttempts(request, context)) return fail('Demasiados intentos. Espera 15 minutos.', 429);
+      if (!await limitAttempts(request, context, path, body)) return fail('Demasiados intentos. Espera 15 minutos.', 429);
       const email = cleanEmail(body.email);
       if (!/^\S+@\S+\.\S+$/.test(email)) return fail('Escribe un correo electrónico válido');
       try {
         await authenticateIdentity(() => requestPasswordRecovery(email));
       } catch (error) {
-        if (error?.status === 404 || error?.message?.includes('not found')) {
-          const [existingUser] = await db.select().from(users).where(eq(users.email, email));
-          if (existingUser) {
-            try {
-              const tempPw = randomBytes(16).toString('hex') + 'A1!';
-              await authenticateIdentity(() => signup(email, tempPw, { company: 'Mi empresa' }));
-              await authenticateIdentity(() => requestPasswordRecovery(email));
-            } catch {
-              // Ignore fallback error
-            }
-          }
+        if (!missingIdentityUser(error)) {
+          await recordAccessMailError(path, error);
+          return fail(RECOVERY_ERROR, identityStatus(error) === 429 ? 429 : 503);
         }
       }
       return json({ ok: true, message: 'Si tu correo está registrado, recibirás un enlace para restablecer tu contraseña. Revisa también tu bandeja de spam.' });
     }
     if (path === 'reset-password' && method === 'POST') {
-      if (!await limitAttempts(request, context)) return fail('Demasiados intentos. Espera 15 minutos.', 429);
+      if (!await limitAttempts(request, context, path, body)) return fail('Demasiados intentos. Espera 15 minutos.', 429);
       const token = String(body.token || '').trim();
       const newPassword = String(body.password || '');
-      if (!token) return fail('Falta el token de recuperación');
+      if (!token) return fail(RESET_ERROR, 400);
       if (newPassword.length < 8 || newPassword.length > 256) return fail('La contraseña debe tener al menos 8 caracteres');
       let identityUser;
       try {
         identityUser = await authenticateIdentity(() => recoverPassword(token, newPassword));
       } catch (err) {
-        return fail(err?.message || 'El enlace de recuperación es inválido o ha expirado. Solicita uno nuevo.', 400);
+        return fail(RESET_ERROR, 400);
       }
       const email = cleanEmail(identityUser?.email);
       if (!email) return fail('No se pudo restablecer la contraseña', 400);
@@ -260,14 +254,14 @@ const handleRequest = async (request, context, metrics) => {
       return await issueSession(email, false, request);
     }
     if (path === 'confirm' && method === 'POST') {
-      if (!await limitAttempts(request, context)) return fail('Demasiados intentos. Espera 15 minutos.', 429);
+      if (!await limitAttempts(request, context, path, body)) return fail('Demasiados intentos. Espera 15 minutos.', 429);
       const identityUser = await authenticateIdentity(() => confirmEmail(String(body.token || '')));
       const email = cleanEmail(identityUser.email);
       if (!email || !identityUser.confirmedAt) return fail('No se pudo confirmar la cuenta', 403);
       return json({ ok: true, confirmed: true, email });
     }
     if (path === 'worker-login' && method === 'POST') {
-      if (!await limitAttempts(request, context)) return fail('Demasiados intentos. Espera 15 minutos.', 429);
+      if (!await limitAttempts(request, context, path, body)) return fail('Demasiados intentos. Espera 15 minutos.', 429);
       const username = String(body.username || '').trim().toLowerCase();
       const [member] = /^[a-z][a-z0-9._-]{3,39}$/.test(username) ? await db.select().from(companyMembers).where(eq(companyMembers.username, username)) : [];
       const valid = await verifyPassword(body.password || '', member?.passwordHash);
@@ -278,7 +272,7 @@ const handleRequest = async (request, context, metrics) => {
       return await issueSession(email, false, request, member.id);
     }
     if (['register', 'login', 'google'].includes(path) && method === 'POST') {
-      if (!await limitAttempts(request, context)) return fail('Demasiados intentos. Espera 15 minutos.', 429);
+      if (!await limitAttempts(request, context, path, body)) return fail('Demasiados intentos. Espera 15 minutos.', 429);
       const email = cleanEmail(body.email);
       const password = String(body.password || '');
       if (path !== 'google' && (!/^\S+@\S+\.\S+$/.test(email) || password.length > 256)) return fail('Correo o contraseña inválidos');
@@ -291,6 +285,7 @@ const handleRequest = async (request, context, metrics) => {
         try {
           identityUser = await authenticateIdentity(() => signup(email, password, { company: companyName(body.company), description: String(body.description || '').trim().slice(0, 2000),country:globalThis.AcontecInvoiceDesign.country(body.country||'Nicaragua'),businessType:validateProfile(body.businessType||'comercio').businessType }));
         } catch (error) {
+          await recordAccessMailError(path, error);
           // Translate known Identity failures without exposing provider internals.
           if (error instanceof MissingIdentityError) throw error;
           if (error instanceof AuthError) {
