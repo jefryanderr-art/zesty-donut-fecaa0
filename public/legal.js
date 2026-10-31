@@ -6,7 +6,7 @@
     ruc: '',                             // RUC (si lo tienes; si está vacío, no se muestra)
     country: 'Nicaragua',
     address: '',
-    email: 'jefryanderr@gmail.com',      // correo de contacto y de solicitudes de privacidad
+    email: '',      // correo de contacto y de solicitudes de privacidad
     site: 'https://acontec.company',
     updated: '22 de octubre de 2026',
     version: '2026-10-22',               // debe coincidir con LEGAL_VERSION en config.mjs
@@ -16,7 +16,7 @@
 
   const run = () => {
     document.querySelectorAll('[data-legal]').forEach((e) => { e.textContent = L[e.dataset.legal] ?? ''; });
-    document.querySelectorAll('[data-legal-mail]').forEach((a) => { a.href = 'mailto:' + L.email; a.textContent = L.email; });
+    document.querySelectorAll('[data-legal-mail]').forEach((a) => { if (L.email) { a.href = 'mailto:' + L.email; a.textContent = L.email; } else { a.removeAttribute('href'); a.textContent = 'Contacto pendiente de configurar'; } });
     document.querySelectorAll('[data-legal-if]').forEach((e) => { if (!L[e.dataset.legalIf]) e.remove(); });
     document.querySelectorAll('[data-legal-footer]').forEach((e) => {
       e.innerHTML = '<nav class="lg-foot"><a href="/privacidad">Política de Privacidad</a> · <a href="/terminos">Términos y Condiciones</a> · <a href="/reembolsos">Reembolsos y cancelaciones</a> · <a href="/cookies">Política de cookies</a><br><span>© ' + new Date().getFullYear() + ' ' + L.brand + '. Precios en dólares (USD).</span></nav>';

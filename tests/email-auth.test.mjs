@@ -30,14 +30,17 @@ test('solo errores explícitos de credenciales muestran contraseña incorrecta; 
 const source = await readFile(new URL('../netlify/functions/api.mjs', import.meta.url), 'utf8');
 const routeSource = source.slice(source.indexOf('const handleRequest ='), source.indexOf('\nexport default async'));
 function fixture(overrides = {}) {
-  const calls = { signup: [], sessions: 0, accounts: 0, consume: 0 };
+  const calls = { audit: 0, adminSessions: 0, signup: [], sessions: 0, accounts: 0, consume: 0 };
   const json = (value, status = 200) => Response.json(value, { status });
   const dependencies = {
-    process: { env: {} }, DEFAULT_GOOGLE_CLIENT_ID: '', PLATFORM_OWNER: 'owner@example.invalid', cleanEmail: value => String(value || '').trim().toLowerCase(), companyName: value => String(value || '').trim(),
+    process: { env: {} }, DEFAULT_GOOGLE_CLIENT_ID: '', configuredAdminEmail: () => '', adminPasswordLogin: () => true, cleanEmail: value => String(value || '').trim().toLowerCase(), companyName: value => String(value || '').trim(), validateProfile: () => ({businessType:'comercio'}),
     json, fail: (message, status = 400) => json({ error: message }, status), AuthError, MissingIdentityError,
     UNCONFIRMED_MESSAGE, RESEND_MESSAGE, identityStatus, loginFailure, resendConfirmation,
     authenticateIdentity: operation => operation(), limitAttempts: async () => true,
     confirmationAttempt: async () => true,
+    same: (a,b) => a === b,
+    users: {}, customerEvents: {},
+    db: { insert: () => ({ values: () => { calls.audit++; return {onConflictDoNothing: async () => {}}; } }) },
     consumeConfirmationGrant: async (email, grant) => { calls.consume++; return email === 'pending@example.invalid' && grant === 'valid-grant'; },
     unconfirmedLogin: async () => json({ error: UNCONFIRMED_MESSAGE, code: 'EMAIL_UNCONFIRMED', confirmationGrant: 'valid-grant' }, 403),
     login: async () => { throw providerError('invalid_grant: Email not confirmed', 400); },
@@ -45,7 +48,7 @@ function fixture(overrides = {}) {
     getSettings: async () => ({ disableSignup: false, autoconfirm: false }),
     confirmEmail: async () => ({ email: 'confirmed@example.invalid', confirmedAt: '2026-10-30T12:00:00Z' }),
     ensureAccount: async () => { calls.accounts++; },
-    issueSession: async () => { calls.sessions++; return json({ ok: true }); },
+    issueSession: async (email, admin) => { calls.sessions++; if(admin)calls.adminSessions++; return json({ ok: true }); },
     ...overrides,
   };
   const route = new Function(...Object.keys(dependencies), routeSource + ';return handleRequest')(...Object.values(dependencies));
@@ -164,4 +167,42 @@ test('enlace fallido conserva error en el mismo lugar sin anunciar confirmación
   assert.match(fixture.status.textContent, /ha caducado/);
   assert.equal(fixture.status.dataset.tone, 'error');
   assert.equal(fixture.email.value, '');
+});
+
+const adminAddress = 'admin@example.invalid';
+test('administrador sin credenciales, sin confirmación o con correo distinto no recibe sesión', async () => {
+  for (const login of [async () => {throw new Error('invalid');}, async () => ({email:adminAddress}), async () => ({email:'other@example.invalid',confirmedAt:'now'})]) {
+    const {request,calls} = fixture({configuredAdminEmail:()=>adminAddress, login});
+    assert.equal((await request('login',{email:adminAddress,password:String(Date.now())})).status,401);
+    assert.equal(calls.sessions,0);
+    assert.ok(calls.audit > 0);
+  }
+});
+test('registro administrativo se rechaza antes de Identity y no emite sesión',async()=>{
+  const {request,calls}=fixture({configuredAdminEmail:()=>adminAddress});
+  assert.equal((await request('register',{email:adminAddress,password:String(Date.now()),company:'Ejemplo'})).status,403);
+  assert.equal(calls.signup.length,0);assert.equal(calls.sessions,0);
+});
+test('modo solo Google rechaza contraseña válida y el límite bloquea nuevas verificaciones',async()=>{
+  for(const overrides of [{adminPasswordLogin:()=>false},{confirmationAttempt:async()=>false}]) {
+    let verified=0;
+    const {request,calls}=fixture({configuredAdminEmail:()=>adminAddress,login:async()=>{verified++;return {email:adminAddress,confirmedAt:'now'};},...overrides});
+    assert.ok([401,429].includes((await request('login',{email:adminAddress,password:String(Date.now())})).status));
+    assert.equal(verified,0);assert.equal(calls.sessions,0);
+  }
+});
+test('confirmar el correo de administrador nunca entrega sesión',async()=>{
+ const {request,calls}=fixture({configuredAdminEmail:()=>adminAddress,confirmEmail:async()=>({email:adminAddress,confirmedAt:'now'})});
+ assert.equal((await request('confirm',{token:'test-confirmation'})).status,200);
+ assert.equal(calls.sessions,0);assert.equal(calls.accounts,0);
+});
+
+test('registro ordinario confirmado solo crea sesión sin privilegios',async()=>{
+ const previous=globalThis.AcontecInvoiceDesign;
+ globalThis.AcontecInvoiceDesign={country:value=>value};
+ try {
+  const {request,calls}=fixture({configuredAdminEmail:()=>adminAddress,signup:async(email)=>({email,confirmedAt:'now'})});
+  const response=await request('register',{email:'customer@example.invalid',password:String(Date.now()),company:'Ejemplo',admin:true,platformAdmin:true});
+  assert.equal(response.status,200);assert.equal(calls.sessions,1);assert.equal(calls.adminSessions,0);
+ }finally{globalThis.AcontecInvoiceDesign=previous;}
 });
