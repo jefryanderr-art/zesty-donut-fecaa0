@@ -1,4 +1,5 @@
-export const PLATFORM_OWNER = 'jefryanderr@gmail.com';
+export const adminEmail = () => String(globalThis.Netlify?.env?.get('ADMIN_EMAIL') ?? process.env.ADMIN_EMAIL ?? '').trim().toLowerCase();
+export const adminPasswordLogin = () => String(globalThis.Netlify?.env?.get('ADMIN_PASSWORD_LOGIN') ?? process.env.ADMIN_PASSWORD_LOGIN ?? '').trim().toLowerCase() !== 'off';
 export const OPERATION_ARRAYS = ['shifts', 'cashMovements', 'pettyFunds', 'pettyVouchers', 'cashCounts', 'costCatalog', 'costs', 'suppliers'];
 export const operationalRole = access => String(access.member?.role || access.role || '').trim().toLowerCase();
 export const salesAdministrator = access => access.owner || operationalRole(access) === 'contador';

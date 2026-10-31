@@ -6,7 +6,7 @@ import { and, desc, eq, notLike, sql } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
 import { users, companies, companyMembers, customerPayments, customerEvents, legalAcceptances, siteContent } from '../../db/schema.ts';
 import { accessError } from './access.mjs';
-import { PLATFORM_OWNER } from './policies.mjs';
+import { adminEmail as configuredAdminEmail } from './policies.mjs';
 
 const clean = (value, maximum = 200) => String(value || '').trim().slice(0, maximum);
 const states = ['sin_plan', 'prueba', 'activo', 'en_gracia', 'vencido', 'suspendido','cancelado'];
@@ -33,22 +33,22 @@ export async function acceptLegal(session, body) {
   return { ok: true };
 }
 export async function isPlatformAdmin(session) {
-  if (!session || session.member) return false;
+  if (!session || session.member || !configuredAdminEmail() || session.email !== configuredAdminEmail() || session.admin !== true) return false;
   const [user] = await db.select({ platformAdmin: users.platformAdmin }).from(users).where(eq(users.email, session.email));
   return user?.platformAdmin === true;
 }
 export async function ensureAcontecCompany(email) {
-  const adminEmail = (process.env.ADMIN_EMAIL || '').trim().toLowerCase() || PLATFORM_OWNER;
-  if (email !== PLATFORM_OWNER && email !== adminEmail) return;
+  const adminEmail = configuredAdminEmail();
+  if (!adminEmail || email !== adminEmail) return;
   const existing = await db.select({ id: companies.id, name: companies.name }).from(companies).where(eq(companies.ownerEmail, email));
   if (existing.some(company => company.name.trim().toLowerCase() === 'acontec')) {
-    if(email===PLATFORM_OWNER) await db.update(companies).set({isPlatformCompany:true}).where(and(eq(companies.id,existing.find(c=>c.name.trim().toLowerCase()==='acontec').id),sql`NOT EXISTS (SELECT 1 FROM acontec_companies WHERE is_platform_company = true)`));
+    if(email===adminEmail) await db.update(companies).set({isPlatformCompany:true}).where(and(eq(companies.id,existing.find(c=>c.name.trim().toLowerCase()==='acontec').id),sql`NOT EXISTS (SELECT 1 FROM acontec_companies WHERE is_platform_company = true)`));
     return;
   }
   const hash = createHash('sha256').update('acontec-ledger:' + email).digest('hex');
   const id = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
   await db.insert(companies).values({ id, ownerEmail: email, name: 'Acontec', description: 'Contabilidad propia de Acontec' }).onConflictDoNothing();
-  if(email===PLATFORM_OWNER)await db.update(companies).set({isPlatformCompany:true}).where(and(eq(companies.id,id),sql`NOT EXISTS (SELECT 1 FROM acontec_companies WHERE is_platform_company = true)`));
+  if(email===adminEmail)await db.update(companies).set({isPlatformCompany:true}).where(and(eq(companies.id,id),sql`NOT EXISTS (SELECT 1 FROM acontec_companies WHERE is_platform_company = true)`));
 }
 export async function customerAdmin(method, body, url, session) {
   if (!await isPlatformAdmin(session)) accessError('Solo la administración autorizada accede a clientes.');
@@ -56,7 +56,7 @@ export async function customerAdmin(method, body, url, session) {
   if(method==='POST'&&(body.confirmed!==true||clean(body.reason,1000).length<3))accessError('Confirma la acción e indica el motivo.',400);
   const email = clean(body.email || url.searchParams.get('email'), 254).toLowerCase();
   if (method === 'GET') {
-    const condition = and(notLike(users.email, '%@access.acontec.invalid'), sql`${users.email} <> ${PLATFORM_OWNER}`);
+    const condition = and(notLike(users.email, '%@access.acontec.invalid'), sql`${users.email} <> ${configuredAdminEmail()}`);
     if (email) return customerDetail(email, condition);
     const rows = await db.select({ email: users.email, name: users.name, createdAt: users.createdAt, lastAccessAt: users.lastAccessAt, profile: users.profile, version: users.version }).from(users).where(condition).orderBy(desc(users.createdAt)).limit(5001);
     const truncated = rows.length > 5000;
@@ -85,7 +85,7 @@ export async function customerAdmin(method, body, url, session) {
   }
   return db.transaction(async client => {
     const [user] = await client.select().from(users).where(eq(users.email, email)).for('update');
-    if (!user || email === PLATFORM_OWNER || email.endsWith('@access.acontec.invalid')) accessError('Cliente no encontrado.', 404);
+    if (!user || email === configuredAdminEmail() || email.endsWith('@access.acontec.invalid')) accessError('Cliente no encontrado.', 404);
     if (user.version !== body.version) accessError('La ficha cambió en otra pestaña. Recárgala.', 409);
     if (body.operation === 'profile') {
       if(body.plan!==String(user.profile?.plan||'')||body.state!==(user.profile?.state||'sin_plan')||body.paidUntil!==String(user.profile?.paidUntil||''))accessError('Ajusta el plan y su vigencia desde Suscripción en el Centro de control.',409);
