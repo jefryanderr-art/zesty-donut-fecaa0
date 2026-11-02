@@ -40,15 +40,29 @@ export async function isPlatformAdmin(session) {
 export async function ensureAcontecCompany(email) {
   const adminEmail = configuredAdminEmail();
   if (!adminEmail || email !== adminEmail) return;
-  const existing = await db.select({ id: companies.id, name: companies.name }).from(companies).where(eq(companies.ownerEmail, email));
-  if (existing.some(company => company.name.trim().toLowerCase() === 'acontec')) {
-    if(email===adminEmail) await db.update(companies).set({isPlatformCompany:true}).where(and(eq(companies.id,existing.find(c=>c.name.trim().toLowerCase()==='acontec').id),sql`NOT EXISTS (SELECT 1 FROM acontec_companies WHERE is_platform_company = true)`));
-    return;
-  }
-  const hash = createHash('sha256').update('acontec-ledger:' + email).digest('hex');
-  const id = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
-  await db.insert(companies).values({ id, ownerEmail: email, name: 'Acontec', description: 'Contabilidad propia de Acontec' }).onConflictDoNothing();
-  if(email===adminEmail)await db.update(companies).set({isPlatformCompany:true}).where(and(eq(companies.id,id),sql`NOT EXISTS (SELECT 1 FROM acontec_companies WHERE is_platform_company = true)`));
+  return db.transaction(async client => {
+    // Serialize both verified login paths and /me for this configured owner.
+    const [configuredOwner] = await client.select({ email: users.email }).from(users).where(eq(users.email, email)).for('update');
+    if (!configuredOwner) accessError('No se pudo recuperar la administración de Acontec.', 409);
+    const existing = await client.select({ id: companies.id, name: companies.name, archivedAt: companies.archivedAt, isPlatformCompany: companies.isPlatformCompany }).from(companies).where(eq(companies.ownerEmail, email)).orderBy(companies.id);
+    const [marked] = await client.select({ id: companies.id, ownerEmail: companies.ownerEmail }).from(companies).where(eq(companies.isPlatformCompany, true));
+    // Never transfer the platform identity from a different owner or company.
+    const candidates = existing.filter(company => company.name.trim().toLowerCase() === 'acontec');
+    const principal = candidates.find(company => company.id === marked?.id)
+      || candidates.find(company => !company.archivedAt) || candidates[0];
+    if (marked && (marked.ownerEmail !== email || marked.id !== principal?.id)) {
+      accessError('La empresa de plataforma requiere revisión administrativa. No se cambiaron sus asignaciones.', 409);
+    }
+    if (!principal) {
+      const hash = createHash('sha256').update('acontec-ledger:' + email).digest('hex');
+      const id = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
+      await client.insert(companies).values({ id, ownerEmail: email, name: 'Acontec', description: 'Contabilidad propia de Acontec', isPlatformCompany: true });
+      return;
+    }
+    if (principal.isPlatformCompany && !principal.archivedAt) return;
+    await client.update(companies).set({ isPlatformCompany: true, archivedAt: null }).where(and(eq(companies.id, principal.id), eq(companies.ownerEmail, email)));
+    await client.insert(customerEvents).values({ email, actor: email, action: 'Acceso a empresa de plataforma recuperado', details: { companyId: principal.id, restoredPlatformFlag: !principal.isPlatformCompany, restoredArchive: !!principal.archivedAt } });
+  });
 }
 export async function customerAdmin(method, body, url, session) {
   if (!await isPlatformAdmin(session)) accessError('Solo la administración autorizada accede a clientes.');
