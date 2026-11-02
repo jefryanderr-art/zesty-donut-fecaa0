@@ -212,7 +212,7 @@ function authStatus(message='',tone='error') {
   target.textContent=message;target.dataset.tone=tone;
 }
 function clearAuthStatus(){authNoticeVersion++;authStatus();confirmationResend=null;const button=$('#resend-confirmation');if(button)button.hidden=true}
-async function session(result){if(result.confirmationRequired){ACT.tab({m:'login'});$('#af [name=pw]').value='';authStatus('Cuenta creada. Revisa tu correo (también spam) y abre el enlace de confirmación para ingresar.','success');return}const account=await api('me');U=account.user;COS=account.companies;await openCompany(COS[0]?.id);if(sessionStorage.getItem('edit')){sessionStorage.removeItem('edit');if(U.editor){authView();ACT.gear()}}}
+async function session(result){if(result.confirmationRequired){ACT.tab({m:'login'});$('#af [name=pw]').value='';authStatus('Cuenta creada. Revisa tu correo (también spam) y abre el enlace de confirmación para ingresar.','success');return}const account=await api('me');U=account.user;COS=account.companies;await openCompany((U.isPlatformAdmin===true&&!U.worker?COS.find(company=>company.owner&&company.isPlatformCompany===true):null)?.id||COS[0]?.id);if(sessionStorage.getItem('edit')){sessionStorage.removeItem('edit');if(U.editor){authView();ACT.gear()}}}
 async function openCompany(id){
   if(CO&&!await flush())throw new Error(uiT("app.extra.10","Guarda los cambios pendientes antes de cambiar de empresa."));
   const company=COS.find(item=>item.id==id)||COS[0];
