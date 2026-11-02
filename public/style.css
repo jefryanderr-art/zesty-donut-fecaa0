@@ -454,3 +454,17 @@ body.invoice-editor-open{overflow:hidden}
 
 #auth-status[data-tone="success"]{color:#21543e;background:#edf7f0}
 .auth-resend{display:block;margin:0 0 16px}.auth-resend[hidden]{display:none}
+/* Optional platform appearance. Empty settings retain the existing design. */
+body{font-family:var(--ui-font,'DM Sans',sans-serif)}
+.card{border-radius:var(--ui-radius,14px)}
+.editor-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}.editor-tabs .btn{flex:1 1 130px}
+#editor-fields{min-width:0}#editor-fields details{border:1px solid var(--line);padding:12px;margin:10px 0;border-radius:10px}#editor-fields summary{cursor:pointer;font-weight:600}#editor-fields fieldset,.bank-account{border:1px solid var(--line);margin:16px 0;padding:12px;min-width:0}#editor-fields textarea{min-height:76px;resize:vertical}.editor-text-field{margin:18px 0;padding-bottom:16px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.editor-preview-banner{position:fixed;inset:auto 8px 80px;z-index:100;padding:16px;background:var(--card);color:var(--ink);border:2px solid var(--g);box-shadow:0 4px 30px #0003}.public-editor-sections{width:min(1144px,calc(100% - 48px));margin:24px auto}.public-section-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));gap:20px}.public-section-grid article p{white-space:pre-line}.transfer-option{margin-top:24px}.transfer-option p{overflow-wrap:anywhere}.brand-mark img{object-fit:contain}.transfer-option a.btn{display:inline-block;text-decoration:none}
+@media(prefers-color-scheme:dark){:root[data-ui-appearance]:not([data-theme="light"]){--bg:#17211b;--card:#202c24;--ink:#f2f0e9;--mut:#b8c1b8;--line:#526356}:root[data-ui-appearance]:not([data-theme="light"]) .auth-page{background:var(--bg);color:var(--ink)}}
+[data-ui-appearance][data-theme="dark"]{--bg:#17211b;--card:#202c24;--ink:#f2f0e9;--mut:#b8c1b8;--line:#526356}
+[data-ui-appearance][data-theme="dark"] :is(.top,.drawer,.bnav,.md,input,select,textarea,.seg,.btn.ghost){background:var(--card);color:var(--ink)}
+@media(prefers-color-scheme:dark){:root[data-ui-appearance]:not([data-theme="light"]) :is(.top,.drawer,.bnav,.md,input,select,textarea,.seg,.btn.ghost){background:var(--card);color:var(--ink)}}
+@media(max-width:650px){.editor-tabs .btn{font-size:12px;padding:10px}.public-editor-sections{width:calc(100% - 32px)}.transfer-option .btn{max-width:100%;white-space:normal}.editor-preview-banner{bottom:88px}}
+:root[data-ui-appearance] :is(.auth-page,.auth-header,.auth-footer){background:var(--bg);color:var(--ink)}
+:root[data-ui-appearance] :is(.auth-wordmark,.hero-a h1,.access-heading h2){color:var(--ink)}
+:root[data-ui-appearance] :is(.hero-a>p,.header-note,.auth-footer p,.access-heading p){color:var(--mut)}
+.public-editor-sections>.hero-a{padding:32px 20px;margin-bottom:24px}.public-editor-sections>.public-contacts{width:100%;margin:20px 0}

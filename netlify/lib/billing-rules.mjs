@@ -43,6 +43,8 @@ export function validatePlan(body){
  if(!/^[a-z][a-z0-9_-]{1,40}$/.test(body.id)||!String(body.name||'').trim()||body.currency!=='USD')billingError('Revisa identificador, nombre y moneda USD.');
  for(const key of ['monthlyCents','annualCents'])if(!Number.isSafeInteger(body[key])||body[key]<1||body[key]>999999900)billingError('Usa precios positivos en centavos enteros.');
  for(const key of ['companies','branches'])if(body.limits?.[key]!==null&&(!Number.isInteger(body.limits?.[key])||body.limits[key]<1||body.limits[key]>10000))billingError('Revisa los límites del plan.');
+ if(body.limits?.storageWarningBytes!=null&&(!Number.isSafeInteger(body.limits.storageWarningBytes)||body.limits.storageWarningBytes<1))billingError('Umbral de almacenamiento inválido.');
+ if(body.annualCents>body.monthlyCents*12)billingError('El precio anual no puede superar doce mensualidades.');
  if(!Array.isArray(body.blockedModules)||body.blockedModules.some(m=>!BLOCKABLE_MODULES.includes(m)))billingError('Revisa los módulos del plan.');
  return {id:body.id,name:String(body.name).trim().slice(0,80),currency:'USD',monthlyCents:body.monthlyCents,annualCents:body.annualCents,limits:body.limits,blockedModules:body.blockedModules,active:body.active===true};
 }

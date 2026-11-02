@@ -28,8 +28,10 @@ export async function subscription(email,client=db){
  let [sub]=await client.select().from(subscriptions).where(eq(subscriptions.email,email));if(sub)return sub;if(client===db)return db.transaction(tx=>subscription(email,tx));
  const [user]=await client.select().from(users).where(eq(users.email,email));if(!user)billingError('Cuenta no encontrada.',404);
  const profile=user.profile||{},paid=profile.paidUntil&&Number.isFinite(Date.parse(profile.paidUntil))?dayEnd(profile.paidUntil.slice(0,10)):null;
- const created=await client.insert(subscriptions).values({email,trialEndsAt:new Date(Date.now()+86400000),plan:paid?(DEFAULT_PLANS.find(p=>p.id===String(profile.plan||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/^plan\s*/,''))?.id||'pro'):null,paidUntil:paid,state:profile.state==='suspendido'?'suspendido':paid?'activo':'prueba'}).onConflictDoNothing().returning({email:subscriptions.email});
- if(created.length)await event(client,email,email,'Suscripción inicializada',{trialHours:24,preservedLegacyPayment:!!paid,legacyPlan:profile.plan||null});
+ const [trialConfig]=await client.select().from(siteContent).where(eq(siteContent.id,'platform-trial-settings'));
+ const trialHours=Number.isInteger(trialConfig?.content?.hours)&&trialConfig.content.hours>=1&&trialConfig.content.hours<=720?trialConfig.content.hours:24;
+ const created=await client.insert(subscriptions).values({email,trialEndsAt:new Date(Date.now()+trialHours*3600000),plan:paid?(DEFAULT_PLANS.find(p=>p.id===String(profile.plan||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/^plan\s*/,''))?.id||'pro'):null,paidUntil:paid,state:profile.state==='suspendido'?'suspendido':paid?'activo':'prueba'}).onConflictDoNothing().returning({email:subscriptions.email});
+ if(created.length)await event(client,email,email,'Suscripción inicializada',{trialHours,preservedLegacyPayment:!!paid,legacyPlan:profile.plan||null});
  [sub]=await client.select().from(subscriptions).where(eq(subscriptions.email,email));if(created.length)await projectProfile(client,sub);return sub;
 }
 export async function accountAccess(email,admin=false,client=db){const sub=await subscription(email,client),ent=entitlement(sub,admin),list=await plans(client),plan=list.find(p=>p.id===ent.plan);return {sub,ent,plan:plan?{...plan,limits:admin?plan.limits:planLimits(plan,sub)}:null}}

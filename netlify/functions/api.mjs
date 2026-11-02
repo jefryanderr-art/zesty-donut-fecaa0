@@ -1,3 +1,6 @@
+import {backupRoute,storageStats,downloadPrivateExport} from '../lib/private-backups.mjs';
+import {publishedEditor,editorRoute,publicPlans,trialSettings} from '../lib/platform-editor.mjs';
+import {transferMe,requestTransfer,transferAdmin,guardPagaditoChannel,transferStatusSummary} from '../lib/transfer-billing.mjs';
 import { UNCONFIRMED_MESSAGE, RESEND_MESSAGE, identityStatus, loginFailure, resendConfirmation, RECOVERY_ERROR, RESET_ERROR, missingIdentityUser, accessMailError, attemptScopes } from '../lib/email-auth.mjs';
 import { validateProfile, fixedBusinessProfile, restoredBusinessProfile } from '../lib/business-profile.mjs';
 import { assistantAnswer, assistantSettings, assistantOn, assistantAvailable } from '../lib/assistant.mjs';
@@ -65,6 +68,7 @@ async function storeImage(value, maxBytes = 1500000) {
   if (image.length > maxBytes || image.toString('ascii', 0, 4) !== 'RIFF' || image.toString('ascii', 8, 12) !== 'WEBP') throw new Error('image');
   const key = randomUUID() + '.webp';
   await getStore({ name: 'acontec-images', consistency: 'strong' }).set(key, image);
+  await db.insert(siteContent).values({id:'image-size:'+key,content:{bytes:image.length}}).onConflictDoNothing();
   return '/api/image?key=' + key;
 }
 const same = (first, second) => timingSafeEqual(
@@ -185,7 +189,7 @@ const handleRequest = async (request, context, metrics) => {
   try {
     if (path === 'config' && method === 'GET') {
       const [site] = await db.select().from(siteContent).where(eq(siteContent.id, 'public'));
-      return json({ googleClientId, site: site?.content || {}, siteRevision: siteRevision(site?.content) });
+      return json({ editor:await publishedEditor(), publicPlans:await publicPlans(), googleClientId, site: site?.content || {}, siteRevision: siteRevision(site?.content) });
     }
     if(path==='plans'&&method==='GET')return json({plans:(await plans()).filter(p=>p.active)});
     if (path === 'legal' && method === 'GET') return json(await legalDocument());
@@ -372,6 +376,18 @@ const handleRequest = async (request, context, metrics) => {
     const canEditSite = isAdmin;
     const consent = await legalState(session);
     if (path === 'legal/accept' && method === 'POST') return json(await acceptLegal(session, body));
+    if(path==='platform-editor/image'&&method==='POST'){if(!isAdmin)return fail('Solo el administrador carga imágenes públicas.',403);if(body.confirmed!==true||String(body.reason||'').trim().length<3)return fail('Confirma e indica el motivo.');const image=await storeImage(body.image,300000);await db.insert(customerEvents).values({email:session.email,actor:session.email,action:'Imagen pública del editor cargada',details:{reason:String(body.reason).slice(0,1000)}});return json({image});}
+    if(path==='platform-trial-settings')return json(await trialSettings(session,method,body));
+    if(path==='private-backup-companies'&&method==='GET'){await requirePlatform(session,session.activeCompanyId);return json({companies:await db.select({id:companies.id,name:companies.name,ownerEmail:companies.ownerEmail,revision:companies.revision}).from(companies).where(sql`${companies.archivedAt} IS NULL`).limit(5000)});}
+    if(path==='private-backups'&&method==='GET'&&url.searchParams.has('key'))return await downloadPrivateExport(session,url);
+    if(path==='private-backups')return json(await backupRoute(session,method,body,url));
+    if(path==='storage-usage'&&method==='GET')return json(await storageStats(session,url.searchParams.get('c'),isAdmin));
+    if(path==='platform-editor')return json(await editorRoute(session,method,body));
+    if(path==='transfer/status'&&method==='GET')return json(await transferStatusSummary(session));
+    if(path==='transfer/me'&&method==='GET')return json(await transferMe(session));
+    if(path==='transfer/request'&&method==='POST')return json(await requestTransfer(session,body));
+    if(path==='transfer/admin')return json(await transferAdmin(session,method,body));
+    if(path==='checkout'&&method==='POST')await guardPagaditoChannel(session);
     if(['billing/me','checkout','billing/confirm','cancel'].includes(path))return json(await billingRoute(path,method,body,session,request,isAdmin));
     if(path==='support-grant')return json(await supportAction(session,url.searchParams.get('c'),method,body));
     if(path==='service-receipt'){await requirePlatform(session,url.searchParams.get('c'));return json(await serviceReceipt(method,url.searchParams.get('id'),body,session));}

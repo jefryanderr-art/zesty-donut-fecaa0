@@ -6,7 +6,7 @@ function choosePrintOptions(callback,{invoice=false,receipt=false,invoiceConfig=
  const initial={...PRINT_OPTIONS};
  if(invoice)initial.paper=({thermal:'80',letter:'letter',a4:'a4'})[(invoiceConfig||S.cfg.print)?.format]||'a4';
  const columns=Math.max(0,...[...document.querySelectorAll('#main table tr')].map(row=>[...row.cells].reduce((total,cell)=>total+cell.colSpan,0)));
- const form=modal('Opciones de impresión',selectField('color','Color de impresión',option('bw','Blanco y negro',initial.color==='bw')+option('color','A color',initial.color==='color'))+selectField('paper','Tamaño de papel',option('a4','A4',initial.paper==='a4')+option('letter','Carta',initial.paper==='letter')+option('80','Ticket 80 mm',initial.paper==='80'))+'<div data-print-orientation>'+selectField('orientation','Orientación',option('portrait','Vertical',initial.orientation==='portrait')+option('landscape','Horizontal',initial.orientation==='landscape'))+'</div><p class="accounting-notice" data-print-warning hidden>Este reporte tiene muchas columnas; en 80 mm puede verse apretado. Se recomienda A4 o Carta horizontal.</p>'+notice('Selecciona el mismo papel en la impresora y desactiva los encabezados y pies del navegador.'),async f=>{
+ const form=modal(t("printing.extra.1","Opciones de impresión"),selectField('color',t("printing.1","Color de impresión"),option('bw',t("printing.extra.2","Blanco y negro"),initial.color==='bw')+option('color',t("printing.extra.3","A color"),initial.color==='color'))+selectField('paper',t("printing.2","Tamaño de papel"),option('a4',t("printing.extra.4","A4"),initial.paper==='a4')+option('letter',t("printing.extra.5","Carta"),initial.paper==='letter')+option('80',t("printing.extra.6","Ticket 80 mm"),initial.paper==='80'))+'<div data-print-orientation>'+selectField('orientation',t("printing.3","Orientación"),option('portrait',t("printing.extra.7","Vertical"),initial.orientation==='portrait')+option('landscape',t("printing.extra.8","Horizontal"),initial.orientation==='landscape'))+`</div><p class="accounting-notice" data-print-warning hidden>${esc(t("printing.4","Este reporte tiene muchas columnas; en 80 mm puede verse apretado. Se recomienda A4 o Carta horizontal."))}</p>`+notice(t("printing.5","Selecciona el mismo papel en la impresora y desactiva los encabezados y pies del navegador.")),async f=>{
   const options={color:v(f,'color'),paper:v(f,'paper'),orientation:v(f,'paper')==='80'?'portrait':v(f,'orientation')};
   PRINT_OPTIONS={...options};PRINT_CHOSEN=true;
   $('#modal').innerHTML='';
@@ -52,7 +52,7 @@ function printInvoiceDocument(entry){return choosePrintOptions(options=>{
 },{invoice:true,receipt:true,invoiceConfig:invoiceSettings(entry)})}
 function printPlatformReport(){return choosePrintOptions(options=>{
  const section=document.createElement('section');section.id='platform-print';
- section.innerHTML='<h1>Acontec · Cobros del servicio</h1>'+accountingTable(['Mes','Plan','Método','Moneda','Estado','Entorno','Cantidad','Monto'],platformExportRows().map(row=>'<tr>'+row.map(cell=>'<td>'+esc(cell)+'</td>').join('')+'</tr>').join(''));
+ section.innerHTML=`<h1>${esc(t("printing.6","Acontec · Cobros del servicio"))}</h1>`+accountingTable(['Mes','Plan','Método','Moneda','Estado','Entorno','Cantidad','Monto'],platformExportRows().map(row=>'<tr>'+row.map(cell=>'<td>'+esc(cell)+'</td>').join('')+'</tr>').join(''));
  document.body.append(section);return printWithOptions(options,{cleanup:()=>section.remove()});
 });}
 
@@ -60,7 +60,7 @@ function printPlatformReport(){return choosePrintOptions(options=>{
 READ_ACTIONS.add('invoicePdf');READ_ACTIONS.add('invoiceShare');
 ACT.invoicePdf=data=>downloadInvoiceDocument(data.id);
 ACT.invoiceShare=data=>downloadInvoiceDocument(data.id,true);
-function invoiceDownloadButtons(id){return `<button type="button" class="lk noprint" data-a="invoicePdf" data-id="${esc(id)}">PDF</button> <button type="button" class="lk noprint" data-a="invoiceShare" data-id="${esc(id)}">Compartir</button>`}
+function invoiceDownloadButtons(id){return `<button type="button" class="lk noprint" data-a="invoicePdf" data-id="${esc(id)}">${esc(t("printing.7","PDF"))}</button> <button type="button" class="lk noprint" data-a="invoiceShare" data-id="${esc(id)}">${esc(t("printing.8","Compartir"))}</button>`}
 const invoiceButtonsObserver=new MutationObserver(()=>{
  for(const button of document.querySelectorAll('[data-a="printEntry"]:not([data-pdf-added])')){
   button.dataset.pdfAdded='true';const entry=S?.entries?.find(e=>e.id===button.dataset.id);
@@ -72,9 +72,9 @@ const invoicePrintOriginal=printInvoiceDocument;
 printInvoiceDocument=function(entry){const result=invoicePrintOriginal(entry);const form=document.querySelector('#modal form');if(form)form.insertAdjacentHTML('beforeend',invoiceDownloadButtons(entry.id));return result};
 function downloadInvoiceDocument(id,share=false){
  const entry=S.entries.find(e=>e.id===id&&['venta','nota-credito'].includes(e.type));
- if(!entry||!(permission('ventas')||permission('facturacion')))throw new Error('Sin acceso a la factura.');
+ if(!entry||!(permission('ventas')||permission('facturacion')))throw new Error(t("printing.extra.9","Sin acceso a la factura."));
  const cfg=invoiceSettings(entry),paper=({thermal:'80',letter:'letter'})[cfg.format]||'a4';
- modal('Descargar factura digital',selectField('paper','Papel',option('a4','A4',paper==='a4')+option('letter','Carta',paper==='letter')+option('80','Ticket 80 mm',paper==='80'))+selectField('color','Color',option('bw','Blanco y negro',true)+option('color','Color'))+'<label class="ck"><input type="checkbox" name="emitterCopy">Incluir copia del emisor en el mismo PDF</label>',async form=>{
+ modal(t("printing.extra.10","Descargar factura digital"),selectField('paper',t("printing.9","Papel"),option('a4',t("printing.extra.11","A4"),paper==='a4')+option('letter',t("printing.extra.12","Carta"),paper==='letter')+option('80',t("printing.extra.13","Ticket 80 mm"),paper==='80'))+selectField('color',t("printing.10","Color"),option('bw',t("printing.extra.14","Blanco y negro"),true)+option('color',t("printing.extra.15","Color")))+`<label class="ck"><input type="checkbox" name="emitterCopy">${esc(t("printing.11","Incluir copia del emisor en el mismo PDF"))}</label>`,async form=>{
   const options={paper:v(form,'paper'),color:v(form,'color'),copies:form.elements.emitterCopy.checked?2:1};
   const file=await createInvoicePdf(entry,options);
   // Autoriza con el estado vigente del servidor y registra el intento antes de entregar el archivo.
@@ -88,7 +88,7 @@ function downloadInvoiceDocument(id,share=false){
 async function createInvoicePdf(entry,options){
  await loadExportScript('/vendor/jspdf.js?v=0f6fe797a6df06bd');await loadExportScript('/vendor/autotable.js?v=31884888608c7aab');
  const format=options.paper==='80'?'thermal':options.paper,cfg={...invoiceSettings(entry),copies:options.copies},design=AcontecInvoiceDesign.effectiveDesign(cfg,format),margin=design?.margin||(format==='thermal'?4:14),width=format==='thermal'?80:format==='letter'?215.9:210,height=format==='letter'?279.4:297;
- const frame=document.createElement('iframe');frame.title='Preparación de factura PDF';frame.setAttribute('sandbox','allow-same-origin');frame.style.cssText='position:fixed;left:-10000px;top:0;width:1000px;height:1000px';document.body.append(frame);
+ const frame=document.createElement('iframe');frame.title=t("printing.extra.16","Preparación de factura PDF");frame.setAttribute('sandbox','allow-same-origin');frame.style.cssText='position:fixed;left:-10000px;top:0;width:1000px;height:1000px';document.body.append(frame);
  try{
   const ready=new Promise(resolve=>frame.onload=resolve),styles=[...document.querySelectorAll('link[rel="stylesheet"]')].map(l=>`<link rel="stylesheet" href="${esc(l.href)}">`).join('');
   frame.srcdoc=`<!doctype html><html><head>${styles}</head><body class="rc">${invoiceMarkup(entry,format,options.color,cfg)}</body></html>`;await ready;
@@ -122,4 +122,4 @@ async function createInvoicePdf(entry,options){
  }finally{frame.remove()}
 }
 const invoiceDetailOriginal=ACT.discountDetail;
-ACT.discountDetail=function(data){const result=invoiceDetailOriginal(data),entry=S.entries.find(e=>e.id===data.id);if(entry&&['venta','nota-credito'].includes(entry.type))document.querySelector('#modal form')?.insertAdjacentHTML('beforeend',`<button type="button" class="btn ghost" data-pdf-added="true" data-a="printEntry" data-id="${esc(entry.id)}">Imprimir</button>${invoiceDownloadButtons(entry.id)}`);return result};
+ACT.discountDetail=function(data){const result=invoiceDetailOriginal(data),entry=S.entries.find(e=>e.id===data.id);if(entry&&['venta','nota-credito'].includes(entry.type))document.querySelector('#modal form')?.insertAdjacentHTML('beforeend',`<button type="button" class="btn ghost" data-pdf-added="true" data-a="printEntry" data-id="${esc(entry.id)}">${esc(t("printing.12","Imprimir"))}</button>${invoiceDownloadButtons(entry.id)}`);return result};
