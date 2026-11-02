@@ -6,7 +6,7 @@
   generic:{name:'Genérico (otro país)',authority:'Autoridad tributaria',taxIdLabel:'Identificador fiscal',taxName:'Impuesto',taxRate:0,authorizationDateLabel:'Fecha de autorización fiscal',authorizationLabel:'Autorización fiscal',missingAuthorization:'DOCUMENTO SIN AUTORIZACIÓN FISCAL',mandatoryLegends:'',requiredFields:[],electronic:false,imprint:false}
  };
  const fiscalFields={authorizationDateLabel:['Etiqueta de fecha de autorización',160],authority:['Autoridad tributaria',200],taxIdLabel:['Etiqueta del identificador fiscal',80],taxName:['Nombre del impuesto',80],authorizationLabel:['Etiqueta de autorización',160],missingAuthorization:['Leyenda sin autorización',300],mandatoryLegends:['Leyendas obligatorias',2000]};
- const country=value=>{if(typeof value!=='string'||!value.trim()||value.length>80||/[\u0000-\u001f]/.test(value))throw new Error(t("invoice-design.extra.1","Escribe un país válido (máximo 80 caracteres)."));return /^(ni|nicaragua)$/i.test(value.trim())?'Nicaragua':value.trim()};
+ const country=value=>{if(typeof value!=='string'||!value.trim()||value.length>80||/[\u0000-\u001f]/.test(value))throw new Error(uiT("invoice-design.extra.1","Escribe un país válido (máximo 80 caracteres)."));return /^(ni|nicaragua)$/i.test(value.trim())?'Nicaragua':value.trim()};
  const profile=(name='Nicaragua')=>({...(Object.values(profiles).find(p=>p.name===name)||profiles.generic),requiredFields:[...(Object.values(profiles).find(p=>p.name===name)||profiles.generic).requiredFields]});
  const fiscal=settings=>({...profile(settings.country),...settings.fiscalProfile});
  const switchCountry=(settings,name)=>{name=country(name);const next={...settings,country:name,fiscalProfile:profile(name)};next.customFields=(settings.customFields||[]).map(f=>({...f,value:''}));for(const key of ['ruc','dgiNumber','dgiDate','printerRuc','printerOrder','printerDate','printerBooks','printerRange','legalText','notes'])next[key]='';return next};
@@ -25,7 +25,7 @@
  const templates={classic,modern:{...classic,template:'modern',accent:'#234e40',tableBackground:'#234e40',tableText:'#ffffff',striped:true},minimal:{...classic,template:'minimal',lines:'none',borderWidth:0},formal:{...classic,template:'formal',font:'times',lines:'grid',borderWidth:1},ticket:{...classic,template:'ticket',font:'courier',baseSize:9,header:'stacked',density:'compact',margin:4}};
  const contrast=(a,b)=>{const lum=c=>{const rgb=c.slice(1).match(/../g).map(v=>parseInt(v,16)/255).map(v=>v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4);return rgb[0]*0.2126+rgb[1]*0.7152+rgb[2]*0.0722};const x=lum(a),y=lum(b);return (Math.max(x,y)+0.05)/(Math.min(x,y)+0.05)};
  const validateDesign=source=>{
-  const fail=()=>{throw new Error(t("invoice-design.extra.2","Diseño inválido: revisa las opciones, rangos y el contraste mínimo 4.5:1."))};
+  const fail=()=>{throw new Error(uiT("invoice-design.extra.2","Diseño inválido: revisa las opciones, rangos y el contraste mínimo 4.5:1."))};
   if(!source||typeof source!=='object'||Array.isArray(source)||Object.keys(source).some(k=>!Object.hasOwn(classic,k)))fail();
   const d={...structuredClone(classic),...source};
   const choices={template:Object.keys(templates),font:['helvetica','times','courier'],lines:['none','horizontal','grid'],density:['compact','normal','wide'],header:['split','center','stacked'],totals:['left','right','full'],watermark:['none','text','logo']};
@@ -42,7 +42,7 @@
   return d;
  };
  const validateCustom=source=>{
-  if(!Array.isArray(source)||source.length>5)throw new Error(t("invoice-design.extra.3","Máximo cinco campos fiscales personalizados."));
+  if(!Array.isArray(source)||source.length>5)throw new Error(uiT("invoice-design.extra.3","Máximo cinco campos fiscales personalizados."));
   return source.map((f,i)=>{if(!f||Object.keys(f).some(k=>!['label','value','required','position'].includes(k))||typeof f.label!=='string'||!f.label.trim()||f.label.length>200||typeof f.value!=='string'||f.value.length>200||/[\u0000-\u001f]/.test(f.label+f.value)||typeof f.required!=='boolean'||!['header','footer'].includes(f.position))throw new Error('Revisa el campo fiscal '+(i+1)+' (máximo 200 caracteres).');return {...f,label:f.label.trim(),value:f.value.trim()}});
  };
  const effectiveDesign=(cfg,format)=>{const selected=(cfg.savedDesigns||[]).find(d=>d.id===cfg.designDefaults?.[format]);const source=selected?.design||cfg.design;if(!source)return null;const d=validateDesign(source);return {...d,...d.formats[format]}};
