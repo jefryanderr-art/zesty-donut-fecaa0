@@ -82,6 +82,8 @@ export async function platformAction(session,body){
    if(body.limits){for(const key of ['companies','branches'])if(body.limits[key]!==null&&(!Number.isInteger(body.limits[key])||body.limits[key]<1||body.limits[key]>10000))billingError('Límites inválidos.');patch.limits=body.limits.manual===true?{manual:true,companies:body.limits.companies,branches:body.limits.branches}:{}}
   }else billingError('Operación no encontrada.',404);
   await client.update(subscriptions).set(patch).where(eq(subscriptions.email,email));
+  patch.limits={...(patch.limits||sub.limits||{}),manualControl:{actor:session.email,at:new Date().toISOString(),state:patch.state,until:patch.paidUntil?.toISOString()||null}};
+  await client.update(subscriptions).set({limits:patch.limits}).where(eq(subscriptions.email,email));
   const effective={...sub,...patch};await client.update(users).set({profile:{...user.profile,plan:effective.plan,state:entitlement(effective).state,paidUntil:effective.paidUntil?managuaDay(new Date(effective.paidUntil)):''},version:user.version+1}).where(eq(users.email,email));
   await event(client,email,session.email,'Suscripción ajustada',{before:sub,after:effective,reason});return {ok:true};
  });

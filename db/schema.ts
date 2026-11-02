@@ -294,3 +294,20 @@ export const assistantUsage = pgTable('acontec_assistant_usage', {
   check('acontec_assistant_user_limit', sql`${table.userSlot} BETWEEN 1 AND 20`),
   check('acontec_assistant_company_limit', sql`${table.companySlot} BETWEEN 1 AND 100`),
 ]).enableRLS();
+
+export const billingChannels = pgTable('acontec_billing_channels', {
+ email: text().primaryKey().references(() => users.email),
+ channel: text().default('unassigned').notNull(),
+ permit: text(), version: integer().default(0).notNull(),
+}, table => [serverAccess(),check('acontec_channel_value',sql`${table.channel} IN ('unassigned','pagadito','transfer')`)]).enableRLS();
+export const transferRequests = pgTable('acontec_transfer_requests', {
+ code: text().primaryKey(), email: text().notNull().references(() => users.email),
+ plan: text().notNull(), interval: text().notNull(), currency: text().notNull(),
+ expectedCents: bigint('expected_cents',{mode:'number'}).notNull(),
+ usdCents: bigint('usd_cents',{mode:'number'}).notNull(),
+ environment: text().notNull(), exchange: jsonb().notNull(),
+ state: text().default('pending').notNull(), reason: text(),
+ paymentId: uuid('payment_id').references(() => customerPayments.id),
+ version: integer().default(0).notNull(), expiresAt: timestamp('expires_at').notNull(),
+ createdAt: timestamp('created_at').defaultNow().notNull(),
+}, table => [serverAccess(),index('acontec_transfer_queue_idx').on(table.state,table.expiresAt),index('acontec_transfer_email_idx').on(table.email),uniqueIndex('acontec_transfer_open_idx').on(table.email).where(sql`${table.state}='pending'`),check('acontec_transfer_money',sql`${table.expectedCents}>0 AND ${table.usdCents}>0`)]).enableRLS();
