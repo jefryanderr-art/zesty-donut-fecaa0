@@ -24,6 +24,8 @@ export const customerPayments = pgTable('acontec_customer_payments', {
   interval: text().default('mensual').notNull(),
   providerKey: text('provider_key').unique(),
   receipt: jsonb(),
+  receiptDetails: jsonb('receipt_details'),
+  notifiedAt: timestamp('notified_at'),
   journalId: text('journal_id'),
   version: integer().default(0).notNull(),
   date: text().notNull(),
@@ -273,6 +275,7 @@ export const supportGrants = pgTable('acontec_support_grants', {
 export const serviceMessages = pgTable('acontec_service_messages', {
   id: uuid().defaultRandom().primaryKey(), email: text().notNull().references(() => users.email),
   subject: text().notNull(), body: text().notNull(),
+  lastError: text('last_error'),
   state: text().default('pending').notNull(), dedupeKey: text('dedupe_key').unique(),
   actor: text().notNull(), attempts: integer().default(0).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(), sentAt: timestamp('sent_at'),

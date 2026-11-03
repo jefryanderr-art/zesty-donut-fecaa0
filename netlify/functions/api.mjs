@@ -1,3 +1,4 @@
+import {paymentHistory,paymentForReceipt,paymentPDF} from '../lib/payment-receipts.mjs';
 import {backupRoute,storageStats,downloadPrivateExport} from '../lib/private-backups.mjs';
 import {publishedEditor,editorRoute,publicPlans,trialSettings} from '../lib/platform-editor.mjs';
 import {transferMe,requestTransfer,transferAdmin,guardPagaditoChannel,transferStatusSummary} from '../lib/transfer-billing.mjs';
@@ -388,7 +389,18 @@ const handleRequest = async (request, context, metrics) => {
     if(path==='transfer/request'&&method==='POST')return json(await requestTransfer(session,body));
     if(path==='transfer/admin')return json(await transferAdmin(session,method,body));
     if(path==='checkout'&&method==='POST')await guardPagaditoChannel(session);
-    if(['billing/me','checkout','billing/confirm','cancel'].includes(path))return json(await billingRoute(path,method,body,session,request,isAdmin));
+    if(path==='payments'&&method==='GET')return json(await paymentHistory(session));
+    if(path==='payment-receipt'&&method==='GET'){
+      if(session.member)return fail('Solo el titular puede consultar sus pagos.',403);
+      const id=url.searchParams.get('id');if(!/^[a-f0-9-]{36}$/.test(id||''))return fail('Pago inválido.');
+      const payment=await paymentForReceipt(id,session.email);
+      return new Response(await paymentPDF(payment),{headers:{'content-type':'application/pdf','content-disposition':`attachment; filename="Acontec-${payment.id}.pdf"`,'cache-control':'private, no-store','x-content-type-options':'nosniff'}});
+    }
+    if(['billing/me','checkout','billing/confirm','cancel'].includes(path)){
+      const result=await billingRoute(path,method,body,session,request,isAdmin);
+      if(path==='billing/confirm')context.waitUntil(deliverMessages(5).catch(()=>{}));
+      return json(result);
+    }
     if(path==='support-grant')return json(await supportAction(session,url.searchParams.get('c'),method,body));
     if(path==='service-receipt'){await requirePlatform(session,url.searchParams.get('c'));return json(await serviceReceipt(method,url.searchParams.get('id'),body,session));}
     if(path==='platform/test-companies'||path.startsWith('platform/test-companies/'))return json(await testCompaniesRoute(session,method,path.split('/')[2]||body.operation,body));
