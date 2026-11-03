@@ -1,3 +1,4 @@
+import {approval,receiptSnapshot} from './payment-receipts.mjs';
 import {legalHash} from './legal-templates.mjs';
 import {randomUUID,createHash} from 'node:crypto';
 import {and,eq,desc,sql,isNull} from 'drizzle-orm';
@@ -105,7 +106,7 @@ export async function checkout(session,body,request){
   await db.update(billingCheckouts).set({state:definitelyRejected?'failed':'unknown'}).where(eq(billingCheckouts.id,id));throw error;
  }
 }
-async function queueReceipt(client,payment){await client.insert(serviceMessages).values({email:payment.email,subject:'Recibo de suscripción · Acontec',body:`Pago confirmado: ${payment.currency} ${(payment.amountCents/100).toFixed(2)}. Plan ${payment.plan}. Referencia: ${payment.reference}. Consulta Mi suscripción para ver la vigencia.`,actor:payment.actor,dedupeKey:'receipt:'+payment.id}).onConflictDoNothing()}
+async function queueReceipt(client,payment){await client.insert(serviceMessages).values({email:payment.email,subject:'Confirmación de pago – Acontec',body:'Pago confirmado. Consulta Mi suscripción y pagos.',actor:payment.actor,dedupeKey:'receipt:'+payment.id}).onConflictDoNothing()}
 export async function bookPayment(client,payment){
  if(payment.journalId)return;
  const [settings]=await client.select().from(siteContent).where(eq(siteContent.id,'platform-accounting'));if(!settings?.content?.enabled)return;
@@ -140,7 +141,7 @@ export async function confirmPayment(client,payment,actor,activate=true){
  await client.update(customerPayments).set({status:'confirmado',version:payment.version+1}).where(eq(customerPayments.id,payment.id));
  await bookPayment(client,payment);await queueReceipt(client,payment);await event(client,payment.email,actor,'Pago confirmado',{paymentId:payment.id,paidUntil:paidUntil?.toISOString()||null});
 }
-export async function syncCheckout(id){
+export async function syncCheckout(id,notification=null){
  const [snapshot]=await db.select().from(billingCheckouts).where(eq(billingCheckouts.id,id));if(!snapshot?.providerToken)return;
  const response=await pagadito('get-status-recurring-payments',{token:snapshot.providerToken},snapshot.environment);
  const records=response?.data?.pending_charges;if(!Array.isArray(records))billingError('El proveedor todavía no confirmó el pago.',502);
@@ -158,10 +159,18 @@ export async function syncCheckout(id){
    // No regresar pagos completados a pendiente por una notificación retrasada.
    if(charge.status!=='COMPLETED')charge.status=record.status;
    charge.token=record.token_pending||charge.token;
+   const reference=approval(record.reference)||(notification?.ern===charge.ern&&notification?.status==='COMPLETED'?approval(notification.reference):null)||charge.reference||null;
+   if(reference)charge.reference=reference;
    if(charge===charges[0]&&charge.status==='COMPLETED')firstCompleted=true;
    const key=servicePaymentKey(row.environment,charge.ern);
    if(charge.status==='COMPLETED'){
-    const [created]=await client.insert(customerPayments).values({email:row.email,plan:row.plan,interval:row.interval,amountCents:charge.amountCents,currency:'USD',date:charge.date,reference:String(record.reference||charge.ern).slice(0,200),method:'Pagadito',actor:'Pagadito',providerKey:key,status:'por_verificar'}).onConflictDoNothing().returning();
+    const [created]=await client.insert(customerPayments).values({email:row.email,plan:row.plan,interval:row.interval,amountCents:charge.amountCents,currency:'USD',date:charge.date,reference:reference||'',method:'Pagadito',actor:'Pagadito',providerKey:key,status:'por_verificar'}).onConflictDoNothing().returning();
+    const payment=created||(await client.select().from(customerPayments).where(eq(customerPayments.providerKey,key)))[0];
+    if(payment){
+     const receiptDetails=await receiptSnapshot(client,payment,row,charge,reference,record.status==='COMPLETED');
+     await client.update(customerPayments).set({receiptDetails}).where(eq(customerPayments.id,payment.id));
+     if(!created&&payment.status==='confirmado')await queueReceipt(client,payment);
+    }
     if(created){
      // Las pruebas conservan historial sin conceder vigencia de producción.
      if(row.environment==='sandbox'&&providerConfig().environment==='production')billingError('Un pago de pruebas no activa producción.',409);

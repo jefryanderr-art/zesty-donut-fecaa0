@@ -6,6 +6,7 @@
 
 [functions]
   node_bundler = "esbuild"
+  included_files = ["public/acontec-mark-v1.png"]
 
 [[headers]]
   for = "/*"
