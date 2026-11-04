@@ -13,7 +13,7 @@ const text=(v,max=200)=>String(v??'').trim().slice(0,max);
 const safeSum=rows=>rows.reduce((n,v)=>{check(Number.isSafeInteger(n+v),'Saldo fuera de rango.');return n+v},0);
 const int=v=>Number.isSafeInteger(v)&&Math.abs(v)<=99999999900;
 export function bankBaseLedger(data,bank,to){
- return (data.entries||[]).filter(e=>e.date<=to&&(e.branchId||'principal')===bank.branchId).flatMap(e=>{
+ return (data.entries||[]).filter(e=>e.date<=to&&!['apertura-anual','anula-apertura-anual'].includes(e.type)&&(e.branchId||'principal')===bank.branchId).flatMap(e=>{
   const amountCents=(e.lines||[]).filter(l=>l.a===bank.account).reduce((n,l)=>n+moneyCents(l.d)-moneyCents(l.c),0)*(bank.card?-1:1);
   check(Number.isSafeInteger(amountCents),'Saldo contable fuera de rango.');return amountCents?[{entryId:e.id,date:e.date,reference:e.reference||'',amountCents}]:[];
  });
@@ -124,7 +124,7 @@ export function bankOperation(data,access,session,body,ctx){
 export function guardBankReconciliations(previous,next,check){
  for(const s of records(previous).filter(r=>r.kind==='statement'&&r.status==='Cerrada')){
   check(canonical(s)===canonical(records(next).find(r=>r.id===s.id)),'La conciliación cerrada es inmutable.');
-  const bank=records(previous).find(r=>r.id===s.bankId),old=(previous.entries||[]).filter(e=>(e.branchId||'principal')===s.branchId&&e.date<=s.to&&e.lines?.some(l=>l.a===bank.account)),fresh=(next.entries||[]).filter(e=>(e.branchId||'principal')===s.branchId&&e.date<=s.to&&e.lines?.some(l=>l.a===bank.account));
+  const bank=records(previous).find(r=>r.id===s.bankId),old=(previous.entries||[]).filter(e=>(e.branchId||'principal')===s.branchId&&e.date<=s.to&&!['apertura-anual','anula-apertura-anual'].includes(e.type)&&e.lines?.some(l=>l.a===bank.account)),fresh=(next.entries||[]).filter(e=>(e.branchId||'principal')===s.branchId&&e.date<=s.to&&!['apertura-anual','anula-apertura-anual'].includes(e.type)&&e.lines?.some(l=>l.a===bank.account));
   const sorted=rows=>canonical([...rows].sort((a,b)=>a.id.localeCompare(b.id)));
   check(sorted(old)===sorted(fresh),'El período bancario está cerrado; registra una corrección en un período posterior.');
  }
@@ -139,7 +139,7 @@ export function guardBankReconciliations(previous,next,check){
   const movements=records(next).filter(r=>r.kind==='movement'&&r.bankId===bank.id),ledger=bankBaseLedger(next,bank,'9999-12-31').filter(e=>e.date>=bank.date&&!next.entries.find(j=>j.id===e.entryId)?.revaluation),ids=new Set();
   for(const e of ledger){const m=movements.find(m=>m.entryId===e.entryId);check(m&&!ids.has(m.entryId)&&m.date===e.date&&m.baseCents===e.amountCents&&bankConvertCents(m.amountCents,m.rateMicros)===m.baseCents,'Usa el movimiento bancario con importe original y tasa explícita para esta cuenta.');ids.add(m.entryId);}
   check(movements.length===ledger.length,'Cada movimiento original requiere un único asiento de su cuenta.');
-  for(const e of next.entries||[])if(!e.revaluation&&e.date>=bank.date&&(e.branchId||'principal')===bank.branchId&&e.lines?.some(l=>l.a===bank.account))check(movements.some(m=>m.entryId===e.id),'Registra la cuenta en otra moneda mediante su operación bancaria.');
+  for(const e of next.entries||[])if(!e.revaluation&&e.date>=bank.date&&(e.branchId||'principal')===bank.branchId&&!['apertura-anual','anula-apertura-anual'].includes(e.type)&&e.lines?.some(l=>l.a===bank.account))check(movements.some(m=>m.entryId===e.id),'Registra la cuenta en otra moneda mediante su operación bancaria.');
   const opening=safeSum(bankBaseLedger(next,bank,'9999-12-31').filter(e=>e.date<bank.date).map(e=>e.amountCents));check(opening===bank.baseOpeningCents,'Conserva el saldo base previo a la incorporación.');
   if(previousBank){const before=bankBaseLedger(previous,previousBank,'9999-12-31').filter(e=>e.date<bank.date),after=bankBaseLedger(next,bank,'9999-12-31').filter(e=>e.date<bank.date);check(canonical(before)===canonical(after),'Conserva el libro previo a la incorporación en otra moneda.');}
  }

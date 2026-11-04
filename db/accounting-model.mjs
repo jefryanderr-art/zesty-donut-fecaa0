@@ -1,5 +1,6 @@
 // Contrato compartido por el esquema, el conversor y el script de migración.
 export const collections = {
+  fiscalWorkflows: { table: 'fiscal_workflows', text: ['module','kind','branchId','period','status','parentId'], cents: ['amountCents','differenceCents'] },
   inventoryLayers: { table: 'inventory_layers', text: ['productId','branchId','epoch','entryId','sourceLayerId'], numeric: ['q','originalQuantity'], cents: ['unitCostCents','valueCents','originalValueCents'] },
   businessRecords: { table: 'business_records', text: ['module','kind','name','status','branchId','customerId','productId','entryId','resource','due'], money: ['total','principal','interest','penalty','paid','deposit','valuation','cost','price'], numeric: ['q','rate'] },
   branches: { table: 'branches', text: ['name','code','address','phone'] },
@@ -46,3 +47,6 @@ export const children = {
   payments: { table: 'invoice_payments', text: ['method'], money: ['amount'] },
 };
 export const snake = name => name.replace(/[A-Z]/g, char => '_' + char.toLowerCase());
+
+// Metadatos de declaraciones y paquetes: valores monetarios nativos, nunca flotantes.
+export const workflowCentFields=[...new Set([...Object.values(collections),...Object.values(children)].flatMap(d=>(d.money||[]).map(k=>k+'Cents'))),'employerSocialCents','inatecCents','revaluationCents','debitCents','creditCents','closingCents','incomeCents','expenseCents','equityCents','assetsCents','liabilitiesCents','outputCents','inputCents','creditCents','advanceCents','adjustmentCents','taxableCents','penaltyCents','interestCents','paidCents','amountCents','differenceCents'];

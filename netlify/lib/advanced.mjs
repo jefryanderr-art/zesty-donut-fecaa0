@@ -16,6 +16,7 @@ export function advancedOperation(data,access,session,body,helpers){
  if(['closePeriod','reopenPeriod','closeYear'].includes(op)){
   check(access.owner,'Solo el dueño cierra o reabre períodos.');check(access.branchId,'Selecciona una sucursal.');check(text(body.reason),'Escribe el motivo para la bitácora.');data.cfg.periodLocks||={};
   if(op==='closeYear'){
+   check(!(data.fiscalWorkflows||[]).some(r=>r.module==='cierre_anual'&&(r.kind==='configuration'&&r.enabled||r.kind==='closure'&&r.period===String(body.year))),'Usa Cierre anual para este ejercicio; conserva el historial automático.');
    const year=String(body.year);check(/^20\d{2}$/.test(year)&&year+'-12-31'<new Date().toISOString().slice(0,10),'El ejercicio debe haber terminado.');check(!data.entries.some(e=>e.type==='cierre'&&e.year===year),'Este ejercicio ya tiene asiento de cierre.');check(body.confirmed===true,'Confirma el cierre del ejercicio.');
    for(let m=1;m<=12;m++)check(!data.cfg.periodLocks[access.branchId+':'+year+'-'+String(m).padStart(2,'0')]?.closed,'Reabre los meses cerrados antes de generar el cierre anual.');
    const lines=yearClosing(data.entries,data.accounts,year);if(lines.length)entry({date:year+'-12-31',type:'cierre',year,desc:'Cierre de ejercicio '+year+' · '+text(body.reason),total:round(lines.reduce((s,l)=>s+l.d,0)),lines:balancedLines(lines,data.accounts)});

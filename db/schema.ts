@@ -151,6 +151,7 @@ function recordTable(definition: any, child = false) {
     ...(definition.table === 'journal_lines' ? [check('acontec_line_nonnegative', sql`${table.dCents} >= 0 AND ${table.cCents} >= 0`)] : []),
   ]).enableRLS();
 }
+export const fiscalWorkflows = recordTable(collections.fiscalWorkflows);
 export const inventoryLayers = recordTable(collections.inventoryLayers);
 export const businessRecords = recordTable(collections.businessRecords);
 export const ledgerAccounts = recordTable(collections.accounts);

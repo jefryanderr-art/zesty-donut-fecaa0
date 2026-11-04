@@ -328,7 +328,7 @@ const pbtn=()=>`<button class="btn ghost noprint" data-a="print">${esc(uiT("app.
 
 // ---------- cálculos ----------
 function bal(f,t,excludeClosing=false){const r={};S.accounts.forEach(a=>r[a.code]={...a,d:0,c:0});
-  S.entries.forEach(e=>{if(e.date>t||e.date<f||(excludeClosing&&e.type==='cierre'))return;e.lines.forEach(l=>{const a=r[l.a];if(a){a.d+=+l.d||0;a.c+=+l.c||0}})});
+  AcontecAnnualLedger.select(S.entries,t).forEach(e=>{if(e.date>t||e.date<f||(excludeClosing&&['cierre','cierre-anual','reapertura-anual'].includes(e.type)))return;e.lines.forEach(l=>{const a=r[l.a];if(a){a.d+=+l.d||0;a.c+=+l.c||0}})});
   Object.values(r).forEach(a=>a.s=a.nat=='D'?a.d-a.c:a.c-a.d);return r}
 const sg=a=>a.nat==NAT[a.tipo]?a.s:-a.s;
 const tot=(B,tipo)=>Object.values(B).filter(a=>a.tipo==tipo).reduce((s,a)=>s+sg(a),0);
@@ -336,9 +336,9 @@ const accName=c=>{const a=S.accounts.find(x=>x.code==c);return a?`${a.code} · $
 const prod=id=>S.products.find(p=>p.id==id);
 function flujo(f,t){
   const cash=new Set(S.accounts.filter(a=>a.sub=='ef').map(a=>a.code));let ini=0;const sec={op:{},inv:{},fin:{}};
-  S.entries.forEach(e=>{const cl=e.lines.filter(l=>cash.has(l.a));if(!cl.length||e.date>t)return;
+  AcontecAnnualLedger.select(S.entries,t).forEach(e=>{const cl=e.lines.filter(l=>cash.has(l.a));if(!cl.length||e.date>t)return;
     const net=cl.reduce((s,l)=>s+(+l.d||0)-(+l.c||0),0);
-    if(e.type=='apertura'||e.date<f){ini+=net;return}
+    if(['apertura','apertura-anual'].includes(e.type)||e.date<f){ini+=net;return}
     e.lines.filter(l=>!cash.has(l.a)).forEach(l=>{const a=S.accounts.find(x=>x.code==l.a);if(!a)return;
       const k=a.sub=='fijo'?'inv':(a.sub=='fin'||a.tipo=='patrimonio')?'fin':'op';
       const eff=(+l.c||0)-(+l.d||0);sec[k][a.name]=(sec[k][a.name]||0)+eff})});
@@ -390,7 +390,7 @@ const entryCard=(e,del)=>`<div class="card"><div style="display:flex;justify-con
 V.apertura=()=>{const e=S.entries.find(x=>x.type=='apertura');main(`<div class="ph"><h2>${esc(uiT("app.114","Asiento de apertura"))}</h2><button class="btn" data-a="apertura">${e?'Editar':'Crear'} apertura</button></div><p class="mut">${esc(uiT("app.115","Registra los saldos con los que inicia tu contabilidad (efectivo, bancos, activos, deudas y capital). El inventario inicial se registra desde Productos con su existencia inicial."))}</p>${e?entryCard(e,false):`<div class="card mut">${esc(uiT("app.113","Aún no hay asiento de apertura."))}</div>`}`)};
 V.diario=()=>{const[f,t]=rg(),L=S.entries.filter(e=>e.date>=f&&e.date<=t).sort((a,b)=>b.date.localeCompare(a.date));main(`<div class="ph"><h2>${esc(uiT("app.117","Libro diario"))}</h2><button class="btn" data-a="manual">${esc(uiT("app.118","+ Asiento"))}</button></div>${pbar()}${L.map(e=>entryCard(e,true)).join('')||`<div class="card mut">${esc(uiT("app.116","Sin asientos en el periodo"))}</div>`}`)};
 V.mayor=()=>{const[f,t]=rg(),a=S.accounts.find(x=>x.code==MAY)||S.accounts[0],k=a.nat=='D'?1:-1;let run=0;const rows=[];
-  S.entries.slice().sort((x,y)=>x.date.localeCompare(y.date)).forEach(e=>e.lines.forEach(l=>{if(l.a!=a.code||e.date>t)return;run+=((+l.d||0)-(+l.c||0))*k;if(e.date>=f)rows.push(`<tr><td>${e.date}</td><td>${esc(e.desc)}</td><td class="n">${l.d?money(l.d):''}</td><td class="n">${l.c?money(l.c):''}</td><td class="n">${money2(run)}</td></tr>`)}));
+  AcontecAnnualLedger.select(S.entries,t).slice().sort((x,y)=>x.date.localeCompare(y.date)).forEach(e=>e.lines.forEach(l=>{if(l.a!=a.code||e.date>t)return;run+=((+l.d||0)-(+l.c||0))*k;if(e.date>=f)rows.push(`<tr><td>${e.date}</td><td>${esc(e.desc)}</td><td class="n">${l.d?money(l.d):''}</td><td class="n">${l.c?money(l.c):''}</td><td class="n">${money2(run)}</td></tr>`)}));
   main(`<div class="ph"><h2>${esc(uiT("app.120","Libro mayor"))}</h2>${pbtn()}</div><label class="noprint">${esc(uiT("app.121","Cuenta"))}<select id="msel">${accOpts(a.code)}</select></label>${pbar()}<div class="card">${rh('Libro mayor · '+esc(a.name),plabel())}<div class="tw"><table><thead><tr><th>${esc(uiT("app.122","Fecha"))}</th><th>${esc(uiT("app.123","Descripción"))}</th><th class="n">${esc(uiT("app.124","Debe"))}</th><th class="n">${esc(uiT("app.125","Haber"))}</th><th class="n">${esc(uiT("app.126","Saldo"))}</th></tr></thead><tbody>${rows.join('')||`<tr><td colspan="5" class="mut">${esc(uiT("app.119","Sin movimientos"))}</td></tr>`}</tbody></table></div></div>`)};
 V.cuentas=()=>{main(`<div class="ph"><h2>${esc(uiT("app.128","Catálogo de cuentas"))}</h2><button class="btn" data-a="newacc">${esc(uiT("app.129","+ Cuenta"))}</button></div><div class="card"><div class="tw"><table><thead><tr><th>${esc(uiT("app.130","Código"))}</th><th>${esc(uiT("app.131","Nombre"))}</th><th>${esc(uiT("app.132","Tipo"))}</th><th></th></tr></thead><tbody>${S.accounts.slice().sort(byCode).map(a=>`<tr><td>${a.code}</td><td>${esc(a.name)}</td><td>${a.tipo}${a.nat!=NAT[a.tipo]?' (contra)':''}</td><td>${PROT.includes(a.code)?'':`<button class="lk" data-a="delacc" data-c="${a.code}">${esc(uiT("app.127","Borrar"))}</button>`}</td></tr>`).join('')}</tbody></table></div></div>`)};
 

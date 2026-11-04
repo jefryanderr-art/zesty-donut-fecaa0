@@ -1,3 +1,4 @@
+import {guardWorkflows,accountingPermissionModules} from './fiscal-workflows.mjs';
 import {guardFifoMutation} from './fifo.mjs';
 import {guardAuditHistory,mergeAuditReviewPatch,REVIEW_OPS} from './audit-review.mjs';
 import {guardPersonnel} from './personnel.mjs';
@@ -44,7 +45,7 @@ export const allowed = (access, module, write = false) => {
   const level = access.permissions?.[module] ?? (module==='auditoria_revision'&&access.member?.role?.toLowerCase()==='contador'?'escritura':undefined) ?? (access.member?.role?.toLowerCase() === 'contador' ? access.permissions?.[fallback[module]] : undefined);
   return !!roleAllows(access, module) && !(write && roleAllows(access, module) === 'lectura') && (level === 'escritura' || (!write && level === 'lectura'));
 };
-export const allData = (access, write = false) => (access.company?.data?.businessRecords||[]).every(r=>allowed(access,r.module,write)) && access.unrestrictedBranches !== false && !(access.billingPlan?.blockedModules||[]).some(m=>['control_personal','decisiones'].includes(m)) && salesAdministrator(access) && [...DATA_MODULES, 'ventas', 'facturacion', 'cajas', 'costos', 'proveedores'].every(module => allowed(access, module, write));
+export const allData = (access, write = false) => (access.company?.data?.businessRecords||[]).every(r=>allowed(access,r.module,write)) && (access.company?.data?.fiscalWorkflows||[]).every(r=>allowed(access,r.module,write)) && access.unrestrictedBranches !== false && !(access.billingPlan?.blockedModules||[]).some(m=>['control_personal','decisiones'].includes(m)) && salesAdministrator(access) && [...DATA_MODULES, 'ventas', 'facturacion', 'cajas', 'costos', 'proveedores'].every(module => allowed(access, module, write));
 export const actorName = session => session.member ? `${session.member.name} (${session.member.username || session.email})` : session.email;
 export const safeMember = member => ({ id: member.id, email: member.email, username: member.username, name: member.name, role: member.role, permissions: member.permissions, branchIds: member.branchIds, active: member.active, version: member.version });
 export function accessError(message, status = 403) {
@@ -203,6 +204,8 @@ export function projectData(data, access) {
     const copy = { ...record }; if(!access.owner)delete copy.receipt; return copy;
   }) : [];
   for(const [name,module] of Object.entries({...ADVANCED_ARRAYS,...TRADE_ARRAYS})) projected[name]=allowed(access,module)?structuredClone(data[name]||[]):[];
+  if(allowed(access,'fiscal'))projected.fiscalCreditReservations=globalThis.AcontecFiscalMath.effectiveDeclarations(data).flatMap(r=>r.frozen.credits||[]).filter(c=>c.source==='iva').map(c=>({period:c.period,amountCents:c.amountCents}));
+  projected.fiscalWorkflows=(data.fiscalWorkflows||[]).filter(r=>allowed(access,r.module)&&(['template','configuration'].includes(r.kind)||[...accountingPermissionModules,...new Set((data.businessRecords||[]).filter(b=>['bancos','constancias_laborales','retenciones_fiscales'].includes(b.module)).map(b=>b.module))].every(m=>allowed(access,m))));
   projected.businessRecords=(data.businessRecords||[]).filter(row=>allowed(access,row.module)&&(row.module!=='auditoria_revision'||row.kind==='settings'||(row.kind==='report'?row:(data.businessRecords||[]).find(r=>r.id===row.reportId))?.scope?.every(m=>allowed(access,m)))).map(row=>structuredClone(row));
   projected.stockTransfers=moduleIncluded(access.billingPlan||{blockedModules:[]},'sucursales')&&allowed(access,'inventario')?structuredClone(data.stockTransfers||[]):[];
   return projected;
@@ -294,7 +297,7 @@ function restoreServiceEntryProjections(current,entries,access){
 }
 export function mergeData(current, incoming, access, {restoreServiceConfiguration=false}={}) {
   if (!incoming || !['accounts', 'entries', 'products'].every(name => Array.isArray(incoming[name]))) accessError('Datos contables inválidos.', 400);
-  delete incoming.fiscalSummary;
+  delete incoming.fiscalSummary;delete incoming.fiscalCreditReservations;
   if (incoming.customers === undefined) incoming.customers = allowed(access, 'ventas') ? structuredClone(current?.customers || []) : [];
   for (const name of ['employees', 'payrolls', 'taxes', 'properties', 'settlements']) if (incoming[name] !== undefined && !Array.isArray(incoming[name])) accessError('Datos contables inválidos.', 400);
   if (!Array.isArray(incoming.customers)) accessError('Cartera de clientes inválida.', 400);
@@ -308,6 +311,7 @@ export function mergeData(current, incoming, access, {restoreServiceConfiguratio
   const projected = projectData(current, { ...access, branchId: null });
   const merged = structuredClone(current);
   if(current.businessRecords) merged.businessRecords=structuredClone(current.businessRecords);
+  if(current.fiscalWorkflows) merged.fiscalWorkflows=structuredClone(current.fiscalWorkflows);
   if(current.inventoryLayers)merged.inventoryLayers=structuredClone(current.inventoryLayers);else delete merged.inventoryLayers;
   merged.cfg ||= {};
   merged.customers = merged.customers || [];
@@ -455,6 +459,7 @@ export async function updateCompany(companyId, session, revision, mutate, action
       guardAuditHistory(fullCompany.data,patch.data,action);
       guardServicePayroll(fullCompany.data,patch.data,(ok,message)=>{if(!ok)accessError(message,400)});
       guardPeriods(fullCompany.data, patch.data, action);
+      guardWorkflows(fullCompany.data,patch.data,action);
       await syncBarcodes(client, fullCompany, patch.data);
     }
     if (Object.entries(patch).every(([name, value]) => equal(fullCompany[name], value))) return remember({ revision: company.revision, data: projectData(fullCompany.data, access) });

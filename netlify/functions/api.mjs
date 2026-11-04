@@ -1,3 +1,4 @@
+import {downloadWorkflowFile} from '../lib/package-jobs.mjs';
 import {systemHealth} from '../lib/system-health.mjs';
 import {paymentHistory,paymentForReceipt,paymentPDF} from '../lib/payment-receipts.mjs';
 import {backupRoute,storageStats,downloadPrivateExport} from '../lib/private-backups.mjs';
@@ -93,7 +94,7 @@ async function issueSession(email, admin, request, memberId = null) {
   await db.delete(sessions).where(or(lt(sessions.expiresAt, new Date()), eq(sessions.tokenHash, hashToken(sessionToken(request)))));
   return json({ ok: true }, 200, { 'set-cookie': `${SESSION}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=28800` });
 }
-async function readSession(request, renew = true) {
+export async function readSession(request, renew = true) {
   const token = sessionToken(request);
   if (!/^[a-f0-9]{64}$/.test(token)) return null;
   const [session] = await db.select({ email: sessions.email, admin: sessions.admin, memberId: sessions.memberId, activeBranchId: sessions.activeBranchId, activeCompanyId:sessions.activeCompanyId, name: users.name, expiresAt: sessions.expiresAt }).from(sessions).innerJoin(users, eq(users.email, sessions.email))
@@ -435,7 +436,16 @@ const handleRequest = async (request, context, metrics) => {
     if(path==='integrity' && method==='GET'){return await db.transaction(async client=>{const access=await companyAccess(client,url.searchParams.get('c'),session,true);requireModule(access,'contabilidad');return json(integrityReport(projectData(access.company.data,access)||{}));});}
     if (path === 'storage-migration' && method === 'POST') return json(await migrateAccountingStorage(url.searchParams.get('c'), session, body));
     if (path === 'discounts' && ['GET','POST'].includes(method)) return json(await discountRoute(url.searchParams.get('c'),session,method,body));
-    if (path === 'operations' && method === 'POST') return json(await runOperation(url.searchParams.get('c'), session, body));
+    if(path==='workflow-file'&&method==='GET')return downloadWorkflowFile(session,url.searchParams.get('c'),url.searchParams.get('id'),url.searchParams.get('type')||'zip');
+    if (path === 'operations' && method === 'POST') {
+      const result=await runOperation(url.searchParams.get('c'),session,body);
+      if(['workflowPackage','workflowClose','workflowPresent'].includes(body.operation)){
+        const selected=result.data?.fiscalWorkflows?.find(r=>r.id===result.id);const jobId=selected?.kind==='packageJob'?selected.id:selected?.packageJobId;
+        const jobs=(result.data?.fiscalWorkflows||[]).filter(r=>r.id===jobId&&r.kind==='packageJob'&&r.status==='pendiente'&&r.createdBy===session.email&&r.createdMemberId===(session.memberId||null));
+        for(const job of jobs)try{await fetch(new URL('/.netlify/functions/fiscal-package-background',url.origin),{method:'POST',headers:{'content-type':'application/json',origin:url.origin,cookie:request.headers.get('cookie')||''},body:JSON.stringify({companyId:url.searchParams.get('c'),id:job.id})});}catch{ /* Trabajo persistido: reintentable desde la pantalla. */ }
+      }
+      return json(result);
+    }
     if (path === 'company-logo' && method === 'POST') {
       const access = await companyAccess(db, url.searchParams.get('c'), session);
       if (!(access.owner && allowed(access,'ajustes',true))) requireModule(access,'diseno_factura',true);
@@ -599,7 +609,7 @@ const handleRequest = async (request, context, metrics) => {
         || (body.mime === 'image/webp' && file.toString('ascii', 0, 4) === 'RIFF' && file.toString('ascii', 8, 12) === 'WEBP');
       if (!valid) return fail('Usa un PDF, JPG, PNG o WebP válido.');
       const historical = await retainedCompanyData(db, companyId);
-      const receipts = [...new Map([company.data, ...historical.map(backup => backup.data)].flatMap(data => receiptRecords(data).map(record => [record.receipt.key, record.receipt]))).values()];
+      const receipts = [...new Map([company.data, ...historical.map(backup => backup.data)].flatMap(data => receiptRecords(data).map(record => [record.receipt.key, record.receipt]))).values()].filter(receipt=>!receipt.generated);
       if (receipts.length >= 100 || receipts.reduce((total,receipt) => total + receipt.size, 0) + file.length > 52428800) return fail('Límite de comprobantes alcanzado: 100 archivos o 50 MB por empresa.');
       const key = companyId + '/' + randomUUID();
       const extensions = { 'application/pdf': '.pdf', 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' };

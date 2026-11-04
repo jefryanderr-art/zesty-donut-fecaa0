@@ -361,17 +361,9 @@ ACT.nextTax=data=>{
   taxForm(null,{...tax,id:undefined,entryId:undefined,receipt:undefined,due,period,recognized:false});
 };
 let TAX_MONTH=today().slice(0,7),TAX_YEAR=String(new Date().getFullYear());
-function vatReport(month){
-  const from=month+'-01',last=new Date(Date.UTC(+month.slice(0,4),+month.slice(5,7),0)).toISOString().slice(0,10);let output=0,input=0,baseSales=0,basePurchases=0;
-  for(const entry of S.entries){
-    if(entry.date<from||entry.date>last||['fiscal','fiscal-pago'].includes(entry.type))continue;
-    for(const line of entry.lines){if(line.a==='2106')output+=(+line.c||0)-(+line.d||0);if(line.a==='1202')input+=(+line.d||0)-(+line.c||0)}
-    if(['venta','nota-credito'].includes(entry.type))baseSales+=(entry.subtotal??entry.total)*(entry.type==='nota-credito'?-1:1);if(['compra','gasto','costo'].includes(entry.type)&&!entry.reversalOf)basePurchases+=entry.subtotal??entry.total;
-  }
-  return {from,to:last,output:r2(output),input:r2(input),baseSales:r2(baseSales),basePurchases:r2(basePurchases),net:r2(output-input)};
-}
-function vatCreditAvailable(period){return Math.max(0,r2(S.taxes.filter(tax=>tax.source==='iva'&&tax.period<period).reduce((total,tax)=>total+(tax.credit||0)-(tax.usedCredit||0),0)))}
-function annualReport(year){if(S.fiscalSummary){const row=S.fiscalSummary[year]||{},income=(row.incomeCents||0)/100,cost=(row.costCents||0)/100,expense=(row.expenseCents||0)/100,profit=r2(income-cost-expense);return {income,cost,expense,profit,tax:r2(Math.max(0,profit)*S.cfg.fiscal.incomeRate/100)}}const balances=bal(year+'-01-01',year+'-12-31'),income=tot(balances,'ingreso'),cost=tot(balances,'costo'),expense=tot(balances,'gasto'),previousTax=balances['6108']?sg(balances['6108']):0,profit=r2(income-cost-expense+previousTax);return {income:r2(income),cost:r2(cost),expense:r2(expense-previousTax),profit,tax:r2(Math.max(0,profit)*S.cfg.fiscal.incomeRate/100)}}
+function vatReport(month){const to=new Date(Date.UTC(+month.slice(0,4),+month.slice(5,7),0)).toISOString().slice(0,10);return AcontecFiscalMath.vat(S,month+'-01',to)}
+function vatCreditAvailable(period){return AcontecFiscalMath.vatCreditAvailable(S,period)}
+function annualReport(year){if(S.fiscalSummary){const r=S.fiscalSummary[year]||{};return AcontecFiscalMath.annual({accounts:[{code:'income',tipo:'ingreso'},{code:'cost',tipo:'costo'},{code:'expense',tipo:'gasto'}],entries:[{id:'summary',date:year+'-12-31',lines:[{a:'income',d:0,c:(r.incomeCents||0)/100},{a:'cost',d:(r.costCents||0)/100,c:0},{a:'expense',d:(r.expenseCents||0)/100,c:0}]}],cfg:S.cfg},year)}return AcontecFiscalMath.annual(S,year)}
 V.impuestos=()=>{
   const vat=vatReport(TAX_MONTH),annual=annualReport(TAX_YEAR);
   const savedVAT=S.taxes.find(tax=>tax.source==='iva'&&tax.period===TAX_MONTH),savedIncome=S.taxes.find(tax=>tax.source==='renta'&&tax.period===TAX_YEAR);

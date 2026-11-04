@@ -103,6 +103,7 @@ export function booksReport(data,body,fiscalStatusOf=()=>null){
  let source;
  if(body.book==='retenciones')source=(data.withholdings||[]).filter(w=>w.date>=body.from&&w.date<=body.to).map(w=>({date:w.date,reference:w.reference,party:w.name,taxId:'',subtotalCents:moneyCents(w.base),vatCents:0,totalCents:moneyCents(w.total),type:'retención '+w.side,fiscalNumber:'',fiscalStatus:''}));
  else source=(data.entries||[]).filter(e=>book.types.includes(e.type)&&e.date>=body.from&&e.date<=body.to).map(e=>{const party=(e.type.includes('compra')?data.suppliers:data.customers)?.find(p=>p.id===(e.supplierId||e.customerId));const f=fiscalStatusOf(e.id);return {date:e.date,reference:e.reference||'',party:e.party||'',taxId:party?.taxId||party?.ruc||'',subtotalCents:moneyCents(e.subtotal??Math.max(0,e.total-(e.vat||0))),vatCents:moneyCents(e.vat||0),totalCents:moneyCents(e.total),type:e.type,fiscalNumber:f?.number||'',fiscalStatus:f?.fiscalState||''}});
+ if(body.signed)source=source.filter(r=>r.fiscalStatus!=='anulado').map(r=>r.type==='nota-credito'||r.type==='nota-credito-compra'?{...r,subtotalCents:-r.subtotalCents,vatCents:-r.vatCents,totalCents:-r.totalCents}:r);
  source.sort((a,b)=>a.date.localeCompare(b.date)||a.reference.localeCompare(b.reference));
  const rows=source.map(r=>Object.fromEntries(columns.map(c=>[c,r[c]])));
  return {book:body.book,label:book.label,columns,rows,totals:{subtotalCents:source.reduce((n,r)=>n+r.subtotalCents,0),vatCents:source.reduce((n,r)=>n+r.vatCents,0),totalCents:source.reduce((n,r)=>n+r.totalCents,0)},notice:FISCAL_NOTICE};
