@@ -72,3 +72,21 @@ export function budgetVariance(budgetCents, actualCents, thresholdPct = 10) {
   const pct = budgetCents ? (diff / budgetCents) * 100 : null;
   return { diffCents: diff, pct, alert: pct != null ? Math.abs(pct) > thresholdPct : diff !== 0 };
 }
+
+/** F6.1 Real por clave de presupuesto (cuenta, centro, proyecto o sucursal) en centavos enteros. Gastos: debe-haber de cuentas 5xxx/6xxx; cuenta: signo natural. */
+export function budgetActuals(entries, dimension, from, to) {
+  const out = new Map();
+  const c = (x) => Math.round(Number(x || 0) * 100);
+  for (const e of entries || []) {
+    if (e.date < from || e.date > to) continue;
+    for (const l of e.lines || []) {
+      const a = String(l.a || ''), net = c(l.d) - c(l.c);
+      let key, value = net;
+      if (dimension === 'cuenta') { key = a; if (!/^[15]|^6/.test(a)) value = -net; }
+      else { if (!/^[56]/.test(a)) continue; key = dimension === 'centro' ? e.costCenter : dimension === 'proyecto' ? e.project : (e.branchId || 'principal'); }
+      if (!key) continue;
+      out.set(key, (out.get(key) || 0) + value);
+    }
+  }
+  return out;
+}
