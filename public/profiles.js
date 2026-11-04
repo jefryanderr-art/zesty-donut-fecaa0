@@ -13,6 +13,7 @@
   conteo_ciclico:{letter:'AG',name:'Conteo cíclico',group:'Inventario',flow:'Abre un conteo por zona o categoría y vincula el ajuste confirmado.'},
   consignacion_vnr:{letter:'AH',name:'Consignación y valor neto realizable',group:'Inventario',flow:'Registra consignaciones y revisa el reporte de valor neto realizable; verifica con tu contador.'},
   desembarque:{letter:'AI',name:'Gastos de desembarque',group:'Inventario',flow:'Asocia facturas de gasto a una compra y consulta el costo puesto en bodega.'},
+  presupuestos:{letter:'AJ',name:'Presupuesto vs real',group:'Finanzas',flow:'Crea presupuestos por cuenta, centro, proyecto o sucursal y revisa desviaciones; verifica con tu contador.'},
   emision_recurrente:{letter:'AA',name:'Próximas facturas',group:'Servicio',flow:'Vincula Q o Contratos y confirma cada emisión desde su módulo.'},
   flujo_proyectado:{letter:'S',name:'Flujo proyectado',group:'Finanzas',flow:'Consulta escenarios y supuestos sin modificar la contabilidad.'},
   pagos_lote:{letter:'T',name:'Pagos por lote',group:'Finanzas',flow:'Prepara, aprueba y confirma un lote de proveedores.'},
