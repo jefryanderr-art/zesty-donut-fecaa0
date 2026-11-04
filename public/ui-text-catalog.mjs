@@ -13039,3 +13039,820 @@ Object.assign(UI_CATALOG, {
     "max": 200
   }
 });
+
+Object.assign(UI_CATALOG, {
+  "clients.title": {
+    "original": "Facturación, cobranza y comunicación",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.help": {
+    "original": "Sin envíos automáticos. Activa cada módulo por sucursal y confirma cada gestión. Verifica con tu contador.",
+    "group": "Facturación y cobranza",
+    "max": 318
+  },
+  "clients.loading": {
+    "original": "Consultando documentos autorizados…",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.error": {
+    "original": "No se completó la gestión.",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.enable": {
+    "original": "Activar o desactivar",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.enabled": {
+    "original": "Habilitar para operaciones futuras",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.date": {
+    "original": "Fecha efectiva",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.reason": {
+    "original": "Motivo",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.confirmed": {
+    "original": "Confirmo la gestión y su efecto",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.save": {
+    "original": "Confirmar",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.customerId": {
+    "original": "Cliente",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.documentType": {
+    "original": "Tipo de documento",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.invoice": {
+    "original": "Factura",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.quotation": {
+    "original": "Cotización",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.proforma": {
+    "original": "Proforma",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.statement": {
+    "original": "Estado de cuenta",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.documentId": {
+    "original": "Documento",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.send": {
+    "original": "Revisar documento y enviar PDF",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.preview": {
+    "original": "Revisar documento",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.sendConfirmed": {
+    "original": "Confirmar envío con PDF al correo registrado",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.template": {
+    "original": "Editar plantilla de la empresa",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.subject": {
+    "original": "Asunto: {empresa}, {cliente}, {documento}, {fecha}",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.body": {
+    "original": "Mensaje: {empresa}, {cliente}, {documento}, {fecha}",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.retry": {
+    "original": "Reintentar error definitivo",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.rules": {
+    "original": "Configurar días de recordatorio",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.offsets": {
+    "original": "Días separados por coma (- antes / + después del vencimiento)",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.generate": {
+    "original": "Generar propuestas para aprobación",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.approve": {
+    "original": "Aprobar envío de estado de cuenta",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.reject": {
+    "original": "Rechazar recordatorio",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.promise": {
+    "original": "Registrar promesa",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.management": {
+    "original": "Registrar gestión",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.amountCents": {
+    "original": "Importe (centavos enteros)",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.due": {
+    "original": "Fecha prometida",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.note": {
+    "original": "Nota de gestión (sin datos sensibles)",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.credit": {
+    "original": "Configurar límite de crédito",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.limitCents": {
+    "original": "Límite en centavos (cero bloquea todo crédito)",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.mode": {
+    "original": "Al superar el límite",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.warn": {
+    "original": "Advertir y exigir confirmación",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.block": {
+    "original": "Bloquear factura",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.creditWarningConfirmed": {
+    "original": "Confirmo la advertencia de límite de crédito (solo si la política permite advertir)",
+    "group": "Facturación y cobranza",
+    "max": 249
+  },
+  "clients.terms": {
+    "original": "Configurar términos futuros",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.netDays": {
+    "original": "Días netos",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.discountDays": {
+    "original": "Días para pronto pago",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.discountBps": {
+    "original": "Descuento financiero sobre base, sin cambiar IVA (100 = 1%)",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.discountAccount": {
+    "original": "Cuenta de gasto financiero",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.collect": {
+    "original": "Revisar y registrar cobro",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.pay": {
+    "original": "Cuenta de cobro",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.invoiceId": {
+    "original": "Factura con condiciones futuras",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.previewCents": {
+    "original": "Importe neto con descuento al pagar todo (centavos)",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.partialHelp": {
+    "original": "El descuento solo aplica al liquidar en el primer cobro dentro del plazo; un cobro parcial no lo aplica. No cambia el IVA. Verifica con tu contador.",
+    "group": "Facturación y cobranza",
+    "max": 444
+  },
+  "clients.link": {
+    "original": "Vincular emisión futura",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.sourceModule": {
+    "original": "Origen",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.sourceId": {
+    "original": "Ficha de origen",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.suscripciones": {
+    "original": "Capacidad Q",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.contratos": {
+    "original": "Contratos",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.upcoming": {
+    "original": "Próximas emisiones: abre el origen y confirma su vista previa",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.from": {
+    "original": "Desde",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.to": {
+    "original": "Hasta",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.refresh": {
+    "original": "Consultar",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.pdf": {
+    "original": "Descargar PDF",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.csv": {
+    "original": "Descargar CSV para Excel",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.whatsapp": {
+    "original": "Abrir WhatsApp con mensaje (sin envío automático)",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.whatsappHelp": {
+    "original": "WhatsApp no adjunta el PDF. Descárgalo y adjúntalo manualmente.",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.records": {
+    "original": "Historial y configuración",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.candidates": {
+    "original": "Propuestas aún no generadas",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.invoices": {
+    "original": "Facturas con condiciones y saldo",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.empty": {
+    "original": "Sin registros",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.company": {
+    "original": "Empresa",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.branchId": {
+    "original": "Sucursal",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.generatedAt": {
+    "original": "Fecha de generación",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.generatedBy": {
+    "original": "Generado por",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.revision": {
+    "original": "Revisión",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.version": {
+    "original": "Versión",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.field": {
+    "original": "Campo",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.value": {
+    "original": "Valor",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.readOnly": {
+    "original": "Solo lectura",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.pending": {
+    "original": "En cola",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.sending": {
+    "original": "Envío en curso o ambiguo: revisar SMTP; no reintentar",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.sent": {
+    "original": "Aceptado por SMTP",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.unknown": {
+    "original": "Estado no disponible",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.deliveryError": {
+    "original": "Error definitivo; requiere reintento confirmado",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.proposed": {
+    "original": "Pendiente de aprobación",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.approved": {
+    "original": "Aprobado",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.rejected": {
+    "original": "Rechazado",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.details": {
+    "original": "Consultar historial",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.open": {
+    "original": "Abrir módulo de origen",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.comunicacion": {
+    "original": "Comunicación con clientes",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.cobranza": {
+    "original": "Gestión de cobranza",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.terminos_pago": {
+    "original": "Términos de pago",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.emision_recurrente": {
+    "original": "Próximas facturas",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.period": {
+    "original": "Período",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.delivery": {
+    "original": "Entrega",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.document": {
+    "original": "Documento",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.items": {
+    "original": "Líneas del documento",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.totalCents": {
+    "original": "Total en centavos",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.balanceCents": {
+    "original": "Saldo en centavos",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.payableCents": {
+    "original": "Neto en centavos",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.discountCents": {
+    "original": "Descuento en centavos",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.Activa": {
+    "original": "Activa",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.Inactiva": {
+    "original": "Inactiva",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.kind": {
+    "original": "Tipo de registro",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.status": {
+    "original": "Estado",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.events": {
+    "original": "Historial",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.actor": {
+    "original": "Responsable",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.action": {
+    "original": "Acción",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.at": {
+    "original": "Fecha y hora",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.key": {
+    "original": "Referencia",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.id": {
+    "original": "Identificador",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.name": {
+    "original": "Nombre",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.message": {
+    "original": "Mensaje",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.recipient": {
+    "original": "Destinatario",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.queueId": {
+    "original": "Solicitud de correo",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.approval": {
+    "original": "Aprobación",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.attempts": {
+    "original": "Intentos",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.sentAt": {
+    "original": "Aceptación SMTP",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.lastError": {
+    "original": "Último error",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.reference": {
+    "original": "Número de documento",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.subtotalCents": {
+    "original": "Base en centavos",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.vatCents": {
+    "original": "IVA en centavos",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.q": {
+    "original": "Cantidad",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.u": {
+    "original": "Precio unitario",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.unit": {
+    "original": "Precio unitario",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.vatRate": {
+    "original": "IVA configurado",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.flow": {
+    "original": "Guía",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.quickQuestion": {
+    "original": "¿Cómo apruebo un recordatorio de cobro?",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.quickAnswer": {
+    "original": "1. Abre Gestión de cobranza. 2. Genera propuestas. 3. Revisa cada deuda y aprueba individualmente el envío; no se envía al generar. Verifica con tu contador.",
+    "group": "Facturación y cobranza",
+    "max": 471
+  },
+  "clients.flow.comunicacion": {
+    "original": "Revisa el documento y confirma cada envío.",
+    "group": "Facturación y cobranza",
+    "max": 400
+  },
+  "clients.flow.cobranza": {
+    "original": "Revisa vencimientos, promesas y recordatorios antes de aprobar.",
+    "group": "Facturación y cobranza",
+    "max": 400
+  },
+  "clients.flow.terminos_pago": {
+    "original": "Configura condiciones futuras y confirma descuentos al cobrar; verifica con tu contador.",
+    "group": "Facturación y cobranza",
+    "max": 400
+  },
+  "clients.flow.emision_recurrente": {
+    "original": "Vincula Q o Contratos y confirma cada emisión desde su módulo.",
+    "group": "Facturación y cobranza",
+    "max": 400
+  }
+});
+
+Object.assign(UI_CATALOG, {
+  "clients.unitCents": {
+    "original": "Precio unitario en centavos",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.currency": {
+    "original": "Moneda",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.enabled": {
+    "original": "Habilitado",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.documentId": {
+    "original": "Documento",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.sourceModule": {
+    "original": "Origen",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.sourceId": {
+    "original": "Ficha de origen",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.body": {
+    "original": "Texto de la plantilla",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.subject": {
+    "original": "Asunto de la plantilla",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.messageId": {
+    "original": "Envío vinculado",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.previousAttempts": {
+    "original": "Intentos previos",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.offset": {
+    "original": "Días respecto al vencimiento",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.offsets": {
+    "original": "Reglas en días",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.discountAccount": {
+    "original": "Cuenta de gasto financiero",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.discountBps": {
+    "original": "Descuento en puntos básicos",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.netDays": {
+    "original": "Días netos",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.discountDays": {
+    "original": "Días para descuento",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.configuration": {
+    "original": "Configuración",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.template": {
+    "original": "Plantilla",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.message": {
+    "original": "Mensaje",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.reminder": {
+    "original": "Recordatorio",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.promise": {
+    "original": "Promesa de pago",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.management": {
+    "original": "Gestión",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.credit": {
+    "original": "Límite de crédito",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.terms": {
+    "original": "Términos",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.link": {
+    "original": "Vínculo recurrente",
+    "group": "Facturación y cobranza",
+    "max": 200
+  }
+});
+
+Object.assign(UI_CATALOG, {
+  "clients.pdfNotice": {
+    "original": "Documento comercial · verifica con tu contador",
+    "group": "Facturación y cobranza",
+    "max": 200
+  }
+});
+
+Object.assign(UI_CATALOG, {
+  "clients.reverseCollect": {
+    "original": "Revertir cobro con motivo",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.collections": {
+    "original": "Cobros con descuento financiero",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.reversed": {
+    "original": "Revertido",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.clientCollection": {
+    "original": "Cobro con condiciones",
+    "group": "Facturación y cobranza",
+    "max": 200
+  },
+  "clients.clientCollectionReversal": {
+    "original": "Reversa de cobro con condiciones",
+    "group": "Facturación y cobranza",
+    "max": 200
+  }
+});

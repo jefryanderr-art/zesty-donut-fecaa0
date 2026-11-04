@@ -1,3 +1,4 @@
+import {clientDocumentPDF} from './client-pdf.mjs';
 import nodemailer from 'nodemailer';
 import {eq,sql} from 'drizzle-orm';
 import {db} from '../../db/index.ts';
@@ -13,7 +14,12 @@ export async function deliverMessages(limit=20){
  await Promise.all((result.rows||result).map(async message=>{
   let smtpStarted=false,accepted=false,payment;
   try{
-   let content={subject:message.subject,text:message.body};
+   let content={subject:message.subject,text:message.body},recipient=message.email;
+   if(message.dedupe_key?.startsWith('client:')){
+    const snapshot=JSON.parse(message.body);recipient=snapshot.recipient;
+    if(!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(recipient))throw new Error('Invalid recipient');
+    content={subject:message.subject,text:snapshot.message,attachments:[{filename:'documento.pdf',content:clientDocumentPDF(snapshot.document),contentType:'application/pdf'}]};
+   }
    if(message.dedupe_key?.startsWith('receipt:')){
     payment=await paymentForReceipt(message.dedupe_key.slice(8),message.email);
     if(payment.notifiedAt){await db.update(serviceMessages).set({state:'sent',sentAt:payment.notifiedAt}).where(eq(serviceMessages.id,message.id));return}
@@ -21,7 +27,7 @@ export async function deliverMessages(limit=20){
     content={subject:'Confirmación de pago – Acontec',text:'Comprobante de pago\n'+lines.map(([k,v])=>k+': '+v).join('\n'),html:'<h1>Comprobante de pago – Acontec</h1>'+lines.map(([k,v])=>'<p><strong>'+htmlEscape(k)+':</strong> '+htmlEscape(v)+'</p>').join(''),attachments:[{filename:'Acontec-'+payment.id+'.pdf',content:pdf,contentType:'application/pdf'}]};
    }
    smtpStarted=true;
-   const info=await transporter.sendMail({from:env('SMTP_FROM'),to:message.email,...content,messageId:`<${message.id}@acontec.company>`});
+   const info=await transporter.sendMail({from:env('SMTP_FROM'),to:recipient,...content,messageId:`<${message.id}@acontec.company>`});
    if(!info.accepted?.length)throw Object.assign(new Error('SMTP rejected'),{responseCode:550});
    accepted=true;
    await db.transaction(async client=>{
@@ -33,7 +39,7 @@ export async function deliverMessages(limit=20){
    // SMTP cannot guarantee exactly-once delivery after an ambiguous timeout.
    // Keep ambiguous submissions claimed; never automatically send them again.
    const ambiguous=accepted||(smtpStarted&&!error.responseCode&&!['CONN','AUTH','EHLO','HELO','STARTTLS','MAIL FROM','RCPT TO'].includes(error.command));
-   await db.update(serviceMessages).set({state:ambiguous?'sending':'pending',lastError:ambiguous?'SMTP_AMBIGUOUS_REVIEW_REQUIRED':'DELIVERY_FAILED'}).where(eq(serviceMessages.id,message.id));
+   await db.update(serviceMessages).set({state:ambiguous?'sending':message.dedupe_key?.startsWith('client:')?'error':'pending',lastError:ambiguous?'SMTP_AMBIGUOUS_REVIEW_REQUIRED':'DELIVERY_FAILED'}).where(eq(serviceMessages.id,message.id));
   }
  }));
 }

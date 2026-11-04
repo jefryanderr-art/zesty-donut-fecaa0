@@ -259,7 +259,7 @@ ACT.posRemove=(data,button)=>{const form=button.closest('form');button.closest('
 ACT.posBalance=(data,button)=>{const form=button.closest('form');form.querySelector('[name=usePayment][value=efectivo]').checked=true;form.paymentOrder=(form.paymentOrder||[]).filter(m=>m!=='efectivo').concat('efectivo');const total=previewPos(form),other=['tarjeta','transferencia','credito'].reduce((sum,method)=>sum+(+v(form,'payment_'+method)||0),0);form.elements.payment_efectivo.value=Math.max(0,r2(total-other));updatePosPayments(form,total)};
 ACT.editventa=()=>{throw new Error(uiT("operations.extra.30","Las facturas emitidas se corrigen mediante nota de crédito."))};
 ACT.creditNote=async data=>{
-  const math=await import('/accounting-math.mjs?v=d877af27050b79e8');
+  const math=await import('/accounting-math.mjs?v=87083c967a1dcbf8');
   const entry=S.entries.find(record=>record.id===data.id),grouped=new Map();for(const item of entry.items||[])if(!grouped.has(item.p))grouped.set(item.p,{...item,q:0});for(const item of entry.items||[])grouped.get(item.p).q+=item.q;
   for(const note of S.entries.filter(record=>record.type==='nota-credito'&&record.invoiceId===entry.id))for(const item of note.items||[])if(grouped.has(item.p))grouped.get(item.p).q-=item.q;
   const items=[...grouped.values()].filter(item=>item.q>0.000001);
