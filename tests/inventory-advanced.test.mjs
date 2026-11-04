@@ -1,0 +1,101 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {inventoryOperation,inventoryReport,INVENTORY_OPS,INVENTORY_MODULES,inventoryModule} from '../netlify/lib/inventory-advanced.mjs';
+import {managuaDay} from '../netlify/lib/billing-rules.mjs';
+const ctx={permit(){}};
+const access=(o={})=>({owner:true,branchId:'principal',company:{name:'Demo'},...o});
+const session={email:'dueno@example.com'};
+const body=(operation,extra={})=>({operation,date:managuaDay(),reason:'Motivo de prueba',confirmed:true,...extra});
+const products=()=>[{id:'p1',name:'Tornillo',code:'T1',stock:10,cost:1.5,price:3,category:'Ferretería'},{id:'p2',name:'Tuerca',code:'T2',stock:5,cost:0.5,price:1,category:'Ferretería'},{id:'sv',name:'Servicio',kind:'service',stock:0,cost:0,price:9}];
+const base=()=>({businessRecords:[],products:products(),entries:[],cfg:{}});
+const run=(d,op,extra,a=access())=>inventoryOperation(d,a,session,body(op,extra),ctx);
+const enable=async(d,module)=>run(d,'invEnable',{module,enabled:true});
+test('todo nace apagado y solo el dueño activa hoy',async()=>{
+ const d=base();
+ await assert.rejects(()=>run(d,'invWarehouse',{name:'A'}),/dueño debe activar/);
+ await assert.rejects(()=>run(d,'invEnable',{module:'bodegas',enabled:true},access({owner:false})),/dueño/);
+ await assert.rejects(()=>run(d,'invEnable',{module:'bodegas',enabled:true,date:'2020-01-01'}),/hoy/);
+ await assert.rejects(()=>run(d,'invEnable',{module:'bodegas',enabled:true,confirmed:false}),/confirma/i);
+ await assert.rejects(()=>run(d,'invEnable',{module:'bodegas',enabled:true,reason:'x'}),/motivo/);
+ assert.equal(d.businessRecords.length,0);
+});
+test('cada operación se asigna a un módulo y exige motivo y confirmación',()=>{
+ for(const op of INVENTORY_OPS)assert.ok(INVENTORY_MODULES.includes(inventoryModule({operation:op,module:'kits'})));
+});
+test('bodegas: asignación limitada a la existencia, traslado y alertas',async()=>{
+ const d=base();await enable(d,'bodegas');
+ const a=await run(d,'invWarehouse',{name:'Central',zone:'Norte'}),b=await run(d,'invWarehouse',{name:'Tienda',zone:'Sur'});
+ await assert.rejects(()=>run(d,'invWarehouse',{name:'central'}),/Ya existe/);
+ await run(d,'invAssign',{warehouseId:a,productId:'p1',qty:8});
+ await assert.rejects(()=>run(d,'invAssign',{warehouseId:b,productId:'p1',qty:3}),/excede/);
+ await assert.rejects(()=>run(d,'invAssign',{warehouseId:b,productId:'sv',qty:1}),/inventariable/);
+ await run(d,'invTransfer',{fromWarehouseId:a,toWarehouseId:b,productId:'p1',qty:2});
+ await assert.rejects(()=>run(d,'invTransfer',{fromWarehouseId:a,toWarehouseId:b,productId:'p1',qty:20}),/insuficiente/);
+ await assert.rejects(()=>run(d,'invTransfer',{fromWarehouseId:a,toWarehouseId:a,productId:'p1',qty:1}),/no válidas/);
+ await run(d,'invLimit',{warehouseId:a,productId:'p1',min:10,max:20});
+ await assert.rejects(()=>run(d,'invLimit',{warehouseId:a,productId:'p1',min:10,max:5}),/mínimo/);
+ const r=inventoryReport(d,{module:'bodegas'},()=>true);
+ assert.equal(r.stock.find(s=>s.warehouseId===a).qty,6);assert.equal(r.stock.find(s=>s.warehouseId===b).qty,2);
+ assert.equal(r.alerts[0].type,'below_min');assert.equal(r.alerts[0].suggested,14);
+ assert.equal(r.unassigned[0].unassigned,2);
+ await assert.rejects(()=>run(d,'invWarehouse',{id:a,name:'Central',active:false}),/Traslada/);
+ assert.equal(d.products[0].stock,10,'no cambia existencias ni costos');assert.equal(d.entries.length,0);
+});
+test('bodegas: otra sucursal no ve ni usa bodegas ajenas (falso positivo)',async()=>{
+ const d=base();await enable(d,'bodegas');const a=await run(d,'invWarehouse',{name:'Central'});
+ await assert.rejects(()=>run(d,'invAssign',{warehouseId:a,productId:'p1',qty:1},access({branchId:'otra'})),/dueño debe activar|no encontrado/);
+});
+test('kits: costo y disponibilidad por componente limitante, sin tocar stock',async()=>{
+ const d=base();await enable(d,'kits');d.products.push({id:'k',name:'Combo',stock:0,cost:0,price:6});
+ await assert.rejects(()=>run(d,'invKit',{productId:'k',components:[]}),/componentes/);
+ await assert.rejects(()=>run(d,'invKit',{productId:'k',components:[{p:'k',q:1}]}),/duplicado/);
+ await assert.rejects(()=>run(d,'invKit',{productId:'k',components:[{p:'sv',q:1}]}),/inventariable/);
+ await run(d,'invKit',{productId:'k',components:[{p:'p1',q:2},{p:'p2',q:1}]});
+ const kit=inventoryReport(d,{module:'kits'},()=>true).kits[0];
+ assert.equal(kit.costCents,350);assert.equal(kit.available,5);assert.equal(d.products[0].stock,10);
+});
+test('conteo cíclico por categoría y vínculo con conteo confirmado existente',async()=>{
+ const d=base();await enable(d,'conteo_ciclico');
+ await assert.rejects(()=>run(d,'invCountOpen',{scope:'zona',value:'Norte'}),/bodegas activas/);
+ await assert.rejects(()=>run(d,'invCountOpen',{scope:'categoria',value:'Nada'}),/No hay productos/);
+ const plan=await run(d,'invCountOpen',{scope:'categoria',value:'ferretería'});
+ await assert.rejects(()=>run(d,'invCountLink',{id:plan,entryId:'x'}),/primero/);
+ d.entries.push({id:'e1',type:'conteo',date:managuaDay(),counts:[{p:'p1'}]},{id:'e2',type:'conteo',date:managuaDay(),counts:[{p:'zz'}]});
+ await assert.rejects(()=>run(d,'invCountLink',{id:plan,entryId:'e2'}),/fuera del alcance/);
+ await run(d,'invCountLink',{id:plan,entryId:'e1'});
+ await assert.rejects(()=>run(d,'invCountLink',{id:plan,entryId:'e1'}),/ya fue aplicado/);
+});
+test('consignación y VNR: solo reporte; sin deterioro cuando el precio supera el costo',async()=>{
+ const d=base();await enable(d,'consignacion_vnr');
+ await assert.rejects(()=>run(d,'invConsign',{supplier:'P',productId:'p1',qty:1,unitCostCents:1.5}),/centavos/);
+ const c=await run(d,'invConsign',{supplier:'Proveedor',productId:'p1',qty:3,unitCostCents:150});
+ d.products.push({id:'x',name:'Viejo',stock:4,cost:10,price:6});
+ const r=inventoryReport(d,{module:'consignacion_vnr'},()=>true);
+ assert.equal(r.consignments[0].totalCents,450);assert.equal(r.nrv.length,1);assert.equal(r.nrv[0].writeDownCents,1600);
+ await run(d,'invConsignClose',{id:c});await assert.rejects(()=>run(d,'invConsignClose',{id:c}),/cerrada/);
+ assert.equal(d.entries.length,0);
+});
+test('desembarque: varias facturas, sin duplicar, costo puesto en bodega prorrateado',async()=>{
+ const d=base();await enable(d,'desembarque');
+ d.entries.push({id:'c1',type:'compra',reference:'C-1',stock:[{pid:'p1',q:10,unitCost:1},{pid:'p2',q:10,unitCost:3}]});
+ await assert.rejects(()=>run(d,'invLanded',{purchaseId:'nope'}),/no encontrada/);
+ const l=await run(d,'invLanded',{purchaseId:'c1'});
+ await assert.rejects(()=>run(d,'invLanded',{purchaseId:'c1'}),/ya tiene/);
+ await run(d,'invLandedExpense',{id:l,supplier:'Aduana',reference:'F-1',amountCents:400});
+ await run(d,'invLandedExpense',{id:l,supplier:'Flete',reference:'F-1',amountCents:101});
+ await assert.rejects(()=>run(d,'invLandedExpense',{id:l,supplier:'aduana',reference:'f-1',amountCents:5}),/ya está registrada/);
+ await assert.rejects(()=>run(d,'invLandedExpense',{id:l,supplier:'X',reference:'F-9',amountCents:1.5}),/centavos/);
+ const r=inventoryReport(d,{module:'desembarque'},()=>true).landed[0];
+ assert.equal(r.expensesCents,501);assert.equal(r.lines.reduce((s,x)=>s+x.landedCents,0),1000+3000+501);
+});
+test('integración: rutas, permisos, respaldo y textos',()=>{
+ const ops=readFileSync(new URL('../netlify/lib/operations.mjs',import.meta.url),'utf8');
+ assert.match(ops,/INVENTORY_OPS\.includes\(body\.operation\)/);
+ assert.match(ops,/inventoryReport/);assert.match(ops,/Descarga inventario avanzado/);
+ const ui=readFileSync(new URL('../public/inventory-advanced.js',import.meta.url),'utf8');
+ assert.ok(!/#[0-9a-f]{3,6}\b/i.test(ui.replace(/&#\d+;/g,'')),'sin colores fijos');
+ assert.match(ui,/uiT\('inventory\./);
+ const profiles=readFileSync(new URL('../public/profiles.js',import.meta.url),'utf8');
+ for(const m of INVENTORY_MODULES)assert.match(profiles,new RegExp(m+':\\{letter'));
+});

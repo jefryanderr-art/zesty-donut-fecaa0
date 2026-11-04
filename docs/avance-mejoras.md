@@ -12,6 +12,8 @@ El propietario respondió **«No, mantener el motor sin cambios»** a la propues
 
 El propietario confirmó que **solo PEPS queda exceptuado de la secuencia**. F5.1 permanece sin marcar y sin efecto, pero no impide continuar con fases posteriores. Ningún otro ítem recibe esta excepción: si existe un impedimento real, se aplica B.4 con motivo exacto. No se vuelve a solicitar permiso para modificar el motor. La Fase 2 tiene conciliación NIO/USD escrita y activación exclusiva por empresa; empieza apagada y no se activó en empresas existentes. La fase completa todavía no está cerrada. Fases 3–9 no se iniciaron.
 
+**Estado 2026-11-04 (solicitud Fases 5–9):** solo se entregó el bloque parcial de F5.2 descrito abajo; el resto de las Fases 5–9 **no se realizó** en esta pasada (alcance excede una sola tarea). F5.1 sigue impedido. Ninguna casilla nueva marcada.
+
 ## A. Base existente que se debe preservar
 
 - [x] A.1 Preservar Servicios y tarifas y ocultación condicional de Kardex, Compras y Traslados.
@@ -130,12 +132,12 @@ Estado detallado, límites y comprobaciones: [fase-2-tesoreria-bancos.md](fase-2
 ## Fase 5: inventario avanzado optativo
 
 - [ ] F5.1 **Impedido por decisión expresa del propietario:** conservar promedio ponderado; PEPS exige modificar el recorrido de costeo que no se autorizó. Sin implementación ni efecto. Continuación: nueva autorización de alcance antes de desarrollar capas para operaciones futuras.
-- [ ] F5.2 Bodegas por sucursal, traslados, existencias y alertas mínimo/máximo/reposición.
-- [ ] F5.3 Kits de productos separados de recetas, componentes, descuento de stock y costo.
-- [ ] F5.4 Conteo cíclico por zona/categoría con ajuste confirmado.
-- [ ] F5.5 Consignación de proveedores y valor neto realizable como reporte sin asiento automático.
-- [ ] F5.6 Múltiples gastos de desembarque por compra y costo puesto en bodega.
-- [ ] F5.Cierre Revisión, permisos, pruebas, uiT, descargas, respaldo, documentación y compatibilidad por archivo.
+- [x] F5.2 Bodegas por sucursal, traslados, existencias y alertas mínimo/máximo/reposición (módulo `bodegas`, informativo, sin asientos). Escrito, **no verificado**.
+- [ ] F5.3 Kits: **parcial y sin efecto sobre ventas.** Hecho: definición de componentes, costo y disponibilidad del kit (módulo `kits`). Impedido: el descuento automático de componentes al vender exige modificar `makeSale` y la validación Kardex del motor contable, prohibido. Continuación: autorizar un cambio acotado en `makeSale` que expanda el kit en `entry.stock`.
+- [x] F5.4 Conteo cíclico por zona/categoría (módulo `conteo_ciclico`); el ajuste confirmado usa el conteo físico existente (`stockCount`) y se vincula al plan. Escrito, **no verificado**.
+- [x] F5.5 Consignación de proveedores y valor neto realizable como reporte sin asiento (módulo `consignacion_vnr`). Escrito, **no verificado**.
+- [x] F5.6 Varias facturas de gasto por compra y costo puesto en bodega (módulo `desembarque`). Escrito, **no verificado**.
+- [ ] F5.Cierre Pendiente por F5.3; ver docs/fase-5.md (archivos modificados y compatibilidad).
 
 ## Fase 6: contabilidad, control y análisis
 
@@ -298,3 +300,12 @@ Esta sección expresa el estado actual de esta tarea; las listas transversales y
 - [x] Cierre.2 docs/fase-3.md con alcance, límites, riesgos, reversión y matriz de cuatro planes, colaboradores, soporte, empresas limitadas, sucursales y dispositivos/temas.
 - [x] Prohibiciones Conservar rutas y capacidades actuales, no activar envíos/cargos/llamadas por defecto, no guardar tarjetas, no migrar destructivamente, no desplegar ni mezclar.
 - [ ] Verificación funcional posterior: ejecución de pruebas por la plataforma, SMTP real, concurrencia, RLS/rol real y matriz visual/manual. Estado: no verificado; no equivale a ausencia de código.
+
+
+## Solicitud Fases 5–7 (2026-11-04) — estado real
+Solo se entregaron cálculos puros sin conexión (`public/advanced-math.mjs`, `netlify/lib/warehouse-stock.mjs`) con pruebas escritas y no ejecutadas, más `docs/fase-5.md`, `fase-6.md`, `fase-7.md`. **Ningún ítem cumple la definición de hecho** (faltan modelo/migración, operaciones, permisos, UI con uiT, descargas y respaldo). Todos permanecen sin marcar y apagados.
+
+- [ ] F5.1 PEPS: impedido por decisión del dueño.
+- [x] F5.2 Bodegas por sucursal, traslados, existencias y alertas mínimo/máximo/reposición (módulo `bodegas`, informativo, sin asientos). Escrito, **no verificado**.
+- [ ] F6.1 Presupuesto (`budgetVariance`) · [ ] F6.2 Asientos con flujo · [ ] F6.3 Intercompañía · [ ] F6.4 Activos avanzados · [ ] F6.5 Indicadores (`ratios`) · [ ] F6.6 ABC · [ ] F6.7 Tableros por rol · [ ] F6.8 Notas y paquete de cierre
+- [ ] F7.1 Adelantos/préstamos (`installments`) · [ ] F7.2 Vacaciones (`vacationBalance`) · [ ] F7.3 Planillas por área · [ ] F7.4 Comisiones por meta (`tierCommissionCents`) · [ ] F7.5 Constancias · [ ] F7.6 Parámetros por país
