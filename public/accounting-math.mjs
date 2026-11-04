@@ -270,3 +270,10 @@ export function customerPaymentQuote({balanceCents,baseCents,discountBps=0,date,
  const discountCents=eligible?Math.min(balanceCents,Number((BigInt(baseCents)*BigInt(discountBps)+5000n)/10000n)):0;
  return {balanceCents,discountCents,payableCents:balanceCents-discountCents};
 }
+
+// Constancias: suma histórica por fecha de pago, sin recalcular nóminas cerradas.
+export function employmentIncomeCents(payrolls,employeeId,from,to){
+ let total=0;
+ for(const p of payrolls)if(p.employeeId===employeeId&&p.entryId&&p.date>=from&&p.date<=to){const cents=moneyCents(p.gross);if(cents<0||!Number.isSafeInteger(total+cents))throw new AccountingValidationError('Ingreso fuera de rango.');total+=cents}
+ return total;
+}
