@@ -2,7 +2,7 @@ import { documentHash } from './accounting-codec.mjs';
 const fail=(message,status=400)=>{const error=new Error(message);error.publicMessage=message;error.status=status;throw error};
 export function guardPeriods(previous,next,action){
  const before=previous?.cfg?.periodLocks||{},after=next.cfg?.periodLocks||{};
- if(documentHash(before)!==documentHash(after)&&!['Operación: closePeriod','Operación: reopenPeriod','Operación: closeYear'].includes(action))fail('Los cierres solo cambian desde Control de períodos.',403);
+ if(documentHash(before)!==documentHash(after)&&!['Operación: closePeriod','Operación: reopenPeriod','Operación: closeYear','Operación: fiscalPeriodClose'].includes(action))fail('Los cierres solo cambian desde Control de períodos.',403);
  const old=new Map((previous?.entries||[]).map(e=>[e.id,e])),incoming=new Map((next.entries||[]).map(e=>[e.id,e]));
  for(const id of new Set([...old.keys(),...incoming.keys()])){
   const a=old.get(id),b=incoming.get(id);if(documentHash(a?{...a,branchId:a.branchId||'principal'}:null)===documentHash(b?{...b,branchId:b.branchId||'principal'}:null))continue;

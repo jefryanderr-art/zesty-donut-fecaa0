@@ -4,7 +4,7 @@ Fecha: 2026-11-04. **F2.3–F2.7 cuentan con implementación, permisos, pruebas 
 
 Las casillas indican código, permisos, pruebas escritas, textos por uiT, descargas aplicables y documentación; no equivalen a pruebas aprobadas. Funcionalidad, concurrencia, RLS, integridad relacional y apariencia siguen **no verificadas**. La Fase 1 se conserva sin rehacer. Evidencia previa en [fase-1-cierre-mejoras.md](fase-1-cierre-mejoras.md); ampliación actual en [fase-2-tesoreria-bancos.md](fase-2-tesoreria-bancos.md); estado de Fase 3 en [fase-3-facturacion-cobranza.md](fase-3-facturacion-cobranza.md).
 
-La solicitud actual abarca exclusivamente Fase 3 y sus controles. Las listas Fases 4–9 se conservan como seguimiento histórico de otra solicitud; no amplían el alcance actual.
+La Fase 4 se implementó en 2026-11-04 (ver [fase-4.md](fase-4.md)), sin verificación funcional. La solicitud anterior abarcaba exclusivamente Fase 3 y sus controles. Las listas Fases 4–9 se conservan como seguimiento histórico de otra solicitud; no amplían el alcance actual.
 
 ## Decisión recibida y excepción exclusiva de PEPS
 
@@ -117,15 +117,15 @@ Estado detallado, límites y comprobaciones: [fase-2-tesoreria-bancos.md](fase-2
 
 ## Fase 4: arquitectura fiscal prudente
 
-- [ ] F4.1a Proveedor fiscal: preparar, firmar/enviar, consultar y anular, con manual DGI predeterminado.
-- [ ] F4.1b Número/fecha manuales, marca DOCUMENTO NO FISCAL cuando falten y estados con historial.
-- [ ] F4.2 Validaciones configurables de identificación por monto, campos, formato y agotamiento de rangos.
-- [ ] F4.3 Rangos por serie/sucursal, alertas, bloqueo fuera de rango y auditoría de saltos con interruptor.
-- [ ] F4.4 Retenciones practicadas/sufridas, constancias, acumulados por tercero y cruce con anticipo/declaración.
-- [ ] F4.5 Exportaciones configurables de apoyo al contador, sin afirmar homologación oficial.
-- [ ] F4.6 Plantillas editables de país para IVA, etiquetas, renta, aportes y calendarios sin cambiar Nicaragua actual.
-- [ ] F4.7 Checklist mensual/anual y bloqueo de período confirmado con interruptor.
-- [ ] F4.Cierre Revisión, permisos, pruebas, uiT, descargas, respaldo, documentación y compatibilidad por archivo.
+- [x] F4.1a Proveedor fiscal (`fiscal-provider.mjs`): preparar, firmar/enviar, consultar y anular, con manual DGI predeterminado; no existe proveedor externo y cualquier otro id se rechaza.
+- [x] F4.1b Número/fecha manuales, marca DOCUMENTO NO FISCAL cuando falten y estados borrador/emitido/aceptado/rechazado/anulado con historial.
+- [x] F4.2 Validaciones configurables de identificación por monto, campos requeridos, máscara de numeración y alerta de agotamiento de rangos (aplican al emitir solo si el dueño las activa).
+- [x] F4.3 Rangos por serie/sucursal, alertas, bloqueo fuera de rango (interruptor de riesgo alto, apagado, solo hacia adelante) y auditoría de saltos calculada desde las facturas emitidas.
+- [x] F4.4 Retenciones practicadas/sufridas: constancias con número manual, acumulados mensual/anual por tercero y cruce con anticipo mensual y declaración manual.
+- [x] F4.5 Libros de ventas, compras y retenciones con columnas configurables, PDF/CSV, marcados como formato de trabajo no oficial. Límite: no hay formatos por país homologados.
+- [x] F4.6 Plantillas de país editables (IVA, etiquetas, tramos de renta, aportes, calendario) extraídas a `public/country-templates.js`; Nicaragua predeterminada sin cambios. Límite: guardar una plantilla no la aplica sola a nóminas ni a la factura; la nómina sigue usando «Plantilla Nicaragua» existente.
+- [x] F4.7 Checklist mensual/anual (siete ítems con estado y nota) y bloqueo de período al cerrarlo, con interruptor apagado que reutiliza `cfg.periodLocks`. Límite: los ítems se marcan manualmente, no se detectan solos.
+- [ ] F4.Cierre Pendiente: no se ejecutaron pruebas ni el servidor (reservado a la plataforma), faltan comprobaciones manuales de `docs/fase-4.md` y no se actualizó la guía del asistente ni el catálogo `ui-text-catalog.mjs` (los textos usan `uiT` con texto base). Compatibilidad por archivo en `docs/fase-4.md`.
 
 ## Fase 5: inventario avanzado optativo
 
