@@ -18,3 +18,5 @@ for(const name of ['index.html','configurar-google.html','privacidad.html','term
  }));
 }
 console.log('URL de los recursos estáticos actualizadas.');
+// Keep system-health's expected migration identities current; never apply SQL here.
+await import('./health-migrations.mjs');

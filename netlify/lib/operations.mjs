@@ -1,3 +1,4 @@
+import {REVIEW_OPS,auditReviewOperation} from './audit-review.mjs';
 import {PERSONNEL_MODULES,PERSONNEL_OPS,personnelOperation,personnelReport} from './personnel.mjs';
 import {ANALYSIS_MODULES,ANALYSIS_OPS,analysisOperation,analysisReport} from './analysis.mjs';
 import {CERTIFICATE_OPS,configureCertificates,employmentCertificate,certificateConfig} from './employment-certificates.mjs';
@@ -478,6 +479,7 @@ async function saveAttachment(data, companyId, body, record, addedKeys, historic
   record.receipt = { key, name: text(file.name, 180).replace(/[\x00-\x1f\x7f/\\]/g, '') || 'comprobante', type: file.type, size: bytes.length };
 }
 export async function runOperation(companyId, session, body) {
+  if(REVIEW_OPS.includes(body.operation)||body.operation==='auditReviewView')return auditReviewOperation(companyId,session,body);
   if(body.operation==='clientReport')return db.transaction(async client=>{
     const access=await companyAccess(client,companyId,session,true);requireModule(access,body.module);requireModule(access,'facturacion');
     requireValue(access.branchId&&CLIENT_MODULES.includes(body.module)&&['VIEW','PDF','CSV'].includes(body.format),'Informe inválido.');

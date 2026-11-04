@@ -230,6 +230,7 @@ export async function reconcilePendingCheckouts(){
  const rows=await db.select({id:billingCheckouts.id}).from(billingCheckouts).where(sql`${billingCheckouts.state} in ('creating','pending','unknown')`).orderBy(billingCheckouts.createdAt).limit(50);
  const results=await Promise.allSettled(rows.map(row=>resolveCheckout(row.id,'scheduled')));
  console.info('pagadito_automatic_resolution',{processed:rows.length,errors:results.filter(r=>r.status==='rejected').length});
+ return {errors:results.filter(r=>r.status==='rejected').length};
 }
 export async function confirmSubscription(session,body={}){
  await requireBillingOwner(session);

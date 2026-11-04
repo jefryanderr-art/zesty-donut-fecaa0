@@ -22,8 +22,8 @@ export function validateBusinessRecords(data,check){
  if(data.businessRecords===undefined)return;
  check(Array.isArray(data.businessRecords)&&data.businessRecords.length<=20000,'Registros de negocio inválidos.');const ids=new Set();
  for(const r of data.businessRecords){
-  check(r&&typeof r.id==='string'&&/^[a-z0-9-]{1,80}$/.test(r.id)&&!ids.has(r.id)&&catalog.all.includes(r.module),'Registro de negocio inválido o duplicado.');ids.add(r.id);
-  check(typeof r.name==='string'&&r.name.trim()&&r.name.length<=200&&flows[r.module].includes(r.status),'Nombre o estado de negocio inválido.');
+  check(r&&typeof r.id==='string'&&/^[a-z0-9-]{1,80}$/.test(r.id)&&!ids.has(r.id)&&(catalog.all.includes(r.module)||r.module==='auditoria_revision'),'Registro de negocio inválido o duplicado.');ids.add(r.id);
+  check(typeof r.name==='string'&&r.name.trim()&&r.name.length<=200&&(r.module==='auditoria_revision'?r.status==='Conservado':flows[r.module].includes(r.status)),'Nombre o estado de negocio inválido.');
   check(/^\d{4}-\d{2}-\d{2}$/.test(r.date||'')&&Number.isFinite(Date.parse(r.date)),'Fecha de negocio inválida.');
   for(const k of ['total','principal','interest','penalty','paid','deposit','valuation','cost','price'])if(r[k]!==undefined)check(moneyCents(r[k])>=0,'Importe de negocio negativo.');
   if(r.q!==undefined)check(Number.isFinite(r.q)&&r.q>=0&&r.q<=1e9,'Cantidad de negocio inválida.');

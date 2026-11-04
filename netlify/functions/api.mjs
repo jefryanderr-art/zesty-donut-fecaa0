@@ -1,3 +1,4 @@
+import {systemHealth} from '../lib/system-health.mjs';
 import {paymentHistory,paymentForReceipt,paymentPDF} from '../lib/payment-receipts.mjs';
 import {backupRoute,storageStats,downloadPrivateExport} from '../lib/private-backups.mjs';
 import {publishedEditor,editorRoute,publicPlans,trialSettings} from '../lib/platform-editor.mjs';
@@ -404,6 +405,7 @@ const handleRequest = async (request, context, metrics) => {
     if(path==='support-grant')return json(await supportAction(session,url.searchParams.get('c'),method,body));
     if(path==='service-receipt'){await requirePlatform(session,url.searchParams.get('c'));return json(await serviceReceipt(method,url.searchParams.get('id'),body,session));}
     if(path==='platform/test-companies'||path.startsWith('platform/test-companies/'))return json(await testCompaniesRoute(session,method,path.split('/')[2]||body.operation,body));
+    if(path==='platform/health'&&(method==='GET'||method==='POST'))return json(await systemHealth(session,url.searchParams.get('c'),method==='POST'?body.format:'VIEW'));
     if(path==='platform'){await requirePlatform(session,url.searchParams.get('c'));if(method==='GET')return json(await platformSummary(url));if(method==='POST'){const result=await platformAction(session,body);if(['message','verifyPayment'].includes(body.operation))context.waitUntil(deliverMessages(20));return json(result);}return fail('Método no permitido.',405);}
     if (path === 'customers-admin') {await requirePlatform(session,url.searchParams.get('c'));return json(await customerAdmin(method, body, url, session));}
     if (consent.required && !isAdmin && path !== 'me') return fail('Debes aceptar los términos de uso y la política de privacidad vigentes.', 428);
