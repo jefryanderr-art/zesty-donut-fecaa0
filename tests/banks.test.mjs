@@ -16,7 +16,7 @@ const fixture=()=>{
 };
 const common={date:'2026-11-30',reason:'Conciliación revisada por el responsable',confirmed:true};
 const op=(f,operation,body={})=>bankOperation(f.data,f.access,{email:'contador@example.test'},{...common,operation,...body},f.ctx);
-const create=f=>op(f,'bankCreate',{date:'2026-11-01',name:'Cuenta de operación',bank:'Banco de ejemplo',lastFour:'1234',currency:'NIO',account:'1102'});
+const create=f=>{op(f,'bankEnable',{enabled:true});return op(f,'bankCreate',{date:'2026-11-01',name:'Cuenta de operación',bank:'Banco de ejemplo',lastFour:'1234',currency:'NIO',account:'1102'});};
 const statement=(f,bankId,extra={})=>op(f,'bankStatement',{bankId,from:'2026-11-01',to:'2026-11-30',openingCents:100000,bankCents:99000,mapping,grid:[['fecha','importe','referencia'],['2026-11-20','-10.00','Comisión']],...extra});
 test('importación monetaria exacta con separadores, signos y rechazo de fracciones',()=>{
  assert.equal(bankAmountCents('1,234.50'),123450);assert.equal(bankAmountCents('(1.234,50)',','),-123450);assert.equal(bankAmountCents('-0.01'),-1);
@@ -85,16 +85,21 @@ test('símbolo histórico C$ identifica NIO sin cambiar la configuración',()=>{
 test('interruptor de cierre nace apagado y solo el dueño lo cambia',()=>{
  const f=fixture();assert.equal(f.data.cfg.bankControls,undefined);f.access.owner=false;
  assert.throws(()=>op(f,'bankLockEnable',{enabled:true}));assert.equal(f.data.cfg.bankControls,undefined);
- f.access.owner=true;op(f,'bankLockEnable',{enabled:true});assert.equal(f.data.cfg.bankControls.closingEnabled,true);
+ f.access.owner=true;op(f,'bankEnable',{enabled:true});op(f,'bankLockEnable',{enabled:true});assert.equal(f.data.cfg.bankControls.closingEnabled,true);
  op(f,'bankLockEnable',{enabled:false});assert.equal(f.data.cfg.bankControls.closingEnabled,false);assert.equal(f.data.cfg.bankControls.events.length,2);
 });
 
-test('la fase incompleta permanece apagada sin ruta que la active',()=>{
- assert.equal(BANKS_READY,false);
- const ops=readFileSync(new URL('../netlify/lib/operations.mjs',import.meta.url),'utf8'),ui=readFileSync(new URL('../public/banks.js',import.meta.url),'utf8');
- assert.match(ops,/BANK_OPS.includes\(body.operation\)\&\&!BANKS_READY/);
- assert.match(ops,/requireModule\(access,'bancos'\);\s*if\(!BANKS_READY\)accessError/);
- assert.match(ui,/const BANKS_UI_READY=false/);assert.match(ui,/if\(!BANKS_UI_READY\)/);
+test('bancos requiere activación del dueño por empresa, confirmación y motivo',()=>{
+ assert.equal(BANKS_READY,true);const f=fixture();
+ assert.throws(()=>op(f,'bankLockEnable',{enabled:true}),/activar/);
+ f.access.owner=false;assert.throws(()=>op(f,'bankEnable',{enabled:true}));
+ f.access.owner=true;assert.throws(()=>op(f,'bankEnable',{enabled:true,confirmed:false}));
+ assert.throws(()=>op(f,'bankEnable',{enabled:true,reason:''}));
+ op(f,'bankEnable',{enabled:true});assert.equal(f.data.cfg.bankControls.enabled,true);
+ op(f,'bankEnable',{enabled:false});assert.equal(f.data.cfg.bankControls.enabled,false);
+ assert.throws(()=>op(f,'bankCreate',{name:'Banco',bank:'Banco',lastFour:'1234',currency:'NIO',account:'1102'}),/activar/);
+ const ops=readFileSync(new URL('../netlify/lib/operations.mjs',import.meta.url),'utf8');
+ assert.match(ops,/BANKS_READY&&\(access.company.data\?\.cfg\?\.bankControls\?\.enabled===true/);
 });
 
 test('una restauración no habilita bancos ni inyecta conciliaciones',()=>{

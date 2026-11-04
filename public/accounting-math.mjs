@@ -205,3 +205,16 @@ export function bankReconciliationTotals({bookCents,bankCents,pendingBank=[],tra
  if(![bookCents,bankCents,adjustedBookCents,adjustedBankCents,differenceCents].every(Number.isSafeInteger))throw new AccountingValidationError('Saldo fuera de rango.');
  return {bookCents,bankCents,pendingCents,transitCents,adjustedBookCents,adjustedBankCents,differenceCents};
 }
+
+// Tasa expresa unidades de moneda base por unidad original, hasta seis decimales.
+export function bankRateMicros(value){
+ const s=String(value??'').trim();
+ if(!/^(?:0|[1-9]\d{0,5})(?:\.\d{1,6})?$/.test(s))throw new AccountingValidationError('Tasa inválida: usa hasta seis decimales sin separadores.');
+ const [whole,fraction='']=s.split('.'),n=Number(BigInt(whole)*1000000n+BigInt(fraction.padEnd(6,'0')));
+ if(!Number.isSafeInteger(n)||n<=0)throw new AccountingValidationError('La tasa debe ser positiva.');return n;
+}
+export function bankConvertCents(originalCents,rateMicros){
+ if(!Number.isSafeInteger(originalCents)||Math.abs(originalCents)>99999999900||!Number.isSafeInteger(rateMicros)||rateMicros<=0||rateMicros>999999999999)throw new AccountingValidationError('Conversión fuera de rango.');
+ const sign=originalCents<0?-1:1,n=Number((BigInt(Math.abs(originalCents))*BigInt(rateMicros)+500000n)/1000000n)*sign;
+ if(!Number.isSafeInteger(n)||Math.abs(n)>99999999900)throw new AccountingValidationError('Conversión fuera de rango.');return n;
+}

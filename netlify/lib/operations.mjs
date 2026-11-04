@@ -489,11 +489,11 @@ export async function runOperation(companyId, session, body) {
   });
   if(body.operation==='bankReport')return db.transaction(async client=>{
     const access=await companyAccess(client,companyId,session,true);requireModule(access,'bancos');
-    if(!BANKS_READY)accessError('La ampliación de tesorería no está habilitada.',503);
+    requireValue(BANKS_READY&&(access.company.data?.cfg?.bankControls?.enabled===true||access.company.data?.businessRecords?.some(r=>r.module==='bancos'&&r.kind==='bank')),'El dueño debe activar Bancos y conciliación.');
     requireValue(['VIEW','PDF','CSV'].includes(body.format),'Formato inválido.');
     const data=scopeBranch(access.company.data,access),report=body.id?bankReport(data,body.bankId,body.id):{version:1,banks:(data.businessRecords||[]).filter(r=>r.module==='bancos'&&r.kind==='bank')};
-    if(body.format!=='VIEW')await audit(client,companyId,access.member?{...session,member:access.member}:session,'Descarga conciliación '+body.format,[{area:'bancos',statementId:body.id,branchId:access.branchId,version:1}]);
-    return {...report,company:access.company.name,currency:data.cfg?.cur||'NIO',branchId:access.branchId,generatedAt:new Date().toISOString(),generatedBy:actorName(session),revision:access.company.revision};
+    if(body.format!=='VIEW')await audit(client,companyId,access.member?{...session,member:access.member}:session,'Descarga conciliación '+body.format,[{area:'bancos',statementId:body.id,branchId:access.branchId,version:report.version}]);
+    return {...report,company:access.company.name,currency:report.bank?.currency||data.cfg?.cur||'NIO',branchId:access.branchId,generatedAt:new Date().toISOString(),generatedBy:actorName(session),revision:access.company.revision};
   });
   if(BANK_OPS.includes(body.operation)&&!BANKS_READY)return db.transaction(async client=>{
     const access=await companyAccess(client,companyId,session,true);requirePermission(access,'bancos');
