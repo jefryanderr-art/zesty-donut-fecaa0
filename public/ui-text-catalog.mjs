@@ -11550,9 +11550,9 @@ export const UI_CATALOG = {
     "max": 318
   },
   "banks.baseOnly": {
-    "original": "Esta conciliación opera en la moneda base. Las cuentas en otra moneda conservan su tratamiento en Multimoneda. No hay conexión al banco, pagos ni cargos automáticos.",
+    "original": "Los importes de conciliación se expresan en la moneda del banco, indicada en cada cuenta e informe. El asiento se registra en moneda base. No hay conexión al banco, pagos ni cargos automáticos.",
     "group": "Tesorería y respaldo",
-    "max": 495
+    "max": 579
   },
   "banks.details": {
     "original": "Revisar conciliación",
@@ -11828,5 +11828,70 @@ export const UI_CATALOG = {
     "original": "Apagado por defecto. Solo el dueño cambia este interruptor con confirmación y motivo. Desactivarlo impide nuevos cierres, pero conserva las conciliaciones ya cerradas y sus bloqueos.",
     "group": "Tesorería y respaldo",
     "max": 546
+  },
+  "banks.enable": {
+    "original": "Activar o desactivar Bancos y conciliación",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.enabled": {
+    "original": "Habilitar Bancos y conciliación en esta empresa",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.enableHelp": {
+    "original": "Solo el dueño activa con confirmación y motivo. No se incorporan cuentas ni se alteran asientos anteriores. Desactivar conserva datos y cierres.",
+    "group": "Tesorería y respaldo",
+    "max": 432
+  },
+  "banks.rate": {
+    "original": "Tasa: unidades base por unidad original (hasta seis decimales)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.rateSource": {
+    "original": "Fuente de la tasa",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.rateDate": {
+    "original": "Fecha de la tasa",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.openingOriginal": {
+    "original": "Saldo original al incorporar (centavos)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.baseOpening": {
+    "original": "Saldo contable base previo a incorporar (centavos)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.foreignHelp": {
+    "original": "En otra moneda, confirma ambos saldos de apertura. La fecha debe ser posterior a todo movimiento existente de esta cuenta. Sus movimientos futuros se registran aquí con importe original y tasa explícita. No se infieren importes históricos. Verifica con tu contador.",
+    "group": "Tesorería y respaldo",
+    "max": 795
+  },
+  "banks.movement": {
+    "original": "Registrar movimiento en moneda original",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.movementAmount": {
+    "original": "Movimiento original con signo (centavos)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.baseBook": {
+    "original": "Saldo contable en moneda base",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.baseCurrency": {
+    "original": "Moneda base",
+    "group": "Tesorería y respaldo",
+    "max": 200
   }
 };

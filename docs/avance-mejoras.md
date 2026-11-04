@@ -1,12 +1,16 @@
 # Seguimiento de las mejoras solicitadas
 
-Fecha: 2026-11-04. Estado: implementación de la Fase 1 escrita y revisada estáticamente; pruebas funcionales, integración y apariencia **no verificadas**. Las casillas indican código, permisos, pruebas escritas, textos por uiT, descargas aplicables y documentación, no aprobación de pruebas ejecutadas. Evidencia detallada en [fase-1-cierre-mejoras.md](fase-1-cierre-mejoras.md).
+Fecha: 2026-11-04. **La solicitud de cerrar las Fases 2 y 3 no se completó.** Se escribió la ampliación bancaria de F2.1–F2.2 con apertura en moneda original, conversiones futuras explícitas y activación por empresa; F2.3–F2.7 continúan sin implementación nueva y no se inició Fase 3. No se demostró un impedimento técnico externo ni se obtuvo una excepción de alcance para esos faltantes. No se presenta esta entrega parcial como cumplimiento de B.2/B.4.
+
+Las casillas indican código, permisos, pruebas escritas, textos por uiT, descargas aplicables y documentación; no equivalen a pruebas aprobadas. Funcionalidad, concurrencia, RLS, integridad relacional y apariencia siguen **no verificadas**. La Fase 1 se conserva sin rehacer. Evidencia previa en [fase-1-cierre-mejoras.md](fase-1-cierre-mejoras.md); ampliación actual en [fase-2-tesoreria-bancos.md](fase-2-tesoreria-bancos.md); estado de Fase 3 en [fase-3-facturacion-cobranza.md](fase-3-facturacion-cobranza.md).
+
+La solicitud actual abarca Fases 2 y 3 y sus controles. Las listas Fases 4–9 se conservan como seguimiento histórico de otra solicitud; no amplían el alcance actual.
 
 ## Decisión recibida y excepción exclusiva de PEPS
 
 El propietario respondió **«No, mantener el motor sin cambios»** a la propuesta de estrategia PEPS optativa. F5.1 queda **impedido por esa decisión**, sin código operativo, capas, migraciones ni efecto sobre empresas. Implementarlo exigiría autorizar otra tarea que integre selección/consumo de capas en ventas futuras; no se solicitó de nuevo ese permiso ni se reinterpretó la respuesta. El promedio ponderado y las funciones emisoras existentes se conservaron.
 
-El propietario confirmó que **solo PEPS queda exceptuado de la secuencia**. F5.1 permanece sin marcar y sin efecto, pero no impide continuar con fases posteriores. Ningún otro ítem recibe esta excepción: si existe un impedimento real, se aplica B.4 con motivo exacto. No se vuelve a solicitar permiso para modificar el motor. La Fase 2 tiene conciliación en moneda base escrita y **desactivada de forma fija** en servidor e interfaz; todavía no está cerrada. Fases 3–9 no se iniciaron.
+El propietario confirmó que **solo PEPS queda exceptuado de la secuencia**. F5.1 permanece sin marcar y sin efecto, pero no impide continuar con fases posteriores. Ningún otro ítem recibe esta excepción: si existe un impedimento real, se aplica B.4 con motivo exacto. No se vuelve a solicitar permiso para modificar el motor. La Fase 2 tiene conciliación NIO/USD escrita y activación exclusiva por empresa; empieza apagada y no se activó en empresas existentes. La fase completa todavía no está cerrada. Fases 3–9 no se iniciaron.
 
 ## A. Base existente que se debe preservar
 
@@ -20,16 +24,16 @@ El propietario confirmó que **solo PEPS queda exceptuado de la secuencia**. F5.
 
 - [x] B.1 Mantener esta lista completa y marcar solo entregables íntegros con sus evidencias.
 - [ ] B.2 Cerrar los ítems en orden sin iniciar una fase posterior antes del cierre de la anterior.
-- [ ] B.3 Resolver conservadoramente dudas ordinarias y documentarlas; consultar solo conflictos o alteraciones históricas.
+- [x] B.3 Resolver conservadoramente dudas ordinarias y documentarlas; consultar solo conflictos o alteraciones históricas.
 - [ ] B.4 Ante impedimento real, dejar la función sin efecto y registrar motivo, faltantes y continuación.
-- [ ] B.5 Contrastar todas las casillas con el código antes de entregar y comunicar su estado real.
+- [x] B.5 Contrastar todas las casillas con el código antes de entregar y comunicar su estado real.
 
 ## C. Contexto y lectura
 
-- [ ] C.1 Conservar frontend estático, API ESM, Netlify Database/Blobs y Drizzle.
-- [ ] C.2 Conservar Identity, Google, permisos, sucursales, versiones y correo existente.
+- [x] C.1 Conservar frontend estático, API ESM, Netlify Database/Blobs y Drizzle.
+- [x] C.2 Conservar Identity, Google, permisos, sucursales, versiones y correo existente.
 - [ ] C.3 Revisar AGENTS.md, README.md y todos los documentos requeridos, incluyendo el historial, antes de implementar.
-- [ ] C.4 Mantener Nicaragua, America/Managua, NIO y USD como contexto sin inferir reglas fiscales.
+- [x] C.4 Mantener Nicaragua, America/Managua, NIO y USD como contexto sin inferir reglas fiscales.
 
 ## D. Controles transversales de todas las fases
 
@@ -81,13 +85,14 @@ El propietario confirmó que **solo PEPS queda exceptuado de la secuencia**. F5.
 
 ## Fase 2: tesorería y bancos
 
-Estado detallado, límites y comprobaciones: [fase-2-tesoreria-bancos.md](fase-2-tesoreria-bancos.md). La conciliación en moneda base está escrita y apagada; el soporte de otra moneda y el resto de esta fase impiden su cierre. No se presentan como terminados ni reciben la excepción de PEPS.
+Estado detallado, límites y comprobaciones: [fase-2-tesoreria-bancos.md](fase-2-tesoreria-bancos.md). La conciliación en moneda base y otra moneda está escrita y es habilitable por el dueño con confirmación y motivo. F2.3–F2.7 siguen sin implementar; la fase completa no está cerrada. No se presentan como terminados ni reciben la excepción de PEPS.
 
-- [ ] F2.1a Importación CSV/XLSX de extractos con vista previa y mapeos guardados por banco; OFX solo si es viable sin dependencia pesada.
-- [ ] F2.1b Sugerencias por monto, fecha y referencia y confirmación manual de emparejamientos.
-- [ ] F2.1c Partidas conciliadas, pendientes y en tránsito y asiento confirmado de movimientos sin contrapartida.
-- [ ] F2.1d Reporte libro/banco/diferencia y cierre de conciliación que impide editar lo conciliado.
-- [ ] F2.2 Entidades en moneda base escritas (banco, máscara, cuenta y ciclos); soporte de otra moneda todavía incompleto. No se infiere moneda de asientos históricos. Continuación: saldos y conversiones explícitos hacia adelante; ver documento de fase.
+- [x] F2.0 Sustituir el bloqueo fijo por activación del dueño por empresa, inicialmente apagada, con confirmación, motivo, revisión, idempotencia y auditoría; desactivar conserva consulta y cierres.
+- [x] F2.1a Importación CSV/XLSX de extractos con vista previa y mapeos guardados por banco; OFX solo si es viable sin dependencia pesada.
+- [x] F2.1b Sugerencias por monto, fecha y referencia y confirmación manual de emparejamientos.
+- [x] F2.1c Partidas conciliadas, pendientes y en tránsito y asiento confirmado de movimientos sin contrapartida.
+- [x] F2.1d Reporte libro/banco/diferencia y cierre de conciliación que impide editar lo conciliado.
+- [x] F2.2 Entidades NIO/USD (banco, máscara, moneda, cuenta exclusiva y ciclos de tarjeta), apertura original explícita y conversiones futuras sin inferir datos históricos; ver límites operativos, pruebas escritas y descargas en documento de fase.
 - [ ] F2.3a Proyección desde cobrar, pagar, recurrentes, nómina, impuestos y préstamos.
 - [ ] F2.3b Escenarios optimista/base/pesimista, liquidez y fecha de faltante.
 - [ ] F2.3c Método indirecto reconciliado con el estado de flujo.
@@ -107,6 +112,8 @@ Estado detallado, límites y comprobaciones: [fase-2-tesoreria-bancos.md](fase-2
 - [ ] F3.3 Términos y descuentos por pronto pago con asiento al cobrar.
 - [ ] F3.4 Emisiones recurrentes ligadas a Q y Contratos, próximas emisiones y confirmación.
 - [ ] F3.Cierre Revisión, permisos, pruebas, uiT, descargas, respaldo, documentación y compatibilidad por archivo.
+
+## Seguimiento histórico fuera del alcance actual
 
 ## Fase 4: arquitectura fiscal prudente
 
@@ -188,22 +195,28 @@ Estado detallado, límites y comprobaciones: [fase-2-tesoreria-bancos.md](fase-2
 
 ## Entrega y prohibiciones
 
-- [ ] E.1 Relacionar commits creados por la plataforma por fase y todas las migraciones nuevas en orden; indicar cuando no existan.
-- [ ] E.2 Separar lo realizado, no realizado y no verificado.
-- [ ] E.3 Describir riesgos y reversión por fase conservando tablas/documentos y señalando migraciones inocuas.
-- [ ] E.4 Preparar comprobaciones de vista previa para los cuatro planes, colaboradores, soporte y empresas limitadas.
-- [ ] E.5 Preparar comprobaciones en teléfono/laptop, claro/oscuro, y completar matriz sin afirmar resultados no ejecutados.
-- [ ] P.1 No alterar motor protegido, históricos, asientos ni numeraciones existentes.
-- [ ] P.2 No eliminar capacidades/rutas ni rehacer la Fase 1 existente.
-- [ ] P.3 No activar cargos automáticos, envíos masivos o llamadas externas por defecto.
-- [ ] P.4 No guardar tarjetas ni credenciales en Database.
-- [ ] P.5 No presentar impuestos/nómina/intereses como asesoría legal/fiscal.
-- [ ] P.6 No crear migraciones destructivas ni reescribir las aplicadas.
-- [ ] P.7 No desplegar a producción ni mezclar con principal.
-- [ ] P.8 No declarar funcionamiento sin prueba ejecutada.
+- [x] E.1 Enumerar migraciones y archivos tocados por fase; no hubo migraciones nuevas y los commits siguen a cargo de la plataforma.
+- [x] E.2 Separar lo realizado, no realizado y no verificado.
+- [x] E.3 Describir riesgos y reversión por fase conservando tablas/documentos y señalando migraciones inocuas.
+- [x] E.4 Preparar comprobaciones de vista previa para los cuatro planes, colaboradores, soporte y empresas limitadas.
+- [x] E.5 Preparar comprobaciones en teléfono/laptop, claro/oscuro, y completar matriz sin afirmar resultados no ejecutados.
+- [x] P.1 No alterar motor protegido, históricos, asientos ni numeraciones existentes.
+- [x] P.2 No eliminar capacidades/rutas ni rehacer la Fase 1 existente.
+- [x] P.3 No activar cargos automáticos, envíos masivos o llamadas externas por defecto.
+- [x] P.4 No guardar tarjetas ni credenciales en Database.
+- [x] P.5 No presentar impuestos/nómina/intereses como asesoría legal/fiscal.
+- [x] P.6 No crear migraciones destructivas ni reescribir las aplicadas.
+- [x] P.7 No desplegar a producción ni mezclar con principal.
+- [x] P.8 No declarar funcionamiento sin prueba ejecutada.
 
-## Evidencia de esta sesión
+## Evidencia histórica de la entrega anterior (no describe el estado actual)
 
 Se implementaron las funciones descritas en el documento de cierre de Fase 1. Se escribieron pruebas y se revisaron estáticamente permisos, transacciones, sucursales, exportación y compatibilidad; no se ejecutaron pruebas ni se afirmó validación funcional. `node --check`, el versionado de recursos y `git diff --check` se ejecutaron; el cierre documenta los resultados. No hubo cambios de esquema, migraciones nuevas, commits manuales ni despliegues. La lista fue recorrida: solo se marcaron los entregables de Fase 1 con evidencias escritas; Fase 2 conserva sus casillas sin marcar mientras se completa su alcance; Fases 3–9 no se iniciaron. Los controles transversales de toda la solicitud no se dan por cumplidos por verificar una sola fase.
 
 La revisión adicional corrigió la colisión de Q con la ruta histórica `recurrentes`: Q usa `suscripciones`, sin sustituir Plantillas y devengos. Se escribió una prueba de regresión. Se añadió respaldo PDF completo autorizado y rechazo de períodos invertidos. La Fase 2 conserva `BANKS_READY=false` y `BANKS_UI_READY=false`; no se pueden activar mediante cuerpo de petición, variable de entorno ni restauración. Hay pruebas escritas de la guarda, importes, importación, permisos, máscaras, conciliación y cierre. El tratamiento de otra moneda y F2.3–F2.7 no están implementados, por lo que no se marca esta fase ni se inicia otra. Se comprobó sintaxis en 32 archivos JavaScript y el diff; no se ejecutaron pruebas.
+
+## Evidencia de la ampliación bancaria actual
+
+Se revisó el diff de la ampliación, la ruta existente de operaciones, los controles de acceso reutilizados, la protección de configuraciones y las guardas de actualización/restauración. Se prepararon pruebas de moneda original y se actualizaron las de moneda base para exigir activación explícita. Se ejecutaron `node --check`, `node scripts/version-assets.mjs` y `git diff --check`; no se ejecutaron pruebas, compilaciones ni servidores. No hubo migraciones ni cambios de esquema. Los archivos modificados y su compatibilidad están enumerados en el documento de Fase 2. No se hicieron commits, despliegues ni mezclas manuales.
+
+Revisión final de casillas: solo F2.0, F2.1a–d y F2.2 se marcaron en la fase actual. F2.3a–c, F2.4, F2.5, F2.6 y F2.7 permanecen sin marcar por falta de implementación, con continuación concreta en el documento de fase; no se justifica su omisión como impedimento externo. F2.Cierre permanece abierto. F3.1a–b, F3.2a–c, F3.3, F3.4 y F3.Cierre permanecen sin marcar y sin código nuevo. Los controles transversales de la entrega completa no se consideran satisfechos por esta ampliación parcial. La lectura documentada del contexto no acredita validación funcional.

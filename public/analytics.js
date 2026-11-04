@@ -1,6 +1,6 @@
 'use strict';
 let BUSINESS_MATH=null;
-const businessMath=()=>BUSINESS_MATH||=(import('/accounting-math.mjs?v=6eb48a093ba5a869'));
+const businessMath=()=>BUSINESS_MATH||=(import('/accounting-math.mjs?v=e055be3e1e3cf61c'));
 MENU.push(['Decisiones del negocio',[['simuladores','◇',uiT("analytics.extra.1","Simuladores e inversiones")],['rentabilidad','▥',uiT("analytics.extra.2","Rentabilidad y análisis ABC")],['pronostico','◷',uiT("analytics.extra.3","Pronóstico y alertas")]]]);Object.assign(ROUTE_MODULE,{simuladores:'finanzas',rentabilidad:'finanzas',pronostico:'finanzas'});
 V.simuladores=()=>{
  main(pageHead(uiT("analytics.1","Simuladores e inversiones"))+notice(uiT("analytics.2","Herramientas de consulta: no crean asientos, contratos ni cambios de precios. Los flujos de inversión son anuales; la TIR puede ser ambigua con varios cambios de signo."))+`<form id="simulation-form" class="card">${selectField('kind',uiT("analytics.3","Simulador"),option('loan',uiT("analytics.extra.4","Préstamo / leasing"))+option('investment',uiT("analytics.extra.5","VAN, TIR y recuperación"))+option('pricing',uiT("analytics.extra.6","Precio y punto de equilibrio"))+option('whatif',uiT("analytics.extra.7","Qué pasa si · utilidad")))}<div id="simulation-fields"></div><button class="btn">${esc(uiT("analytics.4","Calcular"))}</button><p class="err" role="status"></p></form><div id="simulation-result" aria-live="polite"></div>`);
