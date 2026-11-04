@@ -11895,3 +11895,1147 @@ export const UI_CATALOG = {
     "max": 200
   }
 };
+
+// Textos de la ampliación F2.3–F2.7.
+Object.assign(UI_CATALOG, {
+  "treasury.title": {
+    "original": "Tesorería",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.flujo_proyectado": {
+    "original": "Flujo de efectivo proyectado",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.pagos_lote": {
+    "original": "Pagos a proveedores por lote",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.anticipos": {
+    "original": "Anticipos por tercero",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.revalorizacion": {
+    "original": "Revalorización cambiaria",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.tipos_cambio": {
+    "original": "Tipos de cambio",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.help": {
+    "original": "Operaciones confirmadas, sin transferencias bancarias automáticas. Importes nuevos en centavos. Verifica con tu contador.",
+    "group": "Tesorería y respaldo",
+    "max": 363
+  },
+  "treasury.disabled": {
+    "original": "El dueño debe activar este módulo con confirmación y motivo. No cambia documentos anteriores.",
+    "group": "Tesorería y respaldo",
+    "max": 279
+  },
+  "treasury.enable": {
+    "original": "Configurar activación",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.enabled": {
+    "original": "Activado",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.date": {
+    "original": "Fecha",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.reason": {
+    "original": "Motivo",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.confirmed": {
+    "original": "Confirmo los datos y su efecto contable",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.save": {
+    "original": "Confirmar",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.from": {
+    "original": "Desde",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.to": {
+    "original": "Hasta",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.frequency": {
+    "original": "Agrupar",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.week": {
+    "original": "Semana",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.month": {
+    "original": "Mes",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.reserveCents": {
+    "original": "Reserva mínima de liquidez (centavos)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.delayDays": {
+    "original": "Retraso de cobro (días)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.badDebtBps": {
+    "original": "Incobrables (puntos básicos: 100 = 1%)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.optimista": {
+    "original": "Optimista",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.base": {
+    "original": "Base",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.pesimista": {
+    "original": "Pesimista",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.refresh": {
+    "original": "Consultar",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.pdf": {
+    "original": "Descargar PDF / constancia",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.csv": {
+    "original": "Descargar CSV para Excel",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.prepare": {
+    "original": "Preparar lote",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.policy": {
+    "original": "Política de aprobación",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.thresholdCents": {
+    "original": "Umbral de aprobación en centavos",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.preparers": {
+    "original": "Preparadores autorizados",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.approvers": {
+    "original": "Aprobadores autorizados",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.approve": {
+    "original": "Aprobar",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.reject": {
+    "original": "Rechazar",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.pay": {
+    "original": "Registrar pago confirmado",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.reverse": {
+    "original": "Revertir con motivo",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.name": {
+    "original": "Nombre",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.account": {
+    "original": "Cuenta contable",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.invoices": {
+    "original": "Facturas por pagar",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.invoice": {
+    "original": "Factura",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.due": {
+    "original": "Vencimiento",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.party": {
+    "original": "Tercero",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.balance": {
+    "original": "Saldo",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.amountCents": {
+    "original": "Importe en centavos",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.discountCents": {
+    "original": "Descuento (centavos)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.discount": {
+    "original": "Condición de pronto pago",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.select": {
+    "original": "Seleccionar",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.create": {
+    "original": "Registrar anticipo",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.side": {
+    "original": "Origen del anticipo",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.customer": {
+    "original": "Cliente: pasivo hasta aplicar",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.supplier": {
+    "original": "Proveedor: activo hasta aplicar",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.apply": {
+    "original": "Aplicar a facturas",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.refund": {
+    "original": "Devolver anticipo",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.integrated": {
+    "original": "Depósitos vinculados: operar desde el módulo de origen",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.preview": {
+    "original": "Revisar vista previa de cierre",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.post": {
+    "original": "Contabilizar vista previa confirmada",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.reversal": {
+    "original": "Confirmar reversa al inicio del mes siguiente",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.source": {
+    "original": "Fuente",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.sourceEnabled": {
+    "original": "Fuente oficial habilitada",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.sourceHelp": {
+    "original": "Desactivada por defecto. La consulta no guarda tasas. Si no hay configuración o red, importa un archivo. Fuente admitida: Banco Central de Nicaragua.",
+    "group": "Tesorería y respaldo",
+    "max": 447
+  },
+  "treasury.official": {
+    "original": "Consultar fuente oficial y revisar",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.import": {
+    "original": "Importar tasas con vista previa",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.file": {
+    "original": "Archivo CSV o XLSX (opcional, máximo 1 MB)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.paste": {
+    "original": "Pegar filas: fecha, moneda, tasa, fuente; separadas por tabulador, sin encabezado",
+    "group": "Tesorería y respaldo",
+    "max": 243
+  },
+  "treasury.ratesHelp": {
+    "original": "Tasa en unidades de moneda base por unidad original, hasta seis decimales. Fechas AAAA-MM-DD. No modifica operaciones registradas. Revisa antes de confirmar.",
+    "group": "Tesorería y respaldo",
+    "max": 471
+  },
+  "treasury.previewRequired": {
+    "original": "Revisa otra vez la vista previa después de cambiar el archivo o texto.",
+    "group": "Tesorería y respaldo",
+    "max": 210
+  },
+  "treasury.invalidFile": {
+    "original": "Archivo inválido o demasiado grande.",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.empty": {
+    "original": "Sin registros",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.field": {
+    "original": "Campo",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.value": {
+    "original": "Valor",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.actions": {
+    "original": "Acciones",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.company": {
+    "original": "Empresa",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.period": {
+    "original": "Período",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.generatedAt": {
+    "original": "Fecha de generación",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.generatedBy": {
+    "original": "Generado por",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.version": {
+    "original": "Versión",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.revision": {
+    "original": "Revisión",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.branchId": {
+    "original": "Sucursal",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.all": {
+    "original": "Consolidado",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.notes": {
+    "original": "Avisos",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.omittedModules": {
+    "original": "Fuentes excluidas por permisos o plan",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.firstShortfall": {
+    "original": "Primer faltante",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.liquidity": {
+    "original": "Estado de liquidez",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.rojo": {
+    "original": "Rojo: faltante estimado",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.amarillo": {
+    "original": "Amarillo: debajo de reserva",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.verde": {
+    "original": "Verde: reserva cubierta",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.noShortfall": {
+    "original": "Sin faltante en el horizonte",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.openingCents": {
+    "original": "Saldo inicial en centavos",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.balanceCents": {
+    "original": "Saldo final en centavos",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.inCents": {
+    "original": "Entradas en centavos",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.outCents": {
+    "original": "Salidas en centavos",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.assumption": {
+    "original": "Supuestos",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.forecast": {
+    "original": "Escenarios en moneda base",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.original": {
+    "original": "Moneda original",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.indirect": {
+    "original": "Método indirecto y conciliación",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.profitCents": {
+    "original": "Resultado neto (centavos)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.adjustmentCents": {
+    "original": "Ajustes (centavos)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.directCents": {
+    "original": "Método directo (centavos)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.indirectCents": {
+    "original": "Método indirecto (centavos)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.differenceCents": {
+    "original": "Diferencia visible (centavos)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.explanation": {
+    "original": "Explicación",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.adjustments": {
+    "original": "Detalle de ajustes",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.classification": {
+    "original": "Clasificación",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.capital_trabajo": {
+    "original": "Capital de trabajo",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.inversion": {
+    "original": "Inversión",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.financiacion": {
+    "original": "Financiación",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.records": {
+    "original": "Documentos",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.events": {
+    "original": "Movimientos previstos e historial",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.status": {
+    "original": "Estado",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.Abierta": {
+    "original": "Abierta",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.Cerrada": {
+    "original": "Cerrada",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.Aprobada": {
+    "original": "Aprobada",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.Rechazada": {
+    "original": "Rechazada",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.Pagada": {
+    "original": "Pagada",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.Revertida": {
+    "original": "Revertida",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.remainingCents": {
+    "original": "Anticipo pendiente (centavos)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.totalCents": {
+    "original": "Total (centavos)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.allocations": {
+    "original": "Asignaciones por factura",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.reference": {
+    "original": "Referencia",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.currency": {
+    "original": "Moneda",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.rateMicros": {
+    "original": "Tasa en millonésimas",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.rate": {
+    "original": "Tasa",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.rateSource": {
+    "original": "Fuente de tasa",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.rateDate": {
+    "original": "Fecha de tasa",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.sourceRow": {
+    "original": "Fila",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.available": {
+    "original": "Consulta disponible",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.true": {
+    "original": "Sí",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.false": {
+    "original": "No",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.managed": {
+    "original": "Gestionado en módulo de origen",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.details": {
+    "original": "Detalle / constancia",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.error": {
+    "original": "No se completó la operación.",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.loading": {
+    "original": "Consultando tesorería…",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.noInvoices": {
+    "original": "No hay facturas con saldo para este tercero.",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.accountCode": {
+    "original": "Cuenta",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.entryId": {
+    "original": "Asiento",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.reversalId": {
+    "original": "Asiento de reversa",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.preparedBy": {
+    "original": "Preparado por",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.approvedBy": {
+    "original": "Aprobado por",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.paidDate": {
+    "original": "Fecha de pago",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.sourceEnabledLabel": {
+    "original": "Fuente oficial habilitada",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.actor": {
+    "original": "Responsable",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.action": {
+    "original": "Acción",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.at": {
+    "original": "Fecha de registro",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.key": {
+    "original": "Referencia de exposición",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.carryingCents": {
+    "original": "Valor contable (centavos)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.originalCents": {
+    "original": "Saldo original (centavos)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.targetCents": {
+    "original": "Valor a tasa de cierre (centavos)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.items": {
+    "original": "Exposiciones en moneda extranjera",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.next": {
+    "original": "Fecha de reversa",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.token": {
+    "original": "Huella de la vista previa",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.id": {
+    "original": "Identificador",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.module": {
+    "original": "Módulo",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.kind": {
+    "original": "Tipo",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.since": {
+    "original": "Fecha efectiva",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.policyData": {
+    "original": "Política vigente",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.amount": {
+    "original": "Importe",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.dateLimit": {
+    "original": "Fecha límite del descuento",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.disclaimer": {
+    "original": "Estimación basada en registros disponibles y supuestos visibles; no garantiza cobros, pagos ni liquidez. Nóminas sin contabilizar, obligaciones pendientes y próximas cuotas se incluyen; no se inventan obligaciones futuras.",
+    "group": "Tesorería y respaldo",
+    "max": 666
+  },
+  "treasury.permissionNote": {
+    "original": "La proyección omite fuentes no autorizadas y no muestra un panorama completo cuando existen exclusiones.",
+    "group": "Tesorería y respaldo",
+    "max": 312
+  },
+  "treasury.refundHelp": {
+    "original": "Devolución explícita del saldo sin aplicar. Las aplicaciones registradas se corrigen por los documentos contables autorizados; no se borran.",
+    "group": "Tesorería y respaldo",
+    "max": 420
+  },
+  "treasury.readOnly": {
+    "original": "Solo lectura",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.balances": {
+    "original": "Saldo pendiente por tercero",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.count": {
+    "original": "Número de anticipos",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.operatingCents": {
+    "original": "Flujo de operación por método indirecto (centavos)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.investmentCents": {
+    "original": "Flujo de inversión (centavos)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.financingCents": {
+    "original": "Flujo de financiación (centavos)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.no_monetario": {
+    "original": "Ajuste no monetario",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.actorName": {
+    "original": "Nombre del responsable",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.preparedName": {
+    "original": "Preparado por",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.approvedName": {
+    "original": "Aprobado por",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.paidByName": {
+    "original": "Pago registrado por",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.treasuryEnable": {
+    "original": "Cambio de activación",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.batchPolicy": {
+    "original": "Configuración de aprobación",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.batchPrepare": {
+    "original": "Preparación del lote",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.batchApprove": {
+    "original": "Aprobación del lote",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.batchReject": {
+    "original": "Rechazo del lote",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.batchPay": {
+    "original": "Pago del lote",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.batchReverse": {
+    "original": "Reversa del lote",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.advanceCreate": {
+    "original": "Registro de anticipo",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.advanceApply": {
+    "original": "Aplicación de anticipo",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.advanceRefund": {
+    "original": "Devolución de anticipo",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.revaluePost": {
+    "original": "Revalorización confirmada",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.revalueReverse": {
+    "original": "Reversa cambiaria confirmada",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.ratesImport": {
+    "original": "Importación de tasas",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.ratesSource": {
+    "original": "Configuración de fuente oficial",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.foreignPayment": {
+    "original": "Pago original en otra moneda",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.foreignBatchHelp": {
+    "original": "En un banco de otra moneda confirma el importe original y la tasa con fuente y fecha; el equivalente debe coincidir exactamente con el pago base. Los campos de moneda original no se usan para Caja ni bancos de moneda base.",
+    "group": "Tesorería y respaldo",
+    "max": 666
+  },
+  "treasury.exchangeEffectCents": {
+    "original": "Efecto cambiario sobre efectivo (centavos, sin movimiento original)",
+    "group": "Tesorería y respaldo",
+    "max": 201
+  },
+  "treasury.personal": {
+    "original": "Personal y nómina",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.fiscal": {
+    "original": "Impuestos",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.suscripciones": {
+    "original": "Suscripciones",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.bancos": {
+    "original": "Bancos",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.contabilidad": {
+    "original": "Contabilidad",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.proveedores": {
+    "original": "Proveedores",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.ventas": {
+    "original": "Ventas",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.buckets": {
+    "original": "Agrupaciones",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.baseCurrency": {
+    "original": "Moneda base",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.sourceUrl": {
+    "original": "Fuente oficial",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.fetchedAt": {
+    "original": "Fecha de consulta",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.rates": {
+    "original": "Tasas validadas",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.grid": {
+    "original": "Filas originales",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.record": {
+    "original": "Documento seleccionado",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.deposit": {
+    "original": "Anticipo sin aplicar",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.customerId": {
+    "original": "Cliente",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.supplierId": {
+    "original": "Proveedor",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.partyId": {
+    "original": "Identificador del tercero",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.allocationJournal": {
+    "original": "Asiento con detalle por factura",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.treasuryId": {
+    "original": "Documento de tesorería",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.invoiceId": {
+    "original": "Factura vinculada",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.total": {
+    "original": "Total",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.paid": {
+    "original": "Pagado",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.subscription": {
+    "original": "Suscripción",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.advance": {
+    "original": "Anticipo",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.batch": {
+    "original": "Lote",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.valuation": {
+    "original": "Revalorización",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.cobrar": {
+    "original": "Cuentas por cobrar",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.pagar": {
+    "original": "Cuentas por pagar",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.impuestos": {
+    "original": "Obligaciones fiscales",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.nomina": {
+    "original": "Nóminas pendientes",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.prestamos": {
+    "original": "Cuotas de préstamos",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.plantillas": {
+    "original": "Plantillas recurrentes",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.divisas": {
+    "original": "Documentos en otra moneda",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.flow.flujo_proyectado": {
+    "original": "Consulta escenarios y supuestos sin modificar la contabilidad.",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.flow.pagos_lote": {
+    "original": "Prepara, aprueba y confirma un lote de proveedores.",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.flow.anticipos": {
+    "original": "Registra, aplica o devuelve anticipos por tercero.",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.flow.revalorizacion": {
+    "original": "Revisa y confirma cierre y reversa; verifica con tu contador.",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "treasury.flow.tipos_cambio": {
+    "original": "Revisa fuente y fecha antes de importar tasas nuevas.",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  }
+});

@@ -32,10 +32,11 @@ const actionButton=(action,id,label)=>`<button class="lk" data-a="${action}" dat
 const pageHead=(title,buttons='')=>`<div class="ph"><h2>${esc(title)}</h2><div class="accounting-actions">${buttons}</div></div>`;
 const cashSelect=(name='cash')=>`<label>${esc(uiT("accounting.2","Cuenta de dinero"))}<select name="${name}">${accOpts('1102',account=>['1101','1102'].includes(account.code))}</select></label>`;
 const employeeOptions=id=>S.employees.filter(employee=>employee.active!==false||employee.id===id).map(employee=>`<option value="${esc(employee.id)}" ${employee.id===id?'selected':''}>${esc(employee.name)}</option>`).join('');
-const invoicePayments=id=>S.entries.filter(entry=>entry.invoiceId===id);
-const paidInvoice=id=>r2(invoicePayments(id).filter(entry=>entry.type==='abono'&&!S.entries.some(record=>record.reversalOf===entry.id)).reduce((total,entry)=>total+entry.total,0));
+const invoiceLinked=id=>S.entries.flatMap(e=>e.allocationJournal?(e.lines.some(l=>l.invoiceId===id)?[{...e,invoiceId:id,lines:e.lines.filter(l=>l.invoiceId===id)}]:[]):e.id===id||e.invoiceId===id||e.reversalOf===id?[e]:[]);
+const invoicePayments=id=>invoiceLinked(id).filter(e=>e.id!==id).map(e=>{if(!e.allocationJournal)return e;const invoice=S.entries.find(i=>i.id===id);return {...e,total:r2(e.lines.filter(l=>l.a===invoice?.pay).reduce((s,l)=>s+(invoice.pay==='1201'?l.c-l.d:l.d-l.c),0))}});
+const paidInvoice=id=>r2(invoicePayments(id).reduce((total,e)=>{if(e.allocationJournal){const invoice=S.entries.find(i=>i.id===id);return total+(e.lines||[]).filter(l=>l.a===invoice?.pay).reduce((s,l)=>s+(invoice.pay==='1201'?l.c-l.d:l.d-l.c),0)}return total+(e.type==='abono'&&!S.entries.some(record=>record.reversalOf===e.id)?e.total:0)},0));
 const invoicePrincipal=entry=>r2((entry.lines||[]).filter(line=>line.a===entry.pay).reduce((total,line)=>total+(entry.pay==='1201'?line.d-line.c:line.c-line.d),0));
-const invoiceBalance=entry=>Math.max(0,r2(S.entries.filter(record=>record.id===entry.id||record.invoiceId===entry.id||record.reversalOf===entry.id).reduce((total,record)=>total+(record.lines||[]).filter(line=>line.a===entry.pay).reduce((sum,line)=>sum+(entry.pay==='1201'?line.d-line.c:line.c-line.d),0),0)));
+const invoiceBalance=entry=>Math.max(0,r2(invoiceLinked(entry.id).reduce((total,record)=>total+(record.lines||[]).filter(line=>line.a===entry.pay).reduce((sum,line)=>sum+(entry.pay==='1201'?line.d-line.c:line.c-line.d),0),0)));
 const debtStatus=(balance,due)=>balance<=0?'Cancelada':due<today()?'Vencida':'Pendiente';
 const badge=status=>`<span class="ledger-badge ${['Cancelada','Pagado','Saldo a favor','Sin deuda'].includes(status)?'paid':status==='Vencida'?'overdue':'pending'}">${esc(status)}</span>`;
 function invoices(receivable){const account=receivable?'1201':'2101';return S.entries.filter(entry=>entry.pay===account&&entry.total>0&&entry.lines.some(line=>line.a===account&&(receivable?line.d>0:line.c>0)))}

@@ -1,3 +1,4 @@
+import {TREASURY_MODULES,validateTreasuryRecord} from './treasury.mjs';
 import {validateBankRecord} from './banks.mjs';
 import {validateRecurringRecord} from './recurring.mjs';
 import {randomUUID} from 'node:crypto';
@@ -8,7 +9,7 @@ const round=v=>Math.round(v*100)/100;
 const qty=v=>Number(v)===0?0:normalizeItemQuantity(v);
 const sameDay=(day,delta)=>new Date(Date.parse(day+'T12:00:00Z')+delta*86400000).toISOString().slice(0,10);
 function nextDate(day,frequency,n){if(frequency==='mensual'){const d=new Date(day+'T12:00:00Z'),last=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+n+1,0)).getUTCDate();d.setUTCDate(1);d.setUTCMonth(d.getUTCMonth()+n);d.setUTCDate(Math.min(+day.slice(8),last));return d.toISOString().slice(0,10)}return sameDay(day,n*({diaria:1,semanal:7,quincenal:15}[frequency]||0))}
-const flows={bancos:['Abierta','Cerrada'],suscripciones:['Activa','Pausada','Cancelada'],cuentas_abiertas:['Abierta','Cerrada'],agenda:['Pendiente','Confirmada','Atendida','Cancelada'],proyectos:['Recibida','Diagnóstico','Presupuestada','En proceso','Entregada','Cancelada'],lotes:['Disponible','Agotado'],variantes:['Disponible','Vendida'],produccion:['Activa','Inactiva'],medidas:['Pendiente','Facturada'],cartera:['Borrador','Vigente','Liquidada'],contratos:['Activo','Suspendido','Finalizado'],reservas:['Reservada','Ocupada','Finalizada','Cancelada'],rutas:['Preventa','Preparada','Entregada','Cancelada'],despacho:['Recibido','Preparando','Listo','Entregado','Cancelado'],comisiones:['Pendiente','Liquidada'],aportes:['Pendiente','Registrado'],documentos_venta:['Pendiente','Convertido','Cancelado'],comprobantes:['Pendiente']};
+const flows={...Object.fromEntries(TREASURY_MODULES.map(m=>[m,['Abierta','Cerrada','Aprobada','Rechazada','Pagada','Revertida']])),bancos:['Abierta','Cerrada'],suscripciones:['Activa','Pausada','Cancelada'],cuentas_abiertas:['Abierta','Cerrada'],agenda:['Pendiente','Confirmada','Atendida','Cancelada'],proyectos:['Recibida','Diagnóstico','Presupuestada','En proceso','Entregada','Cancelada'],lotes:['Disponible','Agotado'],variantes:['Disponible','Vendida'],produccion:['Activa','Inactiva'],medidas:['Pendiente','Facturada'],cartera:['Borrador','Vigente','Liquidada'],contratos:['Activo','Suspendido','Finalizado'],reservas:['Reservada','Ocupada','Finalizada','Cancelada'],rutas:['Preventa','Preparada','Entregada','Cancelada'],despacho:['Recibido','Preparando','Listo','Entregado','Cancelado'],comisiones:['Pendiente','Liquidada'],aportes:['Pendiente','Registrado'],documentos_venta:['Pendiente','Convertido','Cancelado'],comprobantes:['Pendiente']};
 export const BUSINESS_OPS=['businessProduct','businessCost','businessPurchase','businessConsume','businessSave','businessState','businessBill','businessAdvance','businessRefund','businessMove','businessMerge','businessSplit','businessProduce','businessDisburse','businessCollect','businessAccrue','businessGenerate','businessCheckin','businessCheckout','businessCommission','businessLiquidate','businessDonate','businessRelease','businessOnboard'];
 export function validateBusinessRecords(data,check){
  if(data.businessRecords===undefined)return;
@@ -19,7 +20,8 @@ export function validateBusinessRecords(data,check){
   check(/^\d{4}-\d{2}-\d{2}$/.test(r.date||'')&&Number.isFinite(Date.parse(r.date)),'Fecha de negocio inválida.');
   for(const k of ['total','principal','interest','penalty','paid','deposit','valuation','cost','price'])if(r[k]!==undefined)check(moneyCents(r[k])>=0,'Importe de negocio negativo.');
   if(r.q!==undefined)check(Number.isFinite(r.q)&&r.q>=0&&r.q<=1e9,'Cantidad de negocio inválida.');
-  for(const key of ['items','ingredients'])if(r[key]!==undefined){check(Array.isArray(r[key])&&r[key].length<=200,'Líneas de negocio inválidas.');for(const i of r[key])check(data.products.some(p=>p.id===i.p)&&Number.isFinite(i.q)&&i.q>0&&moneyCents(i.u)>=0,'Producto o línea de negocio inválidos.');}
+  for(const key of ['items','ingredients'])if(!TREASURY_MODULES.includes(r.module)&&r[key]!==undefined){check(Array.isArray(r[key])&&r[key].length<=200,'Líneas de negocio inválidas.');for(const i of r[key])check(data.products.some(p=>p.id===i.p)&&Number.isFinite(i.q)&&i.q>0&&moneyCents(i.u)>=0,'Producto o línea de negocio inválidos.');}
+  if(TREASURY_MODULES.includes(r.module))validateTreasuryRecord(r,data,check);
   if(r.module==='bancos')validateBankRecord(r,data,check);
   if(r.module==='suscripciones')validateRecurringRecord(r,data,check);
   if(r.entryId)check(data.entries.some(e=>e.id===r.entryId),'Conserva el asiento vinculado al registro de negocio.');
@@ -67,7 +69,7 @@ export async function businessOperation(data,access,session,body,context){
   return {onboardingDone:true};
  }
  const module=body.module,existing=body.id?records.find(r=>r.id===body.id):null;
- check(!['suscripciones','bancos'].includes(module),'Usa las operaciones específicas de Suscripciones.');
+ check(![...TREASURY_MODULES,'suscripciones','bancos'].includes(module),'Usa las operaciones específicas de Suscripciones.');
  check(catalog.all.includes(module)&&(!body.id||existing?.module===module),'Registro no encontrado.');permit(module);
  if(op!=='businessSave')check(existing,'Registro no encontrado.');
  if(body.date&&op!=='businessSave')check(ctx.date(body.date)>=existing.date,'La operación no puede ser anterior al registro.');
@@ -145,7 +147,7 @@ export async function businessOperation(data,access,session,body,context){
   check(r.deposit>0&&r.depositAccount,'No hay depósito por devolver.');const total=ctx.amount(body.total);check(moneyCents(total)<=moneyCents(r.deposit),'La devolución supera el depósito pendiente.');const e=post([{a:r.depositAccount,d:total,c:0},{a:cash(),d:0,c:total}],total,'Devolución de depósito · '+r.name);r.deposit=round(r.deposit-total);r.events.push({date:e.date,action:'Depósito devuelto',entryId:e.id,total});return e.id;
  }
  if(op==='businessAdvance'){
-  check(['cuentas_abiertas','agenda','proyectos','reservas','documentos_venta'].includes(module)&&!r.entryId&&!['Cancelada','Cancelado','Cerrada','Finalizada'].includes(r.status),'No admite anticipos.');const total=ctx.amount(body.total),liability=acct(body.liability,'pasivo');check(!r.depositAccount||r.depositAccount===liability,'Conserva la cuenta del anticipo original.');const e=post([{a:cash(),d:total,c:0},{a:liability,d:0,c:total}],total,'Anticipo / depósito · '+r.name);r.deposit=round((r.deposit||0)+total);r.depositAccount=liability;r.events.push({date:e.date,action:'Anticipo',entryId:e.id,total});return e.id;
+  check(['cuentas_abiertas','agenda','proyectos','reservas','documentos_venta',...(data.cfg.treasuryControls?.anticipos?.enabled===true?['contratos']:[])].includes(module)&&!r.entryId&&!['Cancelada','Cancelado','Cerrada','Finalizada'].includes(r.status),'No admite anticipos.');const total=ctx.amount(body.total),liability=acct(body.liability,'pasivo');check(!r.depositAccount||r.depositAccount===liability,'Conserva la cuenta del anticipo original.');const e=post([{a:cash(),d:total,c:0},{a:liability,d:0,c:total}],total,'Anticipo / depósito · '+r.name);r.deposit=round((r.deposit||0)+total);r.depositAccount=liability;r.events.push({date:e.date,action:'Anticipo',entryId:e.id,total});return e.id;
  }
  if(op==='businessBill'||op==='businessGenerate'){
   check(['cuentas_abiertas','agenda','proyectos','contratos','reservas','rutas','despacho','documentos_venta','medidas','variantes'].includes(module),'Registro no facturable.');confirmed();

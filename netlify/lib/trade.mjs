@@ -1,3 +1,4 @@
+import {invoiceLinkedEntries} from './accounting-engine.mjs';
 import { normalizeItemQuantity } from './accounting-engine.mjs';
 import { randomUUID } from 'node:crypto';
 import { allocateCents } from './accounting-engine.mjs';
@@ -10,7 +11,7 @@ export function tradeOperation(data,access,session,body,h){
  for(const name of Object.keys(TRADE_ARRAYS))data[name]||=[];
  const ensure=(code,name,tipo,nat)=>{if(!data.accounts.some(a=>a.code===code))data.accounts.push({code,name,tipo,nat,sub:''})};
  const original=()=>{const invoice=data.entries.find(e=>e.id===body.invoiceId);check(invoice&&when>=invoice.date,'Selecciona un documento de la sucursal y una fecha válida.');return invoice};
- const debt=invoice=>round(data.entries.filter(e=>e.id===invoice.id||e.invoiceId===invoice.id).flatMap(e=>e.lines||[]).filter(l=>l.a===invoice.pay).reduce((s,l)=>s+(invoice.pay==='1201'?l.d-l.c:l.c-l.d),0));
+ const debt=invoice=>round(invoiceLinkedEntries(data.entries,invoice.id).flatMap(e=>e.lines||[]).filter(l=>l.a===invoice.pay).reduce((s,l)=>s+(invoice.pay==='1201'?l.d-l.c:l.c-l.d),0));
  if(op==='purchaseReturn'||op==='purchaseDebit'){
   permit(access,'compras');check(access.owner||['contador','supervisor'].includes(String(access.member?.role).toLowerCase()),'Solo responsables autorizados corrigen compras.');const invoice=original();check(invoice.type==='compra'&&text(body.reason)&&text(body.reference),'Selecciona una compra, motivo y referencia.');
   if(op==='purchaseDebit'){

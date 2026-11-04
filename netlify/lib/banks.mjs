@@ -136,10 +136,10 @@ export function guardBankReconciliations(previous,next,check){
  for(const bank of records(next).filter(r=>r.kind==='bank'&&foreignBank(next,r))){
   const previousBank=records(previous).find(r=>r.id===bank.id),immutable=b=>({id:b.id,date:b.date,account:b.account,branchId:b.branchId,currency:b.currency,card:b.card,openingCents:b.openingCents,baseOpeningCents:b.baseOpeningCents,rateMicros:b.rateMicros,rateSource:b.rateSource,rateDate:b.rateDate});
   if(previousBank)check(canonical(immutable(previousBank))===canonical(immutable(bank)),'Conserva la apertura y moneda originales.');
-  const movements=records(next).filter(r=>r.kind==='movement'&&r.bankId===bank.id),ledger=bankBaseLedger(next,bank,'9999-12-31').filter(e=>e.date>=bank.date),ids=new Set();
+  const movements=records(next).filter(r=>r.kind==='movement'&&r.bankId===bank.id),ledger=bankBaseLedger(next,bank,'9999-12-31').filter(e=>e.date>=bank.date&&!next.entries.find(j=>j.id===e.entryId)?.revaluation),ids=new Set();
   for(const e of ledger){const m=movements.find(m=>m.entryId===e.entryId);check(m&&!ids.has(m.entryId)&&m.date===e.date&&m.baseCents===e.amountCents&&bankConvertCents(m.amountCents,m.rateMicros)===m.baseCents,'Usa el movimiento bancario con importe original y tasa explícita para esta cuenta.');ids.add(m.entryId);}
   check(movements.length===ledger.length,'Cada movimiento original requiere un único asiento de su cuenta.');
-  for(const e of next.entries||[])if(e.date>=bank.date&&(e.branchId||'principal')===bank.branchId&&e.lines?.some(l=>l.a===bank.account))check(movements.some(m=>m.entryId===e.id),'Registra la cuenta en otra moneda mediante su operación bancaria.');
+  for(const e of next.entries||[])if(!e.revaluation&&e.date>=bank.date&&(e.branchId||'principal')===bank.branchId&&e.lines?.some(l=>l.a===bank.account))check(movements.some(m=>m.entryId===e.id),'Registra la cuenta en otra moneda mediante su operación bancaria.');
   const opening=safeSum(bankBaseLedger(next,bank,'9999-12-31').filter(e=>e.date<bank.date).map(e=>e.amountCents));check(opening===bank.baseOpeningCents,'Conserva el saldo base previo a la incorporación.');
   if(previousBank){const before=bankBaseLedger(previous,previousBank,'9999-12-31').filter(e=>e.date<bank.date),after=bankBaseLedger(next,bank,'9999-12-31').filter(e=>e.date<bank.date);check(canonical(before)===canonical(after),'Conserva el libro previo a la incorporación en otra moneda.');}
  }
