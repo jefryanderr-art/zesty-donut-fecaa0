@@ -1,3 +1,4 @@
+import {guardPersonnel} from './personnel.mjs';
 import {guardTreasury} from './treasury.mjs';
 import {guardBankReconciliations} from './banks.mjs';
 import {guardServicePayroll} from './service-commission.mjs';
@@ -443,6 +444,7 @@ export async function updateCompany(companyId, session, revision, mutate, action
       materializeBranches(patch.data);
       guardTreasury(fullCompany.data,patch.data,(ok,message)=>{if(!ok)accessError(message,400)},action);
       guardBankReconciliations(fullCompany.data,patch.data,(ok,message)=>{if(!ok)accessError(message,400)});
+      guardPersonnel(fullCompany.data,patch.data,action);
       guardServicePayroll(fullCompany.data,patch.data,(ok,message)=>{if(!ok)accessError(message,400)});
       guardPeriods(fullCompany.data, patch.data, action);
       await syncBarcodes(client, fullCompany, patch.data);
