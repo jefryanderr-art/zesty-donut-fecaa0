@@ -8,7 +8,7 @@ const permission=(module,write=false)=>{
   const role=String(CO.role||'').trim().toLowerCase();
   if(module==='ventas'&&role!=='contador')return false;
   if(['cajero','vendedor','supervisor'].includes(role)&&['contabilidad','finanzas','personal','fiscal','ajustes','auditoria','accesibilidad'].includes(module))return false;
-  if(['cajero','vendedor'].includes(role)&&(!['facturacion','inventario','cajas','cuentas_abiertas','agenda','despacho','documentos_venta','comprobantes','medidas','rutas'].includes(module)||(module==='inventario'&&write)))return false;
+  if(['cajero','vendedor'].includes(role)&&(!['tableros_rol','facturacion','inventario','cajas','cuentas_abiertas','agenda','despacho','documentos_venta','comprobantes','medidas','rutas'].includes(module)||(module==='inventario'&&write)))return false;
   const fallback={facturacion:'ventas',cajas:'contabilidad',costos:'gastos',proveedores:'compras'},level=CO.permissions?.[module]??(role==='contador'?CO.permissions?.[fallback[module]]:undefined);
   return level==='escritura'||(!write&&level==='lectura');
 };

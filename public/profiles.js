@@ -2,6 +2,11 @@
 // Catálogo compartido por el navegador y Functions. Sin acceso al DOM ni datos de clientes.
 (() => {
  const capabilities={
+  indicadores_financieros:{letter:'AK',name:'Indicadores financieros',group:'Finanzas',flow:'Informe de apoyo; verifica con tu contador.'},
+  costeo_abc:{letter:'AL',name:'Costeo por actividades',group:'Finanzas',flow:'Informe de apoyo; verifica con tu contador.'},
+  tableros_rol:{letter:'AM',name:'Cuadros de mando por rol',group:'Finanzas',flow:'Informe de apoyo; verifica con tu contador.'},
+  notas_financieras:{letter:'AN',name:'Notas y paquete de cierre',group:'Finanzas',flow:'Informe de apoyo; verifica con tu contador.'},
+
   constancias_laborales:{letter:'AK',name:'Constancias laborales',group:'Personal',flow:'Configura textos y descarga constancias de trabajo o ingresos; verifica con tu contador.'},
   comunicacion:{letter:'X',name:'Comunicación con clientes',group:'Ventas',flow:'Revisa el documento y confirma cada envío.'},
   cobranza:{letter:'Y',name:'Gestión de cobranza',group:'Ventas',flow:'Revisa vencimientos, promesas y recordatorios antes de aprobar.'},

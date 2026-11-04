@@ -309,3 +309,18 @@ Solo se entregaron cálculos puros sin conexión (`public/advanced-math.mjs`, `n
 - [x] F5.2 Bodegas por sucursal, traslados, existencias y alertas mínimo/máximo/reposición (módulo `bodegas`, informativo, sin asientos). Escrito, **no verificado**.
 - [ ] F6.1 Presupuesto (`budgetVariance`) · [ ] F6.2 Asientos con flujo · [ ] F6.3 Intercompañía · [ ] F6.4 Activos avanzados · [ ] F6.5 Indicadores (`ratios`) · [ ] F6.6 ABC · [ ] F6.7 Tableros por rol · [ ] F6.8 Notas y paquete de cierre
 - [ ] F7.1 Adelantos/préstamos (`installments`) · [ ] F7.2 Vacaciones (`vacationBalance`) · [ ] F7.3 Planillas por área · [ ] F7.4 Comisiones por meta (`tierCommissionCents`) · [x] F7.5 Constancias (implementadas, no verificadas funcionalmente) · [ ] F7.6 Parámetros por país
+
+## Solicitud actual: cuatro módulos de análisis (F6.5–F6.8)
+
+Las casillas siguientes acreditan implementación y pruebas escritas, no funcionamiento verificado por ejecución. Sustituyen el estado histórico sin marcar de estos cuatro ítems en las listas anteriores.
+
+- [x] F6.5 Indicadores por perfil/sector, clasificación editable, comparación de períodos, explicación y PDF/CSV.
+- [x] F6.6 Costeo por actividades y rentabilidad en cinco dimensiones, generadores editables, reparto exacto sin asientos, PDF/CSV.
+- [x] F6.7 Tableros por rol real con permisos propios/de origen y sucursal de sesión; PDF/CSV.
+- [x] F6.8 Notas editables y paquete de cierre para contador/banco, metadatos, versión y aviso; PDF/CSV.
+- [x] Activación apagada por defecto, solo dueño con motivo y confirmación; escrituras transaccionales por operaciones, bloqueo, revisión, idempotencia y bitácora existentes.
+- [x] Interfaz española por uiT, componentes existentes para móvil/oscuro, sin cambios en style.css, dependencias, motor ni datos históricos.
+- [x] Cuatro pruebas breves escritas y revisión estática; documentación y límites en docs/fase-6.md.
+- [ ] Validación funcional por la plataforma: pruebas, permisos desplegados, concurrencia, RLS, exportaciones y matriz visual. No ejecutada en esta sesión por instrucción expresa.
+
+Archivos nuevos: `netlify/lib/analysis.mjs`, `public/financial-analysis.js` y las cuatro pruebas mencionadas en el documento de fase. Integraciones aditivas en `business.mjs`, `operations.mjs`, `policies.mjs`, `profiles.js`, `access.js` e `index.html`. Sin migraciones nuevas, despliegue ni mezcla con principal.
