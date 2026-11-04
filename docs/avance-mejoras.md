@@ -341,3 +341,36 @@ Este estado sustituye las casillas históricas pendientes de F7.1–F7.4 y F7.6.
 - [ ] Validación funcional: pruebas por la plataforma, concurrencia, permisos reales, RLS, exportaciones, respaldos y matriz visual. No ejecutada en esta sesión.
 
 Alcance, reglas conservadoras, archivos y reversión: docs/fase-7.md, sección de entrega de los cinco módulos. La verificación local se limitó a sintaxis y formato; no acredita funcionamiento desplegado.
+
+## Fase 8 — Salud del sistema (2026-11-04)
+
+- [x] Ruta y menú exclusivos de plataforma, con autorización real de servidor antes de consultar.
+- [x] Cola de correo: conteos, errores/atascos, antigüedad y códigos saneados, sin datos de clientes.
+- [x] Pagadito: autorizaciones pendientes/ambiguas o con cargos por resolver, antigüedad y estado, sin importes ni consultas al proveedor.
+- [x] Lectura de migraciones aplicadas/pendientes con manifiesto de versión; ausencia de permisos indicada como no disponible.
+- [ ] Identificación de migraciones fallidas: las tablas de aplicación confirmada no guardan intentos fallidos. El panel lo indica expresamente; requiere una fuente autorizada de registros de despliegue para completar esa observabilidad. No se inventó un resultado de cero fallos.
+- [x] Último resultado observable de las tres tareas existentes, incluidos fallos parciales, sin cron nuevo ni mensajes de error privados.
+- [x] Semáforo explicado, actualización manual, PDF/CSV con fecha/generador seudonimizado/versión y bitácora.
+- [x] Textos uiT, CSS aditivo, pruebas escritas de autorización/proyección y documentación docs/fase-8.md.
+- [ ] Validación funcional por la plataforma: pruebas escritas, permisos reales, lectura de migraciones, primera ejecución de tareas, PDF/CSV y móvil/oscuro. No ejecutada en esta sesión.
+
+## Fase 9 — Auditoría existente ampliada (2026-11-04)
+
+- [x] Controles añadidos a auditoria y junto a Integridad contable, sin duplicar ni reemplazar la bitácora anterior.
+- [x] Ejecución por período y sucursal; informes inmutables con fecha, autor, alcance, hallazgos/gravedad, historial y PDF/CSV auditados.
+- [x] Ventas: correcciones frecuentes, descuentos y precios históricos distintos.
+- [x] Documentos: secuencias, horario/feriados, importes redondos/bajo límite y duplicados.
+- [x] Caja/inventario: faltantes recurrentes, ajustes inusuales, stock negativo y costos atípicos.
+- [x] Gastos: falta de referencia/comprobante y proveedor nuevo por monto alto.
+- [x] Contabilidad: manuales al cierre, reaperturas, emisión posterior a cierre, sin documento y partidas bancarias antiguas con módulo activo.
+- [x] Accesos: ingresos fuera de horario ya registrados, permisos y separación de funciones con referencias vinculadas.
+- [x] Terceros/nómina: vencidos con descuentos, coincidencias documentales, empleados duplicados, salarios fuera de rango y pagos sin expediente vinculado.
+- [x] Puntajes por área/identidad con cálculo explicado; cobertura no evaluable por ausencia de campos o permisos.
+- [x] Seguimiento separado, cinco estados, responsable autorizado, comentario obligatorio al cerrar y evidencia mediante comprobantes existentes. Cierres conservados.
+- [x] Umbrales por empresa, solo dueño con confirmación/motivo; recordatorio mensual optativo interno sin correos.
+- [x] Permiso propio inicial dueño/contador, planes, sucursales del servidor, soporte excluido, runOperation/updateCompany y protección del historial frente a guardados/restauración.
+- [x] Conservación exacta del documento contable ajeno al informe, incluidos orden y asignaciones históricas; sin inicializadores ni operaciones monetarias.
+- [x] uiT, CSS aditivo, PDF/CSV, guía y docs/auditoria-ampliada.md y docs/fase-9.md; casos positivos/negativos por regla y pruebas de inmutabilidad/no modificación escritos.
+- [ ] Validación funcional por la plataforma: ejecución de pruebas, cuatro planes, permisos/RLS, concurrencia/idempotencia, volumen, evidencias, respaldos, PDF/CSV y móvil/oscuro. No ejecutada en esta sesión.
+
+Las casillas de implementación no acreditan pruebas funcionales. La sesión se limitó a node --check y git diff --check, además del mantenimiento obligatorio de URL de caché. Sin migraciones nuevas, dependencias, despliegue ni mezcla con main. Los límites y falsos positivos están documentados; la ayuda interna no es auditoría externa ni prueba legal.

@@ -1,3 +1,4 @@
+import {guardAuditHistory,mergeAuditReviewPatch,REVIEW_OPS} from './audit-review.mjs';
 import {guardPersonnel} from './personnel.mjs';
 import {guardTreasury} from './treasury.mjs';
 import {guardBankReconciliations} from './banks.mjs';
@@ -24,7 +25,7 @@ import { db } from '../../db/index.ts';
 import { companies, companyMembers, companyBackups, auditEvents, sessions, saveOperations } from '../../db/schema.ts';
 import { OPERATION_ARRAYS, roleAllows, salesAdministrator, cashAdministrator, operatorId, receiptRecords } from './policies.mjs';
 
-export const MODULES = [...catalog.all, 'ventas', 'compras', 'gastos', 'inventario', 'contabilidad', 'finanzas', 'personal', 'fiscal', 'ajustes', 'accesibilidad', 'auditoria', 'facturacion', 'cajas', 'costos', 'proveedores', 'diseno_factura'];
+export const MODULES = [...catalog.all, 'ventas', 'compras', 'gastos', 'inventario', 'contabilidad', 'finanzas', 'personal', 'fiscal', 'ajustes', 'accesibilidad', 'auditoria', 'auditoria_revision', 'facturacion', 'cajas', 'costos', 'proveedores', 'diseno_factura'];
 const DATA_MODULES = ['compras', 'gastos', 'inventario', 'contabilidad', 'finanzas', 'personal', 'fiscal'];
 const deriveKey = promisify(scrypt);
 const round = value => Math.round(value * 100) / 100;
@@ -32,13 +33,14 @@ const canonical = value => JSON.stringify(value, (key, item) => item && typeof i
 export const equal = (first, second) => canonical(first) === canonical(second);
 export const requireModule = (access,module,write=false) => { requirePlanModule(access.billingPlan,module); if(!allowed(access,module,write))accessError('No tienes permiso para '+module+'.'); };
 export const allowed = (access, module, write = false) => {
+  if(module==='auditoria_revision'&&access.support)return false;
   if(access.support && write)return false;
   if(access.billingPlan && !moduleIncluded(access.billingPlan,module))return false;
   if(access.readOnlyLimit && write)return false;
   if (access.owner) return true;
   module=({control_personal:'personal',sucursales:'ajustes',decisiones:'finanzas'})[module]||module;
   const fallback = { facturacion: 'ventas', cajas: 'contabilidad', costos: 'gastos', proveedores: 'compras' };
-  const level = access.permissions?.[module] ?? (access.member?.role?.toLowerCase() === 'contador' ? access.permissions?.[fallback[module]] : undefined);
+  const level = access.permissions?.[module] ?? (module==='auditoria_revision'&&access.member?.role?.toLowerCase()==='contador'?'escritura':undefined) ?? (access.member?.role?.toLowerCase() === 'contador' ? access.permissions?.[fallback[module]] : undefined);
   return !!roleAllows(access, module) && !(write && roleAllows(access, module) === 'lectura') && (level === 'escritura' || (!write && level === 'lectura'));
 };
 export const allData = (access, write = false) => (access.company?.data?.businessRecords||[]).every(r=>allowed(access,r.module,write)) && access.unrestrictedBranches !== false && !(access.billingPlan?.blockedModules||[]).some(m=>['control_personal','decisiones'].includes(m)) && salesAdministrator(access) && [...DATA_MODULES, 'ventas', 'facturacion', 'cajas', 'costos', 'proveedores'].every(module => allowed(access, module, write));
@@ -199,7 +201,7 @@ export function projectData(data, access) {
     const copy = { ...record }; if(!access.owner)delete copy.receipt; return copy;
   }) : [];
   for(const [name,module] of Object.entries({...ADVANCED_ARRAYS,...TRADE_ARRAYS})) projected[name]=allowed(access,module)?structuredClone(data[name]||[]):[];
-  projected.businessRecords=(data.businessRecords||[]).filter(row=>allowed(access,row.module)).map(row=>structuredClone(row));
+  projected.businessRecords=(data.businessRecords||[]).filter(row=>allowed(access,row.module)&&(row.module!=='auditoria_revision'||row.kind==='settings'||(row.kind==='report'?row:(data.businessRecords||[]).find(r=>r.id===row.reportId))?.scope?.every(m=>allowed(access,m)))).map(row=>structuredClone(row));
   projected.stockTransfers=moduleIncluded(access.billingPlan||{blockedModules:[]},'sucursales')&&allowed(access,'inventario')?structuredClone(data.stockTransfers||[]):[];
   return projected;
 }
@@ -440,11 +442,13 @@ export async function updateCompany(companyId, session, revision, mutate, action
     const crossBranch=patch.crossBranch;delete patch.crossBranch;
     if(crossBranch && !CROSS_BRANCH_OPS.some(op=>action==='Operación: '+op)) accessError('Operación entre sucursales no autorizada.');
     if (patch.data) {
-      if(!crossBranch) patch.data = mergeBranch(fullCompany.data, company.data, patch.data, access, action === 'Operación: branch' && access.owner);
-      materializeBranches(patch.data);
+      const auditOnly=REVIEW_OPS.some(op=>action==='Operación: '+op);
+      if(auditOnly)patch.data=mergeAuditReviewPatch(fullCompany.data,company.data,patch.data,access,action);
+      else {if(!crossBranch) patch.data = mergeBranch(fullCompany.data, company.data, patch.data, access, action === 'Operación: branch' && access.owner);materializeBranches(patch.data);}
       guardTreasury(fullCompany.data,patch.data,(ok,message)=>{if(!ok)accessError(message,400)},action);
       guardBankReconciliations(fullCompany.data,patch.data,(ok,message)=>{if(!ok)accessError(message,400)});
       guardPersonnel(fullCompany.data,patch.data,action);
+      guardAuditHistory(fullCompany.data,patch.data,action);
       guardServicePayroll(fullCompany.data,patch.data,(ok,message)=>{if(!ok)accessError(message,400)});
       guardPeriods(fullCompany.data, patch.data, action);
       await syncBarcodes(client, fullCompany, patch.data);
@@ -477,13 +481,13 @@ export function validatePermissions(permissions, access, role) {
   if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions)) accessError('Permisos inválidos.', 400);
   const result = {};
   for (const module of MODULES) {
-    const level = permissions[module] || 'ninguno';
+    const level = permissions[module] || (module==='auditoria_revision'&&role==='contador'?'escritura':'ninguno');
     if (!['ninguno', 'lectura', 'escritura'].includes(level)) accessError('Permisos inválidos.', 400);
     if (level !== 'ninguno' && !allowed(access, module, level === 'escritura')) accessError('No puedes conceder permisos que no tienes.');
     result[module] = level;
   }
   const prospective = { owner: false, permissions: result, member: { role } };
-  const availableData=write=>MODULES.filter(m=>(!catalog.all.includes(m)||(access.company?.data?.businessRecords||[]).some(r=>r.module===m))&&!['ajustes','auditoria','accesibilidad','diseno_factura'].includes(m)&&(!access.billingPlan||moduleIncluded(access.billingPlan,m))).every(m=>allowed(prospective,m,write));
+  const availableData=write=>MODULES.filter(m=>(!catalog.all.includes(m)||(access.company?.data?.businessRecords||[]).some(r=>r.module===m))&&!['ajustes','auditoria','auditoria_revision','accesibilidad','diseno_factura'].includes(m)&&(!access.billingPlan||moduleIncluded(access.billingPlan,m))).every(m=>allowed(prospective,m,write));
   if (result.ajustes !== 'ninguno' && !allData(prospective)) accessError('Los respaldos de Ajustes requieren lectura de todos los módulos por contener información completa.', 400);
   if (result.ajustes === 'escritura' && !allData(prospective, true)) accessError('Restaurar respaldos requiere escritura en todos los módulos.', 400);
   if(result.auditoria!=='ninguno'&&!availableData(false))accessError('La auditoría requiere lectura de los módulos incluidos.',400);

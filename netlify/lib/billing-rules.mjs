@@ -32,7 +32,7 @@ export function entitlement(sub,admin=false,now=Date.now()){
  if(!paid&&now<new Date(sub.trialEndsAt).getTime())return {access:true,state:'prueba',plan:'pro',trialEndsAt:new Date(sub.trialEndsAt).toISOString()};
  return {access:false,state:sub.canceledAt?'cancelado':'vencido',plan:sub.plan};
 }
-export const BLOCKABLE_MODULES = [...catalog.all, 'ventas','compras','gastos','inventario','contabilidad','finanzas','cajas','personal','fiscal','control_personal','decisiones','sucursales','facturacion','costos','proveedores','accesibilidad','ajustes','auditoria'];
+export const BLOCKABLE_MODULES = [...catalog.all, 'ventas','compras','gastos','inventario','contabilidad','finanzas','cajas','personal','fiscal','control_personal','decisiones','sucursales','facturacion','costos','proveedores','accesibilidad','ajustes','auditoria','auditoria_revision'];
 // Las deudas operativas no conceden acceso al libro diario ni a asientos manuales.
 export function planModule(module){return ({...Object.fromEntries(catalog.all.map(id=>[id,id])),cobrar:'ventas',pagar:'compras',asistencia:'control_personal',attendance:'control_personal',vacation:'control_personal',employeeAdvance:'control_personal',simuladores:'decisiones',rentabilidad:'decisiones',pronostico:'decisiones',traslados:'sucursales',compararsucursales:'sucursales'})[module]||module}
 export function moduleIncluded(plan,module){return !!plan&&!(plan.id==='facturacion'&&INVOICE_ONLY_BLOCKED.includes(planModule(module)))&&!(plan.blockedModules||[]).includes(planModule(module))}
