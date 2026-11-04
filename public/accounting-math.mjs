@@ -262,3 +262,11 @@ export function treasuryRateRows(grid,existing=[],baseCurrency='NIO'){
  return grid.map(row=>{if(!Array.isArray(row)||row.length!==4)throw new AccountingValidationError('Usa fecha, moneda, tasa y fuente sin encabezado.');const [date,currency,rate,source]=row.map(v=>String(v).trim());recurringDay(date);const rateMicros=bankRateMicros(rate),key=currency+'-'+date;if(!['NIO','USD'].includes(currency)||currency===baseCurrency||seen.has(key)||source.length<3||source.length>200)throw new AccountingValidationError('Moneda, fuente o fecha duplicada inválida.');seen.add(key);return {id:key,date,currency,rateMicros,rate:rateMicros/1000000,source,rateDate:date}});
 }
 export function treasuryDiscountUsed(entries,invoiceId){return treasurySum(invoiceLinkedEntries(entries,invoiceId).filter(e=>e.allocationJournal).flatMap(e=>e.lines).filter(l=>l.a==='4192').map(l=>moneyCents(l.c)-moneyCents(l.d)))}
+
+// Condiciones futuras: descuento financiero sobre la base, sin modificar IVA ni históricos.
+export function customerPaymentQuote({balanceCents,baseCents,discountBps=0,date,deadline,alreadyPaid=false}) {
+ if(![balanceCents,baseCents,discountBps].every(Number.isSafeInteger)||balanceCents<0||baseCents<0||discountBps<0||discountBps>10000)throw new Error('Condición monetaria inválida.');
+ const eligible=!alreadyPaid&&date<=deadline;
+ const discountCents=eligible?Math.min(balanceCents,Number((BigInt(baseCents)*BigInt(discountBps)+5000n)/10000n)):0;
+ return {balanceCents,discountCents,payableCents:balanceCents-discountCents};
+}

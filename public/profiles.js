@@ -2,6 +2,10 @@
 // Catálogo compartido por el navegador y Functions. Sin acceso al DOM ni datos de clientes.
 (() => {
  const capabilities={
+  comunicacion:{letter:'X',name:'Comunicación con clientes',group:'Ventas',flow:'Revisa el documento y confirma cada envío.'},
+  cobranza:{letter:'Y',name:'Gestión de cobranza',group:'Ventas',flow:'Revisa vencimientos, promesas y recordatorios antes de aprobar.'},
+  terminos_pago:{letter:'Z',name:'Términos de pago',group:'Ventas',flow:'Configura condiciones futuras y confirma descuentos al cobrar; verifica con tu contador.'},
+  emision_recurrente:{letter:'AA',name:'Próximas facturas',group:'Servicio',flow:'Vincula Q o Contratos y confirma cada emisión desde su módulo.'},
   flujo_proyectado:{letter:'S',name:'Flujo proyectado',group:'Finanzas',flow:'Consulta escenarios y supuestos sin modificar la contabilidad.'},
   pagos_lote:{letter:'T',name:'Pagos por lote',group:'Finanzas',flow:'Prepara, aprueba y confirma un lote de proveedores.'},
   anticipos:{letter:'U',name:'Anticipos',group:'Finanzas',flow:'Registra, aplica o devuelve anticipos por tercero.'},

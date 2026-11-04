@@ -1,10 +1,10 @@
 # Seguimiento de las mejoras solicitadas
 
-Fecha: 2026-11-04. **F2.3–F2.7 cuentan con implementación, permisos, pruebas escritas, uiT, descargas y documentación.** No se verificó su funcionamiento; las pruebas y la matriz manual corresponden a la plataforma. Fase 3 no se inició. La evidencia anterior se conserva como historial, no como estado actual.
+Fecha: 2026-11-04. **F2.3–F2.7 cuentan con implementación, permisos, pruebas escritas, uiT, descargas y documentación.** No se verificó su funcionamiento; las pruebas y la matriz manual corresponden a la plataforma. La Fase 3 cuenta ahora con los entregables escritos descritos en fase-3.md, sin verificación funcional. La evidencia anterior se conserva como historial, no como estado actual.
 
 Las casillas indican código, permisos, pruebas escritas, textos por uiT, descargas aplicables y documentación; no equivalen a pruebas aprobadas. Funcionalidad, concurrencia, RLS, integridad relacional y apariencia siguen **no verificadas**. La Fase 1 se conserva sin rehacer. Evidencia previa en [fase-1-cierre-mejoras.md](fase-1-cierre-mejoras.md); ampliación actual en [fase-2-tesoreria-bancos.md](fase-2-tesoreria-bancos.md); estado de Fase 3 en [fase-3-facturacion-cobranza.md](fase-3-facturacion-cobranza.md).
 
-La solicitud actual abarca Fases 2 y 3 y sus controles. Las listas Fases 4–9 se conservan como seguimiento histórico de otra solicitud; no amplían el alcance actual.
+La solicitud actual abarca exclusivamente Fase 3 y sus controles. Las listas Fases 4–9 se conservan como seguimiento histórico de otra solicitud; no amplían el alcance actual.
 
 ## Decisión recibida y excepción exclusiva de PEPS
 
@@ -104,14 +104,14 @@ Estado detallado, límites y comprobaciones: [fase-2-tesoreria-bancos.md](fase-2
 
 ## Fase 3: facturación, cobranza y comunicación
 
-- [ ] F3.1a Correo con PDF de factura, cotización, proforma y estado de cuenta mediante cola e idempotencia existentes.
-- [ ] F3.1b Plantillas por empresa, registro enviado/error/reintento y alternativa wa.me sin API.
-- [ ] F3.2a Reglas de cobranza antes/después del vencimiento y recordatorios sujetos a aprobación.
-- [ ] F3.2b Estado de cuenta, promesas de pago e historial de gestión por cliente.
-- [ ] F3.2c Límites de crédito con advertencia o bloqueo configurable.
-- [ ] F3.3 Términos y descuentos por pronto pago con asiento al cobrar.
-- [ ] F3.4 Emisiones recurrentes ligadas a Q y Contratos, próximas emisiones y confirmación.
-- [ ] F3.Cierre Revisión, permisos, pruebas, uiT, descargas, respaldo, documentación y compatibilidad por archivo.
+- [x] F3.1a Correo con PDF de factura, cotización, proforma y estado de cuenta mediante cola e idempotencia existentes.
+- [x] F3.1b Plantillas por empresa, registro enviado/error/reintento y alternativa wa.me sin API.
+- [x] F3.2a Reglas de cobranza antes/después del vencimiento y recordatorios sujetos a aprobación.
+- [x] F3.2b Estado de cuenta, promesas de pago e historial de gestión por cliente.
+- [x] F3.2c Límites de crédito con advertencia o bloqueo configurable.
+- [x] F3.3 Términos y descuentos por pronto pago con asiento al cobrar.
+- [x] F3.4 Emisiones recurrentes ligadas a Q y Contratos, próximas emisiones y confirmación.
+- [x] F3.Cierre Revisión, permisos, pruebas, uiT, descargas, respaldo, documentación y compatibilidad por archivo.
 
 ## Seguimiento histórico fuera del alcance actual
 
@@ -271,3 +271,30 @@ Estas casillas significan código, permisos, pruebas escritas, textos editoriale
 Validación funcional, concurrencia real, permisos desplegados, RLS, servicio BCN y diseño en dispositivos: **no verificados**. Su matriz está en el documento de fase; no son ítems de implementación omitidos ni se presentan como pruebas aprobadas. No se identificó un impedimento técnico que dejara un entregable solicitado a medio implementar.
 
 Evidencia estática final actual: 31 pruebas nuevas escritas, no ejecutadas; sintaxis comprobada en 22 archivos JavaScript y en los últimos ajustes; huellas de recursos actualizadas y `git diff --check` sin errores. La lista completa de F2.3–F2.7 se recorrió contra sus archivos y se mantuvo separada del historial anterior. Las comprobaciones desplegadas continúan expresamente no verificadas.
+
+## Cierre exclusivo de la solicitud Fase 3 (2026-11-04)
+
+Esta sección expresa el estado actual de esta tarea; las listas transversales y fases ajenas anteriores son seguimiento histórico. Todas las casillas siguientes significan entregables escritos y revisión estática; ninguna afirma pruebas ejecutadas. Evidencia: `docs/fase-3.md`, módulos `client-*`, pruebas `tests/client-communications.test.mjs` y diff de esta tarea.
+
+- [x] B.1 Mantener todos los ítems de Fase 3 y controles con casilla y evidencia.
+- [x] B.2 Trabajar solo Fase 3, siguiendo documentos, cobranza, términos y emisiones; no iniciar otra fase.
+- [x] B.3 Elegir decisiones conservadoras y documentarlas sin cambiar datos históricos.
+- [x] B.4 No dejar funcionalidades parciales activadas ni atribuir imposibilidad técnica inexistente.
+- [x] B.5 Recorrer casillas contra código, permisos, pruebas escritas, uiT, descargas y documentación.
+- [x] C.1 Conservar stack, identidad, cola, almacenamiento, perfiles, sucursales y contabilidad existentes.
+- [x] D.1 Preservar históricos, numeraciones, tablas, migraciones aplicadas y motor contable.
+- [x] D.2 Módulos sin efecto inicial; activación del dueño por sucursal con confirmación y motivo.
+- [x] D.3 Usar centavos enteros y cálculo compartido de pronto pago con recálculo en servidor.
+- [x] D.4 Mutaciones por runOperation/updateCompany con sesión, empresa, membresía, bloqueo, revisión, UUID, auditoría, versiones y cola transaccional.
+- [x] D.5 Permisos propios bloqueables por plan y sucursal del servidor; soporte y empresas limitadas en lectura.
+- [x] D.6 Mantener credenciales en variables de entorno; no añadir secretos ni tokens al navegador.
+- [x] D.7 No afirmar validez fiscal; condiciones editables con aviso verifica con tu contador.
+- [x] D.8 No añadir dependencias, compilación, sondeos ni tareas programadas; reutilizar entrega existente.
+- [x] D.9 Textos por uiT, escape HTML y componentes adaptables existentes; style.css y colores sin cambios.
+- [x] D.10 PDF/CSV auditados con empresa, período, fecha, autor, sucursal y versión; registros incluidos en JSON/ZIP/PDF completo.
+- [x] D.11 Pruebas escritas por reglas nuevas; sintaxis y diff comprobados; no ejecutar pruebas, servidores ni compilaciones.
+- [x] D.12 Revisión de rutas, índices/RLS existentes, centavos, compatibilidad por archivo y documentación de riesgos y reversión.
+- [x] Cierre.1 Estado real de F3.1a–F3.4 y F3.Cierre documentado; sin ítems funcionales omitidos deliberadamente.
+- [x] Cierre.2 docs/fase-3.md con alcance, límites, riesgos, reversión y matriz de cuatro planes, colaboradores, soporte, empresas limitadas, sucursales y dispositivos/temas.
+- [x] Prohibiciones Conservar rutas y capacidades actuales, no activar envíos/cargos/llamadas por defecto, no guardar tarjetas, no migrar destructivamente, no desplegar ni mezclar.
+- [ ] Verificación funcional posterior: ejecución de pruebas por la plataforma, SMTP real, concurrencia, RLS/rol real y matriz visual/manual. Estado: no verificado; no equivale a ausencia de código.
