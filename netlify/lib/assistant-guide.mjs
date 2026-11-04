@@ -1,6 +1,30 @@
 // Guía editorial de las vistas y formularios reales; sin datos de clientes.
 export const assistantGuide = [
   {
+  "id": "servicios_tarifas",
+  "modulo": "inventario",
+  "titulo": "Servicios y tarifas sin inventario",
+  "palabras_clave": [
+    "servicios",
+    "tarifas",
+    "software",
+    "agencia",
+    "freelance",
+    "corretaje",
+    "belleza",
+    "sin stock",
+    "hora",
+    "sesión",
+    "membresía",
+    "servicio",
+    "unidad de cobro",
+    "salón",
+    "consultoría"
+  ],
+  "texto": "1. Abre Servicios y tarifas en una empresa de servicios. Sin artículos inventariables, muestra código, nombre, unidad de cobro, precio e IVA configurado. No muestra existencias ni valoración. Una etiqueta personalizada conserva prioridad.\n2. Pulsa Crear servicio e indica nombre, unidad, precio sin IVA y porcentaje de IVA. Puedes cobrar por hora, sesión, mes o visita. El servicio no recibe stock ni costo inventariable. La tasa cero no acredita exención: verifica con tu contador.\n3. Kardex, Compras y Traslados se ocultan del menú automático mientras solo hay servicios. Crear producto con inventario abre el formulario habitual. Un artículo histórico, incluso sin existencia, permite mostrar esas herramientas. Ningún producto anterior se convierte ni se borra.\n4. El dueño puede seleccionar Visible u Oculto desde Ajustes y respaldo, Personalizar mi sistema. Los permisos y el plan siguen aplicándose. Más módulos conserva accesos autorizados cuando el plan ofrece esa pantalla. Los perfiles nuevos reutilizan capacidades existentes. Contratos mantiene la generación confirmada de períodos; esta entrega no añade cargos automáticos, paquetes ni consumibles."
+},
+
+  {
     id:'transferencias_servicio',modulo:'general',titulo:'Pagar Acontec por transferencia y WhatsApp',
     palabras_clave:['transferencia','whatsapp','pago en revisión','canal de cobro','referencia','renovar'],
     texto:'1. Abre Mi suscripción y pagos y elige un plan y periodo. El resumen de Pagadito conserva su botón Continuar al pago seguro. Al final aparece Pagar por transferencia, cuando Acontec habilita esa opción. Solo el dueño gestiona pagos; los colaboradores mantienen sus permisos habituales. Si tu cuenta paga por Pagadito, contacta a Acontec para solicitar un cambio de canal. No canceles ni repitas cobros sin conciliarlos.\n2. Selecciona una moneda con cuenta bancaria activa. Revisa banco, titular, número, monto y código ACT. Para córdobas se muestra un tipo de cambio con fecha. Copiar cuenta ayuda a evitar errores, pero comprueba siempre el destinatario en tu banco. El código identifica esta solicitud; conservarlo no acredita un pago.\n3. Tras transferir, confirma la solicitud y usa Enviar comprobante por WhatsApp. La solicitud queda en revisión y el enlace incluye plan, periodo, moneda, importe, referencia y correo. Adjunta el comprobante en WhatsApp. No envíes contraseñas ni datos de tarjeta.\n4. La solicitud no amplía la prueba ni el acceso pagado. Acontec compara el comprobante con el banco antes de aprobar o rechazar. Una solicitud sin confirmar vence a los siete días. Si aparece rechazada, revisa el motivo antes de preparar otra. La vigencia, gracia y suspensión se comprueban en el servidor; el asistente solo explica las pantallas y no confirma pagos, revisa comprobantes ni consulta cifras. Verifica con tu contador cualquier duda contable.'

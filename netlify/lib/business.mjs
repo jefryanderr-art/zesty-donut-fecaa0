@@ -42,7 +42,7 @@ function produce(data,access,session,recipe,n,ctx){
 export function prepareBusinessSale(data,access,session,body,ctx){
  const records=data.businessRecords||[],allocations=[];const demand=new Map();for(const i of body.items||[])demand.set(i.p,qty((demand.get(i.p)||0)+qty(i.q)));
  for(const [pid,q]of demand){
-  const p=data.products.find(p=>p.id===pid);const reserved=records.filter(r=>r.id!==ctx.trustedSourceId&&r.module==='rutas'&&r.consignment&&r.status==='Preparada'&&!r.entryId).flatMap(r=>r.items||[]).filter(i=>i.p===pid).reduce((s,i)=>s+i.q,0);if(p&&p.kind!=='service'){ctx.check(p.stock-reserved>=q||records.some(r=>r.module==='produccion'&&r.productId===pid&&r.autoProduce&&r.status==='Activa'),'La existencia disponible está comprometida en consignación.');}
+  const p=data.products.find(p=>p.id===pid);if(p?.kind==='service')continue;const reserved=records.filter(r=>r.id!==ctx.trustedSourceId&&r.module==='rutas'&&r.consignment&&r.status==='Preparada'&&!r.entryId).flatMap(r=>r.items||[]).filter(i=>i.p===pid).reduce((s,i)=>s+i.q,0);if(p&&p.kind!=='service'){ctx.check(p.stock-reserved>=q||records.some(r=>r.module==='produccion'&&r.productId===pid&&r.autoProduce&&r.status==='Activa'),'La existencia disponible está comprometida en consignación.');}
 
   const recipe=records.find(r=>r.module==='produccion'&&r.productId===pid&&r.autoProduce&&r.status==='Activa');if(recipe){const missing=qty(Math.max(0,q+reserved-(data.products.find(p=>p.id===pid)?.stock||0)));if(missing)produce(data,access,session,recipe,missing,{...ctx,body});}
   const lots=records.filter(r=>r.module==='lotes'&&r.productId===pid&&r.status==='Disponible'&&(!r.due||r.due>=body.date)).sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999')||a.date.localeCompare(b.date));

@@ -252,7 +252,7 @@ No se documentaron como disponibles lectura de cifras desde el chat, acciones so
 
 ## Tipos de negocio y capacidades compartidas
 
-Acontec incorpora un catálogo de 26 perfiles en `public/profiles.js`. Las empresas anteriores conservan **Comercio general**, sus datos y las rutas habituales. Al crear la empresa o desde **Ajustes → Personalizar mi sistema**, el dueño elige rubro, etiquetas y módulos del menú. **Más módulos** permite abrir otras herramientas según permisos y plan; ocultar una ruta no elimina información. El arranque opcional agrega ejemplos editables sin precios, IVA ni saldos únicamente a empresas nuevas vacías.
+Acontec incorpora un catálogo de 32 perfiles en `public/profiles.js`. Las empresas anteriores conservan **Comercio general**, sus datos y las rutas habituales. Al crear la empresa o desde **Ajustes → Personalizar mi sistema**, el dueño elige rubro, etiquetas y módulos del menú. **Más módulos** permite abrir otras herramientas según permisos y plan; ocultar una ruta no elimina información. El arranque opcional agrega ejemplos editables sin precios, IVA ni saldos únicamente a empresas nuevas vacías.
 
 La entrega añade capacidades para documentos de venta, impresión, variantes/series, medidas, cuentas abiertas, despacho, agenda, proyectos, comisiones, lotes, producción, cartera otorgada/empeño, contratos, reservas, rutas y aportes. Las facturas y costos usan los flujos existentes y los asientos explícitos se confirman con cuentas configuradas. Las 16 capacidades se pueden bloquear en los planes del Centro de control. Los colaboradores requieren permisos propios; el perfil no concede acceso.
 
