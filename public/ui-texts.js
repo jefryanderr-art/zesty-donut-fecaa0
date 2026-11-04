@@ -2153,3 +2153,689 @@ Object.assign(UI_CATALOG, {
 });
 
 Object.assign(UI_CATALOG, {"employment.flow": {original: "Configura textos y descarga constancias de trabajo o ingresos; verifica con tu contador.", group: "Personal y nómina", max: 250}});
+
+Object.assign(UI_CATALOG, {
+  "personnel.notice": {
+    "original": "Aviso",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.reason": {
+    "original": "Motivo",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.confirmed": {
+    "original": "Confirmo los datos y esta operación",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.employee": {
+    "original": "Empleado",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.cash": {
+    "original": "Cuenta de pago",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.calendar": {
+    "original": "Calendario de solicitudes",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.loading": {
+    "original": "Consultando personal…",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.legacy": {
+    "original": "Adelantos históricos",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.requests": {
+    "original": "Solicitudes",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.from": {
+    "original": "Desde",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.to": {
+    "original": "Hasta",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.status": {
+    "original": "Estado",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.actions": {
+    "original": "Acciones",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.payment": {
+    "original": "Confirmar pago",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.empty": {
+    "original": "No hay registros para este período. Crea el primero desde Nuevo registro.",
+    "group": "Personal y nómina",
+    "max": 219
+  },
+  "personnel.areaTotals": {
+    "original": "Costo total por área y estado",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.area": {
+    "original": "Área",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.gross": {
+    "original": "Salarios (centavos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.charges": {
+    "original": "Cargas (centavos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.provisions": {
+    "original": "Provisiones (centavos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.labor": {
+    "original": "Costo total (centavos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.disabled": {
+    "original": "Apagado. El dueño activa cada módulo por sucursal con motivo y confirmación.",
+    "group": "Personal y nómina",
+    "max": 228
+  },
+  "personnel.error": {
+    "original": "No se pudo consultar el módulo.",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.apply": {
+    "original": "Aplicar",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.enabled": {
+    "original": "Habilitar módulo",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.save": {
+    "original": "Guardar",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.parameterHelp": {
+    "original": "Sin tasas legales predefinidas. Un punto básico equivale a 0,01 %. Cada versión rige para nuevas planillas; no recalcula las anteriores.",
+    "group": "Personal y nómina",
+    "max": 408
+  },
+  "personnel.tiersHelp": {
+    "original": "Comisión marginal: cada tasa se aplica solo a su tramo. El primer tramo empieza en cero. El resultado se registra manualmente con motivo; no se infiere la atribución de ventas.",
+    "group": "Personal y nómina",
+    "max": 528
+  },
+  "personnel.includeLoans": {
+    "original": "Reservar próxima cuota de cada préstamo",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.includeTargets": {
+    "original": "Incluir comisiones por meta del período",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.payrollHelp": {
+    "original": "Se prepara una planilla pendiente con reglas vigentes al inicio. Las cuotas quedan reservadas hasta pagarla. El pago confirmado genera salario, retenciones, cargas y provisiones en un único asiento. La nómina clásica mantiene su cálculo.",
+    "group": "Personal y nómina",
+    "max": 711
+  },
+  "personnel.decision": {
+    "original": "Resolver solicitud",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.net": {
+    "original": "Neto",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.total": {
+    "original": "Costo laboral total",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.pay": {
+    "original": "Revisar y pagar",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.company": {
+    "original": "Empresa",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.branch": {
+    "original": "Sucursal",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.generated": {
+    "original": "Generado",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.author": {
+    "original": "Autor",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.version": {
+    "original": "Versión",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.revision": {
+    "original": "Revisión",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.cancel": {
+    "original": "Cancelar pendiente",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.cancelHelp": {
+    "original": "Libera cuotas y metas reservadas. Conserva la ficha y su historial.",
+    "group": "Personal y nómina",
+    "max": 201
+  },
+  "personnel.organize": {
+    "original": "Organizar cuotas",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.legacyHelp": {
+    "original": "Confirma el saldo pendiente después de conciliar los descuentos manuales anteriores. No se modifica el adelanto original ni se registra otro desembolso. Evita volver a descontarlo desde la nómina clásica.",
+    "group": "Personal y nómina",
+    "max": 612
+  },
+  "personnel.name": {
+    "original": "Concepto",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.amountCents": {
+    "original": "Saldo pendiente confirmado en centavos",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.count": {
+    "original": "Número de cuotas",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.country": {
+    "original": "País",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.effective": {
+    "original": "Vigencia",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.baseCents": {
+    "original": "Salario del período en centavos",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.targetCents": {
+    "original": "Meta mínima en centavos",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.date": {
+    "original": "Fecha",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.threshold": {
+    "original": "Inicio del tramo en centavos",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.rate": {
+    "original": "Tasa en puntos básicos",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.prestamos_personal": {
+    "original": "Adelantos y préstamos a empleados",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.vacaciones_personal": {
+    "original": "Vacaciones y pasivo laboral",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.planillas_area": {
+    "original": "Planillas por sucursal y área",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.comisiones_meta": {
+    "original": "Comisiones por meta",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.parametros_laborales": {
+    "original": "Parámetros laborales por país",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.period": {
+    "original": "Elegir período",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.activation": {
+    "original": "Activar o desactivar",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.new": {
+    "original": "Nuevo registro",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.pdf": {
+    "original": "Descargar PDF",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.csv": {
+    "original": "Descargar CSV",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.approve": {
+    "original": "Aprobar",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.reject": {
+    "original": "Rechazar",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.addTier": {
+    "original": "Agregar tramo",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.prestamos_personal.column.0": {
+    "original": "Concepto",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.prestamos_personal.column.1": {
+    "original": "Empleado",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.prestamos_personal.column.2": {
+    "original": "Capital (centavos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.prestamos_personal.column.3": {
+    "original": "Saldo sin pagar (centavos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.prestamos_personal.column.4": {
+    "original": "Cuotas (centavos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.vacaciones_personal.column.0": {
+    "original": "Empleado",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.vacaciones_personal.column.1": {
+    "original": "Días devengados",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.vacaciones_personal.column.2": {
+    "original": "Días utilizados o aprobados",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.vacaciones_personal.column.3": {
+    "original": "Saldo en días",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.vacaciones_personal.column.4": {
+    "original": "Pasivo (centavos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.planillas_area.column.0": {
+    "original": "Empleado",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.planillas_area.column.1": {
+    "original": "Área",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.planillas_area.column.2": {
+    "original": "Sucursal",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.planillas_area.column.3": {
+    "original": "Desde",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.planillas_area.column.4": {
+    "original": "Hasta",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.planillas_area.column.5": {
+    "original": "Salario y comisiones (centavos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.planillas_area.column.6": {
+    "original": "Cargas (centavos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.planillas_area.column.7": {
+    "original": "Provisiones (centavos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.planillas_area.column.8": {
+    "original": "Costo total (centavos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.planillas_area.column.9": {
+    "original": "Neto (centavos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.planillas_area.column.10": {
+    "original": "Estado",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.comisiones_meta.column.0": {
+    "original": "Empleado",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.comisiones_meta.column.1": {
+    "original": "Desde",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.comisiones_meta.column.2": {
+    "original": "Hasta",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.comisiones_meta.column.3": {
+    "original": "Resultado confirmado (centavos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.comisiones_meta.column.4": {
+    "original": "Meta (centavos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.comisiones_meta.column.5": {
+    "original": "Comisión (centavos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.comisiones_meta.column.6": {
+    "original": "Estado",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.parametros_laborales.column.0": {
+    "original": "País",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.parametros_laborales.column.1": {
+    "original": "Vigencia",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.parametros_laborales.column.2": {
+    "original": "Días por mes",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.parametros_laborales.column.3": {
+    "original": "Días por año",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.parametros_laborales.column.4": {
+    "original": "Vacaciones anuales",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.parametros_laborales.column.5": {
+    "original": "Impuesto (puntos básicos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.parametros_laborales.column.6": {
+    "original": "Seguro trabajador (puntos básicos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.parametros_laborales.column.7": {
+    "original": "Cargas patronales (puntos básicos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.parametros_laborales.column.8": {
+    "original": "Provisiones (puntos básicos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.parametros_laborales.column.9": {
+    "original": "Versión",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.weekday.0": {
+    "original": "L",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.weekday.1": {
+    "original": "M",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.weekday.2": {
+    "original": "X",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.weekday.3": {
+    "original": "J",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.weekday.4": {
+    "original": "V",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.weekday.5": {
+    "original": "S",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.weekday.6": {
+    "original": "D",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.status.Activa": {
+    "original": "Activa",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.status.Inactiva": {
+    "original": "Inactiva",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.status.Pendiente": {
+    "original": "Pendiente",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.status.Aprobada": {
+    "original": "Aprobada",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.status.Rechazada": {
+    "original": "Rechazada",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.status.Pagada": {
+    "original": "Pagada",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.status.Cancelada": {
+    "original": "Cancelada",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.status.Liquidada": {
+    "original": "Liquidada",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.daysPerMonth": {
+    "original": "Días por mes",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.daysPerYear": {
+    "original": "Días por año",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.vacationDays": {
+    "original": "Vacaciones anuales en días",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.taxBp": {
+    "original": "Impuesto en puntos básicos",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.workerBp": {
+    "original": "Seguro trabajador en puntos básicos",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.employerBp": {
+    "original": "Cargas patronales en puntos básicos",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.provisionBp": {
+    "original": "Provisiones en puntos básicos",
+    "group": "Personal y nómina",
+    "max": 200
+  }
+});
+
+Object.assign(UI_CATALOG, {
+  "personnel.concept": {
+    "original": "Concepto",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.amount": {
+    "original": "Importe",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.commission": {
+    "original": "Comisión por meta",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.tax": {
+    "original": "Impuesto",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.worker": {
+    "original": "Seguro del trabajador",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.deduction": {
+    "original": "Descuento confirmado de cuotas",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.loan": {
+    "original": "Préstamo",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "personnel.installment": {
+    "original": "Cuota",
+    "group": "Personal y nómina",
+    "max": 200
+  }
+});

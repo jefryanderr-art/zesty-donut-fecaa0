@@ -324,3 +324,20 @@ Las casillas siguientes acreditan implementación y pruebas escritas, no funcion
 - [ ] Validación funcional por la plataforma: pruebas, permisos desplegados, concurrencia, RLS, exportaciones y matriz visual. No ejecutada en esta sesión por instrucción expresa.
 
 Archivos nuevos: `netlify/lib/analysis.mjs`, `public/financial-analysis.js` y las cuatro pruebas mencionadas en el documento de fase. Integraciones aditivas en `business.mjs`, `operations.mjs`, `policies.mjs`, `profiles.js`, `access.js` e `index.html`. Sin migraciones nuevas, despliegue ni mezcla con principal.
+
+
+## Solicitud actual: cinco módulos de personal y nómina (2026-11-04)
+
+Este estado sustituye las casillas históricas pendientes de F7.1–F7.4 y F7.6. Las constancias F7.5 se conservaron sin rehacer. Las casillas acreditan implementación y pruebas escritas, no ejecución funcional.
+
+- [x] F7.1 Adelantos y préstamos: interfaz, cuotas exactas, saldo histórico conciliado y descuento confirmado al pagar planilla.
+- [x] F7.2 Vacaciones: calendario, solicitud/aprobación, saldo y pasivo laboral estimado, PDF/CSV.
+- [x] F7.3 Planillas por sucursal y área con salario, cargas, provisiones, preparación/pago/cancelación y totales PDF/CSV.
+- [x] F7.4 Comisiones por meta con escalas marginales, resultado confirmado y reserva única en planilla; comisiones fijas conservadas.
+- [x] F7.6 Parámetros laborales editables por país/vigencia, sin tasas legales predefinidas y con copias en nuevas planillas.
+- [x] Cinco permisos propios de servidor, Personal adicional, módulos apagados, activación exclusiva del dueño con motivo/confirmación, operaciones transaccionales y centavos enteros.
+- [x] Interfaz uiT española y CSS aditivo adaptable con colores heredados; PDF/CSV auditados; documentación, guía y cinco pruebas breves escritas.
+- [x] Conservación de fórmulas históricas, nóminas pagadas, constancias, style.css, dependencias y migraciones; sin despliegue ni mezcla.
+- [ ] Validación funcional: pruebas por la plataforma, concurrencia, permisos reales, RLS, exportaciones, respaldos y matriz visual. No ejecutada en esta sesión.
+
+Alcance, reglas conservadoras, archivos y reversión: docs/fase-7.md, sección de entrega de los cinco módulos. La verificación local se limitó a sintaxis y formato; no acredita funcionamiento desplegado.

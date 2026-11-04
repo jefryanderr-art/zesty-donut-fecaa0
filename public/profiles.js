@@ -2,6 +2,12 @@
 // Catálogo compartido por el navegador y Functions. Sin acceso al DOM ni datos de clientes.
 (() => {
  const capabilities={
+  prestamos_personal:{letter:'AO',name:'Adelantos y préstamos a empleados',group:'Personal',flow:'Activación del dueño con motivo; verifica con tu contador.'},
+  vacaciones_personal:{letter:'AP',name:'Vacaciones y pasivo laboral',group:'Personal',flow:'Activación del dueño con motivo; verifica con tu contador.'},
+  planillas_area:{letter:'AQ',name:'Planillas por sucursal y área',group:'Personal',flow:'Activación del dueño con motivo; verifica con tu contador.'},
+  comisiones_meta:{letter:'AR',name:'Comisiones por meta',group:'Personal',flow:'Activación del dueño con motivo; verifica con tu contador.'},
+  parametros_laborales:{letter:'AS',name:'Parámetros laborales por país',group:'Personal',flow:'Activación del dueño con motivo; verifica con tu contador.'},
+
   indicadores_financieros:{letter:'AK',name:'Indicadores financieros',group:'Finanzas',flow:'Informe de apoyo; verifica con tu contador.'},
   costeo_abc:{letter:'AL',name:'Costeo por actividades',group:'Finanzas',flow:'Informe de apoyo; verifica con tu contador.'},
   tableros_rol:{letter:'AM',name:'Cuadros de mando por rol',group:'Finanzas',flow:'Informe de apoyo; verifica con tu contador.'},
