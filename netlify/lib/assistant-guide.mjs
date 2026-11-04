@@ -1,5 +1,60 @@
 // Guía editorial de las vistas y formularios reales; sin datos de clientes.
 export const assistantGuide = [
+{
+  "id": "tesoreria_flujo_proyectado",
+  "modulo": "flujo_proyectado",
+  "titulo": "Flujo proyectado y escenarios",
+  "palabras_clave": [
+    "flujo proyectado y escenarios",
+    "flujo_proyectado",
+    "tesorería"
+  ],
+  "texto": "1. Abre Más módulos y selecciona Flujo de efectivo proyectado. El dueño puede activar el módulo para operaciones futuras, con confirmación y motivo. El informe es de consulta y no crea cobros ni pagos.\n2. Selecciona fechas, semana o mes y reserva mínima en centavos. Revisa optimista, base y pesimista; cada escenario muestra retraso de cobro y puntos básicos de incobrables editables. Cien puntos básicos equivalen a uno por ciento.\n3. El semáforo y el primer faltante se calculan por día, aunque la tabla agrupe semanas o meses. Las fuentes son facturas pendientes, plantillas sin confirmar, capacidad Q sin facturar, nómina pendiente, impuestos y cuotas de préstamos. Los documentos en divisas conservan la moneda original cuando existe.\n4. Las fuentes excluidas por permisos o plan se advierten: el resultado puede ser incompleto. El método indirecto muestra resultado, ajustes y diferencia frente al efectivo del método actual; no oculta descuadres. Descarga PDF o CSV con empresa, período, autor, fecha y versión.\n5. No garantiza liquidez futura; verifica con tu contador."
+},
+{
+  "id": "tesoreria_pagos_lote",
+  "modulo": "pagos_lote",
+  "titulo": "Preparación y aprobación de pagos por lote",
+  "palabras_clave": [
+    "preparación y aprobación de pagos por lote",
+    "pagos_lote",
+    "tesorería"
+  ],
+  "texto": "1. Desde Más módulos abre Pagos a proveedores por lote. El dueño activa el módulo con motivo y configura quién prepara, quién aprueba y el umbral en centavos. Se necesitan los permisos adicionales de proveedores, contabilidad y caja según la acción.\n2. Preparar lote permite seleccionar varias facturas pendientes, revisar vencimientos e indicar importes parciales. Solo se admite descuento cuando la factura ya contiene condiciones documentadas y vigentes. Preparar no contabiliza ni transfiere dinero.\n3. Al alcanzar el umbral, otra persona incluida en los aprobadores debe confirmar la aprobación; el preparador no aprueba su propio lote. También se puede rechazar antes del pago. Registrar pago confirmado vuelve a comprobar cada deuda bajo bloqueo de la empresa y produce un único asiento con asignación por factura.\n4. Caja general, un fondo de caja chica autorizado o un banco de moneda base deben tener saldo suficiente también en fechas posteriores. La constancia se descarga en PDF y el detalle en CSV. Un lote pagado solo se corrige por reversa del dueño con motivo, una vez.\n5. No se conecta al banco ni ejecuta transferencias. Verifica con tu contador."
+},
+{
+  "id": "tesoreria_anticipos",
+  "modulo": "anticipos",
+  "titulo": "Anticipos de terceros y depósitos vinculados",
+  "palabras_clave": [
+    "anticipos de terceros y depósitos vinculados",
+    "anticipos",
+    "tesorería"
+  ],
+  "texto": "1. Abre Anticipos por tercero desde Más módulos. Su activación corresponde al dueño, con confirmación y motivo. Registrar anticipo exige tercero identificado, importe en centavos y cuenta de dinero autorizada.\n2. Los anticipos de clientes se reconocen como pasivo y los de proveedores como activo; no se convierten en ingresos o gastos al recibirlos. Aplicar a facturas permite repartir un anticipo total o parcialmente entre varias deudas del mismo tercero en la sucursal seleccionada. El servidor comprueba el saldo del anticipo y de cada factura antes del asiento.\n3. Devolver anticipo registra una devolución explícita únicamente por el saldo sin aplicar, conservando su historial. Los depósitos existentes de Reservas, Contratos y Suscripciones aparecen como gestionados desde el módulo de origen. Su aplicación usa la ficha y cuenta originales; no crea otro anticipo.\n4. La devolución continúa en su pantalla original. No canceles ni cierres una ficha con depósito pendiente: primero debes aplicarlo o devolverlo. Los informes y constancias se descargan en PDF y CSV, sin borrar asientos contabilizados.\n5. Revisa empresa, sucursal y tercero antes de confirmar; verifica con tu contador."
+},
+{
+  "id": "tesoreria_revalorizacion",
+  "modulo": "revalorizacion",
+  "titulo": "Revalorización mensual y reversa confirmada",
+  "palabras_clave": [
+    "revalorización mensual y reversa confirmada",
+    "revalorizacion",
+    "tesorería"
+  ],
+  "texto": "1. La revalorización permanece apagada hasta que el dueño la activa con confirmación y motivo. Solo afecta cierres posteriores a esa activación. Desde Más módulos abre Revalorización cambiaria y selecciona Revisar vista previa de cierre.\n2. La fecha debe ser el último día de un mes terminado, abierto contablemente. Importa previamente una tasa de ese día con fuente identificada. La vista incluye bancos o tarjetas en otra moneda y documentos originales por cobrar o pagar; no adivina la moneda de facturas históricas que carecen de ella.\n3. Revisa saldos originales, valor contable, valor de cierre y diferencia antes de confirmar el asiento. La confirmación vuelve a calcular la vista y rechaza una huella desactualizada. Solo hay un cierre por sucursal y mes; cada exposición queda identificada dentro de su documento.\n4. Después, Confirmar reversa propone automáticamente el primer día del mes siguiente y registra las líneas inversas una vez, con confirmación. No existe tarea que contabilice sin intervención. Los períodos bloqueados y las conciliaciones cerradas conservan sus guardas.\n5. Descarga el detalle y la vista previa en PDF o CSV. Nunca se recalculan históricos; verifica con tu contador."
+},
+{
+  "id": "tesoreria_tipos_cambio",
+  "modulo": "tipos_cambio",
+  "titulo": "Importación de tasas y consulta oficial opcional",
+  "palabras_clave": [
+    "importación de tasas y consulta oficial opcional",
+    "tipos_cambio",
+    "tesorería"
+  ],
+  "texto": "1. Abre Tipos de cambio desde Más módulos. El dueño activa la importación con confirmación y motivo; la consulta oficial tiene un interruptor adicional, inicialmente desactivado. Importar tasas con vista previa admite archivo CSV o XLSX de hasta un megabyte y mil filas.\n2. También puedes pegar filas separadas por tabuladores, sin encabezado, con fecha, moneda, tasa y fuente. Usa fechas completas y tasa positiva de hasta seis decimales, expresada como unidades de moneda base por unidad original. No se admiten fechas duplicadas para la misma moneda, moneda base ni tasas futuras.\n3. Revisa la vista previa y confirma con motivo. Cada tasa conserva fuente, fecha y responsable; no modifica las operaciones registradas que ya tienen su tasa. Consultar fuente oficial usa el servicio público del Banco Central de Nicaragua solamente por acción manual, si está habilitado y configurado.\n4. Una falta de red, cambio de formato o configuración ausente devuelve un aviso; puedes continuar importando manualmente. La consulta no guarda tasas automáticamente: vuelve a importar y revisar las filas. Descarga el registro en PDF o CSV.\n5. Verifica con tu contador."
+},
  {
  id:'bancos_conciliacion',modulo:'bancos',titulo:'Bancos y conciliación de extractos',
  palabras_clave:['banco','conciliación bancaria','extracto','mapeo','CSV','XLSX','tránsito','tarjeta empresarial'],

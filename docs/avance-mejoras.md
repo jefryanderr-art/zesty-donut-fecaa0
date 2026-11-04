@@ -1,6 +1,6 @@
 # Seguimiento de las mejoras solicitadas
 
-Fecha: 2026-11-04. **La solicitud de cerrar las Fases 2 y 3 no se completó.** Se escribió la ampliación bancaria de F2.1–F2.2 con apertura en moneda original, conversiones futuras explícitas y activación por empresa; F2.3–F2.7 continúan sin implementación nueva y no se inició Fase 3. No se demostró un impedimento técnico externo ni se obtuvo una excepción de alcance para esos faltantes. No se presenta esta entrega parcial como cumplimiento de B.2/B.4.
+Fecha: 2026-11-04. **F2.3–F2.7 cuentan con implementación, permisos, pruebas escritas, uiT, descargas y documentación.** No se verificó su funcionamiento; las pruebas y la matriz manual corresponden a la plataforma. Fase 3 no se inició. La evidencia anterior se conserva como historial, no como estado actual.
 
 Las casillas indican código, permisos, pruebas escritas, textos por uiT, descargas aplicables y documentación; no equivalen a pruebas aprobadas. Funcionalidad, concurrencia, RLS, integridad relacional y apariencia siguen **no verificadas**. La Fase 1 se conserva sin rehacer. Evidencia previa en [fase-1-cierre-mejoras.md](fase-1-cierre-mejoras.md); ampliación actual en [fase-2-tesoreria-bancos.md](fase-2-tesoreria-bancos.md); estado de Fase 3 en [fase-3-facturacion-cobranza.md](fase-3-facturacion-cobranza.md).
 
@@ -85,7 +85,7 @@ El propietario confirmó que **solo PEPS queda exceptuado de la secuencia**. F5.
 
 ## Fase 2: tesorería y bancos
 
-Estado detallado, límites y comprobaciones: [fase-2-tesoreria-bancos.md](fase-2-tesoreria-bancos.md). La conciliación en moneda base y otra moneda está escrita y es habilitable por el dueño con confirmación y motivo. F2.3–F2.7 siguen sin implementar; la fase completa no está cerrada. No se presentan como terminados ni reciben la excepción de PEPS.
+Estado detallado, límites y comprobaciones: [fase-2-tesoreria-bancos.md](fase-2-tesoreria-bancos.md). La conciliación en moneda base y otra moneda está escrita y es habilitable por el dueño con confirmación y motivo. F2.3–F2.7 se implementaron en esta entrega. Las casillas acreditan entregables escritos y revisión estática, no pruebas funcionales aprobadas.
 
 - [x] F2.0 Sustituir el bloqueo fijo por activación del dueño por empresa, inicialmente apagada, con confirmación, motivo, revisión, idempotencia y auditoría; desactivar conserva consulta y cierres.
 - [x] F2.1a Importación CSV/XLSX de extractos con vista previa y mapeos guardados por banco; OFX solo si es viable sin dependencia pesada.
@@ -93,14 +93,14 @@ Estado detallado, límites y comprobaciones: [fase-2-tesoreria-bancos.md](fase-2
 - [x] F2.1c Partidas conciliadas, pendientes y en tránsito y asiento confirmado de movimientos sin contrapartida.
 - [x] F2.1d Reporte libro/banco/diferencia y cierre de conciliación que impide editar lo conciliado.
 - [x] F2.2 Entidades NIO/USD (banco, máscara, moneda, cuenta exclusiva y ciclos de tarjeta), apertura original explícita y conversiones futuras sin inferir datos históricos; ver límites operativos, pruebas escritas y descargas en documento de fase.
-- [ ] F2.3a Proyección desde cobrar, pagar, recurrentes, nómina, impuestos y préstamos.
-- [ ] F2.3b Escenarios optimista/base/pesimista, liquidez y fecha de faltante.
-- [ ] F2.3c Método indirecto reconciliado con el estado de flujo.
-- [ ] F2.4 Lotes de pago a proveedores con lista, aprobación por monto, constancia y asiento único.
-- [ ] F2.5 Anticipos de clientes/proveedores como pasivo/activo, aplicación y devolución.
-- [ ] F2.6 Revaluación cambiaria mensual y reversa confirmadas y protegidas por interruptor.
-- [ ] F2.7 Tasas por archivo/pegado, fuente y fecha y adaptador oficial optativo apagado, tolerante a falta de red.
-- [ ] F2.Cierre Revisión, permisos, pruebas, uiT, descargas, respaldo, documentación y compatibilidad por archivo.
+- [x] F2.3a Proyección desde cobrar, pagar, recurrentes, nómina, impuestos y préstamos.
+- [x] F2.3b Escenarios optimista/base/pesimista, liquidez y fecha de faltante.
+- [x] F2.3c Método indirecto reconciliado con el estado de flujo.
+- [x] F2.4 Lotes de pago a proveedores con lista, aprobación por monto, constancia y asiento único.
+- [x] F2.5 Anticipos de clientes/proveedores como pasivo/activo, aplicación y devolución.
+- [x] F2.6 Revaluación cambiaria mensual y reversa confirmadas y protegidas por interruptor.
+- [x] F2.7 Tasas por archivo/pegado, fuente y fecha y adaptador oficial optativo apagado, tolerante a falta de red.
+- [x] F2.Cierre Revisión, permisos, pruebas, uiT, descargas, respaldo, documentación y compatibilidad por archivo.
 
 ## Fase 3: facturación, cobranza y comunicación
 
@@ -215,8 +215,59 @@ Se implementaron las funciones descritas en el documento de cierre de Fase 1. Se
 
 La revisión adicional corrigió la colisión de Q con la ruta histórica `recurrentes`: Q usa `suscripciones`, sin sustituir Plantillas y devengos. Se escribió una prueba de regresión. Se añadió respaldo PDF completo autorizado y rechazo de períodos invertidos. La Fase 2 conserva `BANKS_READY=false` y `BANKS_UI_READY=false`; no se pueden activar mediante cuerpo de petición, variable de entorno ni restauración. Hay pruebas escritas de la guarda, importes, importación, permisos, máscaras, conciliación y cierre. El tratamiento de otra moneda y F2.3–F2.7 no están implementados, por lo que no se marca esta fase ni se inicia otra. Se comprobó sintaxis en 32 archivos JavaScript y el diff; no se ejecutaron pruebas.
 
-## Evidencia de la ampliación bancaria actual
+## Evidencia histórica de la ampliación bancaria anterior
 
 Se revisó el diff de la ampliación, la ruta existente de operaciones, los controles de acceso reutilizados, la protección de configuraciones y las guardas de actualización/restauración. Se prepararon pruebas de moneda original y se actualizaron las de moneda base para exigir activación explícita. Se ejecutaron `node --check`, `node scripts/version-assets.mjs` y `git diff --check`; no se ejecutaron pruebas, compilaciones ni servidores. No hubo migraciones ni cambios de esquema. Los archivos modificados y su compatibilidad están enumerados en el documento de Fase 2. No se hicieron commits, despliegues ni mezclas manuales.
 
-Revisión final de casillas: solo F2.0, F2.1a–d y F2.2 se marcaron en la fase actual. F2.3a–c, F2.4, F2.5, F2.6 y F2.7 permanecen sin marcar por falta de implementación, con continuación concreta en el documento de fase; no se justifica su omisión como impedimento externo. F2.Cierre permanece abierto. F3.1a–b, F3.2a–c, F3.3, F3.4 y F3.Cierre permanecen sin marcar y sin código nuevo. Los controles transversales de la entrega completa no se consideran satisfechos por esta ampliación parcial. La lectura documentada del contexto no acredita validación funcional.
+Revisión histórica de casillas de la entrega anterior: solo F2.0, F2.1a–d y F2.2 se marcaron en la fase actual. F2.3a–c, F2.4, F2.5, F2.6 y F2.7 permanecen sin marcar por falta de implementación, con continuación concreta en el documento de fase; no se justifica su omisión como impedimento externo. F2.Cierre permanece abierto. F3.1a–b, F3.2a–c, F3.3, F3.4 y F3.Cierre permanecen sin marcar y sin código nuevo. Los controles transversales de la entrega completa no se consideran satisfechos por esta ampliación parcial. La lectura documentada del contexto no acredita validación funcional.
+
+## Lista de cierre de la tarea actual: F2.3–F2.7
+
+Estas casillas significan código, permisos, pruebas escritas, textos editoriales, descargas aplicables y documentación revisados; **no significan pruebas ejecutadas**. Evidencia: `netlify/lib/treasury.mjs`, `treasury-rates.mjs`, `public/accounting-math.mjs`, `public/treasury.js`, `tests/treasury.test.mjs` y sección de entrega actual en `fase-2-tesoreria-bancos.md`.
+
+- [x] F2.3.1 Proyectar cuentas por cobrar y pagar sin escribir contabilidad.
+- [x] F2.3.2 Proyectar plantillas recurrentes y capacidad Q sin duplicar facturas ni anticipos.
+- [x] F2.3.3 Incorporar nóminas pendientes, obligaciones fiscales y cuotas de préstamos registradas.
+- [x] F2.3.4 Agrupar por semana y mes y distinguir moneda base de originales NIO/USD disponibles.
+- [x] F2.3.5 Editar y mostrar supuestos de retraso e incobrables en optimista, base y pesimista.
+- [x] F2.3.6 Mostrar semáforo, reserva y primer faltante diario, también si luego se recupera.
+- [x] F2.3.7 Conciliar método indirecto con el actual, exponiendo ajustes, diferencia y explicación.
+- [x] F2.3.8 Descargar PDF/CSV autorizados, con supuestos y metadatos, auditando la descarga.
+- [x] F2.4.1 Seleccionar facturas por pagar, vencimientos y descuentos documentados vigentes.
+- [x] F2.4.2 Configurar preparadores, aprobadores y umbral; separar preparador de aprobador cuando corresponde.
+- [x] F2.4.3 Producir constancia PDF imprimible y CSV con detalle por factura y un único asiento por lote.
+- [x] F2.4.4 Admitir pagos parciales y rechazo; anular un pago solo mediante reversa única con motivo.
+- [x] F2.4.5 Releer deuda bloqueada y usar revisión/idempotencia; impedir pagar dos veces o reutilizar descuentos consumidos.
+- [x] F2.4.6 Pagar desde banco NIO/USD, Caja general o caja chica autorizada, sin sobregiro base ni original.
+- [x] F2.5.1 Registrar anticipo cliente como pasivo y proveedor como activo, sin reconocer ingreso/gasto prematuro.
+- [x] F2.5.2 Aplicar total/parcialmente a una o varias facturas del mismo tercero y mostrar saldo pendiente.
+- [x] F2.5.3 Registrar devolución explícita del saldo no aplicado y conservar asientos.
+- [x] F2.5.4 Reutilizar fichas, cuentas y saldo de Contratos, Reservas y Q sin crear anticipos duplicados.
+- [x] F2.5.5 Impedir cancelación/finalización/restauración de documento con depósito pendiente sin aplicar/devolver.
+- [x] F2.6.1 Medir diferencia no realizada mensual sobre bancos/tarjetas y documentos originales por cobrar/pagar.
+- [x] F2.6.2 Recalcular vista previa antes del asiento y exigir confirmación de la huella vigente.
+- [x] F2.6.3 Proponer automáticamente y confirmar reversa el primer día del mes siguiente, una vez por documento.
+- [x] F2.6.4 Impedir duplicación por cuenta/período, cierres bloqueados y cambios de originales/históricos.
+- [x] F2.6.5 Mantener interruptor independiente apagado por defecto, solo dueño, hacia adelante, con motivo y auditoría.
+- [x] F2.6.6 Descargar vista previa/documento/reversa en PDF/CSV autorizados y auditados.
+- [x] F2.7.1 Importar CSV/XLSX o pegado, con vista previa vigente y validación repetida en servidor.
+- [x] F2.7.2 Validar fechas reales/no futuras, NIO/USD, tasa positiva, precisión, fuente y duplicados internos/guardados.
+- [x] F2.7.3 Conservar fuente/fecha/importador de cada tasa sin modificar operaciones registradas.
+- [x] F2.7.4 Incorporar adaptador oficial BCN manual, apagado y sin red por defecto, tolerante a falta de configuración/red/formato.
+- [x] F2.7.5 Descargar el registro de tasas en PDF/CSV con metadatos y auditoría.
+- [x] C.1 Conservar Fase 1, conciliación previa, promedio ponderado, secuencias, rutas y migraciones aplicadas.
+- [x] C.2 Usar permisos propios bloqueables por plan y controles adicionales por módulo de origen; soporte y empresas limitadas solo lectura.
+- [x] C.3 Reutilizar sesión, empresa, sucursal del servidor, transacción única, bloqueo, revisión, UUID idempotente, auditoría y versiones.
+- [x] C.4 Declarar metadatos en centavos enteros y conservar BIGINT del diario; cálculos compartidos, sin cambiar motor contable.
+- [x] C.5 Nacer desactivado, sin llamadas externas, cobros, correos ni tareas nuevas por defecto.
+- [x] C.6 Incluir registros/configuración/asignaciones en respaldo JSON/ZIP/PDF completo y conservar su lectura relacional.
+- [x] C.7 Usar español por uiT y catálogos, componentes adaptables y tema existente, sin modificar style.css.
+- [x] C.8 Escribir pruebas de reglas nuevas y regresiones; distinguir sintaxis de ejecución funcional.
+- [x] C.9 Documentar alcance, supuestos conservadores, riesgos, reversión y compatibilidad de cada archivo modificado.
+- [x] C.10 Preparar matriz manual de cuatro planes, colaboradores, soporte, empresas limitadas, sucursales, teléfono/laptop y claro/oscuro.
+- [x] C.11 Revisar la lista completa contra operaciones, guardas, interfaz, descargas, pruebas y documentación.
+- [x] C.12 No iniciar Fase 3, crear commits manuales, mezclar ni desplegar.
+
+Validación funcional, concurrencia real, permisos desplegados, RLS, servicio BCN y diseño en dispositivos: **no verificados**. Su matriz está en el documento de fase; no son ítems de implementación omitidos ni se presentan como pruebas aprobadas. No se identificó un impedimento técnico que dejara un entregable solicitado a medio implementar.
+
+Evidencia estática final actual: 31 pruebas nuevas escritas, no ejecutadas; sintaxis comprobada en 22 archivos JavaScript y en los últimos ajustes; huellas de recursos actualizadas y `git diff --check` sin errores. La lista completa de F2.3–F2.7 se recorrió contra sus archivos y se mantuvo separada del historial anterior. Las comprobaciones desplegadas continúan expresamente no verificadas.

@@ -38,6 +38,7 @@ export async function recurringOperation(data,access,session,body,ctx){
  const post=(lines,total,action,extra={})=>{permit('contabilidad');return ctx.entry(data,session,{date,type:'negocio-recurrentes',desc:action+' · '+r.name,total,reference:'REC-'+r.id.slice(0,8),businessId:r.id,lines,...extra})};
  const cash=()=>{permit('cajas');ctx.financialCash(access);check(['1101','1102'].includes(body.pay),'Selecciona Caja general o Banco.');return body.pay};
  if(op==='recurringState'){
+  check(data.cfg.treasuryControls?.anticipos?.enabled!==true||body.status!=='Cancelada'||!r.deposit,'Aplica o devuelve el anticipo antes de cancelar la suscripción.');
   check(access.owner,'Solo el dueño cambia el estado.');check(['Activa','Pausada','Cancelada'].includes(body.status)&&r.status!=='Cancelada'&&r.status!==body.status,'Transición no permitida.');
   if(body.status==='Activa')check(!r.billed.some(b=>b.to>date),'La reanudación empieza desde el siguiente período para conservar las facturas y sus notas.');
   const proposed={...r,events:[...r.events,{...event,status:body.status}]};

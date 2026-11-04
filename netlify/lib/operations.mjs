@@ -1,3 +1,6 @@
+import {TREASURY_OPS,TREASURY_MODULES,treasuryToday,treasuryOperation,treasuryReport} from './treasury.mjs';
+import {officialRatesPreview} from './treasury-rates.mjs';
+import {invoiceLinkedEntries} from './accounting-engine.mjs';
 import {BANKS_READY,BANK_OPS,bankOperation,bankReport} from './banks.mjs';
 import {serviceCommissionAccrual} from './service-commission.mjs';
 import {restoreServiceConsumables} from './service-restock.mjs';
@@ -187,6 +190,7 @@ export function guardLedgerMutation(previous, next, access, {restoreServiceConfi
   }
   requireValue(equal(previous?.cfg?.print || {}, next.cfg?.print || {}), 'Configura la impresión desde Edición de factura.');
   for(const key of ['economicSector','chartTemplate','specializedChartTemplate'])requireValue(restoreService||equal(previous?.cfg?.[key],next.cfg?.[key]),'Usa la configuración de sector y plantilla contable.');
+  requireValue(equal(previous?.cfg?.treasuryControls,next.cfg?.treasuryControls),'Configura tesorería mediante sus operaciones.');
   requireValue(equal(previous?.cfg?.bankControls,next.cfg?.bankControls),'Configura los cierres bancarios mediante su operación específica.');
   requireValue(equal(previous?.cfg?.pos || {}, next.cfg?.pos || {}) && equal(previous?.cfg?.cash || {}, next.cfg?.cash || {}) && equal(previous?.cfg?.advance || {}, next.cfg?.advance || {}), 'Los parámetros operativos solo se modifican desde su configuración.');
   const before = new Map((previous?.entries || []).map(entry => [entry.id, entry]));
@@ -205,7 +209,7 @@ export function guardLedgerMutation(previous, next, access, {restoreServiceConfi
       const debit = invoice.pay === '1201' ? entry.lines.find(line => ['1101', '1102'].includes(line.a) && line.d === entry.total && line.c === 0) : entry.lines.find(line => line.a === '2101' && line.d === entry.total && line.c === 0);
       const credit = invoice.pay === '1201' ? entry.lines.find(line => line.a === '1201' && line.c === entry.total && line.d === 0) : entry.lines.find(line => ['1101', '1102'].includes(line.a) && line.c === entry.total && line.d === 0);
       requireValue(debit && credit, 'El asiento del abono no coincide con el pago.');
-      const remaining = next.entries.filter(record => record.id === invoice.id || record.invoiceId === invoice.id || record.reversalOf === invoice.id).reduce((total, record) => total + record.lines.filter(line => line.a === invoice.pay).reduce((sum, line) => sum + (invoice.pay === '1201' ? line.d - line.c : line.c - line.d), 0), 0);
+      const remaining = invoiceLinkedEntries(next.entries,invoice.id).reduce((total, record) => total + record.lines.filter(line => line.a === invoice.pay).reduce((sum, line) => sum + (invoice.pay === '1201' ? line.d - line.c : line.c - line.d), 0), 0);
       requireValue(remaining >= -0.01, 'El abono supera la deuda pendiente de la factura.');
     }
     if (entry.supplierId) {
@@ -217,7 +221,7 @@ export function guardLedgerMutation(previous, next, access, {restoreServiceConfi
     const updated = next.taxes?.find(record => record.id === tax.id);
     requireValue(updated && ['source', 'period', 'base', 'rate', 'withholdings', 'amount', 'entryId'].every(name => equal(tax[name], updated[name])), 'Conserva la obligación y el cálculo del anticipo generado.');
   }
-  for(const module of ['suscripciones','bancos'])requireValue(equal((previous?.businessRecords||[]).filter(r=>r.module===module),(next.businessRecords||[]).filter(r=>r.module===module)),'Conserva las fichas gestionadas de suscripciones y bancos; usa sus operaciones específicas.');
+  for(const module of [...TREASURY_MODULES,'suscripciones','bancos'])requireValue(equal((previous?.businessRecords||[]).filter(r=>r.module===module),(next.businessRecords||[]).filter(r=>r.module===module)),'Conserva las fichas gestionadas de suscripciones y bancos; usa sus operaciones específicas.');
   validateBusinessRecords(next,requireValue);
   validateConfiguredServices(next,serviceEmployees(access.company?.data,previous,next));
   validateEconomicSector(next);
@@ -459,6 +463,22 @@ async function saveAttachment(data, companyId, body, record, addedKeys, historic
   record.receipt = { key, name: text(file.name, 180).replace(/[\x00-\x1f\x7f/\\]/g, '') || 'comprobante', type: file.type, size: bytes.length };
 }
 export async function runOperation(companyId, session, body) {
+  if(body.operation==='treasuryReport')return db.transaction(async client=>{
+    const access=await companyAccess(client,companyId,session,true);requireModule(access,body.module);
+    requireValue(TREASURY_MODULES.includes(body.module)&&['VIEW','PDF','CSV'].includes(body.format),'Informe inválido.');
+    if(['pagos_lote','anticipos','revalorizacion','flujo_proyectado'].includes(body.module))requireModule(access,'contabilidad');
+    if(body.module==='pagos_lote')requireModule(access,'proveedores');
+    if(body.module==='flujo_proyectado')requireValue(dateValue(body.from)>=treasuryToday(),'La proyección comienza hoy o en una fecha futura.');
+    if(body.module==='revalorizacion'&&body.preview){requireValue(access.branchId,'Selecciona una sucursal.');if((access.company.data?.businessRecords||[]).some(b=>b.module==='bancos'&&b.kind==='bank'&&(b.branchId||'principal')===access.branchId))requireModule(access,'bancos');}
+    const scoped=scopeBranch(access.company.data,access);requireValue(scoped&&Array.isArray(scoped.entries),'Abre primero la empresa para inicializar su contabilidad.');const data=projectData(scoped,access);
+    if(body.module==='tipos_cambio')data.exchangeRates=structuredClone(scoped.exchangeRates||[]);
+    // La proyección no recibe datos ocultos por permisos o plan.
+    const report=body.official?await officialRatesPreview(data,body):treasuryReport(data,body,access);
+    if(body.id){const selected=report.records?.find(r=>r.id===body.id);requireValue(selected,'Documento no encontrado en la sucursal autorizada.');report.records=[selected];delete report.invoices;delete report.balances;delete report.integrated;}
+    const reportDays=[...(report.records||[]),...(report.invoices||[])].map(r=>r.date).filter(Boolean).sort(),from=body.module==='flujo_proyectado'?body.from:body.date||reportDays[0]||null,to=body.module==='flujo_proyectado'?body.to:body.date||reportDays.at(-1)||null;
+    if(body.format!=='VIEW')await audit(client,companyId,access.member?{...session,member:access.member}:session,'Descarga tesorería '+body.format,[{area:body.module,id:body.id||null,branchId:access.branchId,from,to,version:1}]);
+    return {...report,omittedModules:['personal','fiscal','suscripciones','bancos'].filter(m=>!allowed(access,m)),company:access.company.name,branchId:access.branchId,version:1,from,to,currency:data.cfg?.cur||'NIO',revision:access.company.revision,generatedAt:new Date().toISOString(),generatedBy:actorName(access.member?{...session,member:access.member}:session)};
+  });
   if(body.operation==='customerCredit')return db.transaction(async client=>{
     const access=await companyAccess(client,companyId,session,true);requirePermission(access,'facturacion');
     const data=scopeBranch(access.company.data,access),customer=data?.customers?.find(c=>c.id===body.customerId&&c.status==='activo');
@@ -500,7 +520,7 @@ export async function runOperation(companyId, session, body) {
     accessError('La ampliación de tesorería no está habilitada.',503);
   });
   const addedKeys = [];
-  if((BANK_OPS.includes(body.operation)||RECURRING_OPS.includes(body.operation)||BUSINESS_OPS.includes(body.operation)||['serviceDefinition','economicSector','specializedChart','serviceAccrueCommission'].includes(body.operation))&&!body.operationId)accessError('La operación requiere un identificador único.',400);
+  if((TREASURY_OPS.includes(body.operation)||BANK_OPS.includes(body.operation)||RECURRING_OPS.includes(body.operation)||BUSINESS_OPS.includes(body.operation)||['serviceDefinition','economicSector','specializedChart','serviceAccrueCommission'].includes(body.operation))&&!body.operationId)accessError('La operación requiere un identificador único.',400);
   let output = null;
   if(body.operationId && !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.operationId)) accessError('Identificador de operación inválido.',400);
   const receipt=body.operationId?{id:body.operationId,actor:session.email+':'+(session.memberId||''),hash:createHash('sha256').update(JSON.stringify(body)).digest('hex'),resultId:()=>typeof output==='string'?output:null}:null;
@@ -515,7 +535,11 @@ export async function runOperation(companyId, session, body) {
       const operation = body.operation, userId = operatorId(access, session);
       if (['printSettings','settings','creditNote'].includes(operation)) ensurePrintVersions(data, access.company, operationSession);
       if(operation==='sale') await consumeDiscount(client,companyId,access,operationSession,body);
-      if(BANK_OPS.includes(operation))output=bankOperation(data,access,operationSession,body,{permit:requirePermission,entry:appendEntry});
+      if(TREASURY_OPS.includes(operation)){
+        const members=operation==='batchPolicy'?await client.select({id:companyMembers.id}).from(companyMembers).where(and(eq(companyMembers.companyId,companyId),eq(companyMembers.active,true))):[];
+        output=treasuryOperation(data,access,operationSession,body,{permit:requirePermission,entry:appendEntry,financialCash,members});
+      }
+      else if(BANK_OPS.includes(operation))output=bankOperation(data,access,operationSession,body,{permit:requirePermission,entry:appendEntry});
       else if(RECURRING_OPS.includes(operation))output=await recurringOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,amount,entry:appendEntry,financialCash,credit:b=>creditNote(data,access,operationSession,b),sale:(b,id)=>makeSale(data,access,operationSession,b,client,companyId,id)});
       else if(BUSINESS_OPS.includes(operation)){
         output=await businessOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,amount,date:dateValue,entry:appendEntry,financialCash,registerCost,sale:(b,id)=>makeSale(data,access,operationSession,b,client,companyId,id)});
@@ -810,7 +834,7 @@ export async function runOperation(companyId, session, body) {
         requireValue(cost && original && text(body.reason) && text(body.reference), 'Costo no encontrado o motivo vacío.');
         const date = dateValue(body.date);
         requireValue(date >= original.date, 'La anulación no puede ser anterior al costo.');
-        requireValue(!data.entries.some(entry => entry.invoiceId === original.id), 'El costo tiene abonos; revierte primero esos pagos mediante un asiento autorizado.');
+        requireValue(!data.entries.some(entry => entry.invoiceId === original.id||entry.lines?.some(l=>l.invoiceId===original.id)), 'El costo tiene abonos; revierte primero esos pagos mediante un asiento autorizado.');
         const voucher = data.pettyVouchers.find(record => record.id === cost.voucherId);
         requireValue(!voucher?.replenishmentId, 'El vale ya fue repuesto; requiere un ajuste autorizado de caja.');
         const reversal = appendEntry(data, operationSession, { date, type: 'costo', reversalOf: original.id, desc: 'Anulación de costo - ' + text(body.reason), reference: text(body.reference), total: original.total, lines: original.lines.map(line => ({ a: line.a, d: line.c, c: line.d })) });

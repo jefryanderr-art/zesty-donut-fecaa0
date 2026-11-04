@@ -82,7 +82,7 @@ test('los seis perfiles adicionales solo recomiendan capacidades implementadas y
    assert.equal(example.kind,id==='comercio_electronico'?'stock':'service');
   }
  }
- assert.equal(catalog.all.length,18);
+ assert.equal(catalog.all.length,23);
 });
 test('servicios no consumen lotes, series, consignaciones ni producción aunque haya referencias inconsistentes',()=>{
  const data=state();data.products=[{id:'service',kind:'service',stock:0,cost:0,price:25}];

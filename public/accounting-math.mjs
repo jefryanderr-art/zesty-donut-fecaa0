@@ -39,7 +39,7 @@ export function yearClosing(entries,accounts,year){
 export function aging(entries,account,asOf){
  const receivable=account==='1201',buckets=[0,0,0,0,0];const rows=[];
  for(const entry of entries.filter(e=>e.date<=asOf&&e.lines?.some(l=>l.a===account&&(receivable?l.d:l.c)>0)&&e.pay===account)){
-  const linked=entries.filter(e=>e.date<=asOf&&(e.id===entry.id||e.invoiceId===entry.id));const cents=linked.reduce((sum,e)=>sum+e.lines.filter(l=>l.a===account).reduce((s,l)=>s+(receivable?moneyCents(l.d)-moneyCents(l.c):moneyCents(l.c)-moneyCents(l.d)),0),0);
+  const linked=invoiceLinkedEntries(entries,entry.id).filter(e=>e.date<=asOf);const cents=linked.reduce((sum,e)=>sum+e.lines.filter(l=>l.a===account).reduce((s,l)=>s+(receivable?moneyCents(l.d)-moneyCents(l.c):moneyCents(l.c)-moneyCents(l.d)),0),0);
   if(cents<=0)continue;const days=Math.max(0,Math.floor((Date.parse(asOf)-Date.parse(entry.due||entry.date))/86400000)),index=(entry.due||entry.date)>=asOf?0:days<=30?1:days<=60?2:days<=90?3:4;buckets[index]+=cents;rows.push({id:entry.id,party:entry.party,reference:entry.reference||entry.id,due:entry.due||entry.date,days,balance:cents/100,bucket:index});
  }return {buckets:buckets.map(c=>c/100),rows};
 }
@@ -121,14 +121,14 @@ export function creditReturnSummary(original, previousNotes, items, finalReturn,
     vat = round((original.vat || 0) - previousNotes.reduce((sum, note) => sum + note.vat, 0));
   }
   const total = round(subtotal + vat);
-  const debt = round(entries.filter(entry => entry.id === original.id || entry.invoiceId === original.id).reduce((sum, entry) => sum + (entry.lines || []).filter(line => line.a === '1201').reduce((value, line) => value + line.d - line.c, 0), 0));
+  const debt = round(invoiceLinkedEntries(entries,original.id).reduce((sum, entry) => sum + (entry.lines || []).filter(line => line.a === '1201').reduce((value, line) => value + line.d - line.c, 0), 0));
   const debtReduction = Math.min(Math.max(0, debt), total), refund = round(total - debtReduction);
   return {subtotal, vat, total, debtReduction, refund};
 }
 
 export function customerCreditBalance(customerId, entries){
  const invoices=new Set(entries.filter(entry=>entry.customerId===customerId).map(entry=>entry.id));
- return entries.filter(entry=>invoices.has(entry.id)||invoices.has(entry.invoiceId)).reduce((sum,entry)=>sum+(entry.lines||[]).filter(line=>line.a==='1201').reduce((total,line)=>total+line.d-line.c,0),0);
+ return entries.reduce((sum,entry)=>sum+(entry.allocationJournal?(entry.lines||[]).filter(l=>invoices.has(l.invoiceId)):invoices.has(entry.id)||invoices.has(entry.invoiceId)?entry.lines||[]:[]).filter(line=>line.a==='1201').reduce((total,line)=>total+line.d-line.c,0),0);
 }
 
 // Recurrentes: fechas civiles con fin exclusivo e importes nativos en centavos.
@@ -218,3 +218,47 @@ export function bankConvertCents(originalCents,rateMicros){
  const sign=originalCents<0?-1:1,n=Number((BigInt(Math.abs(originalCents))*BigInt(rateMicros)+500000n)/1000000n)*sign;
  if(!Number.isSafeInteger(n)||Math.abs(n)>99999999900)throw new AccountingValidationError('Conversión fuera de rango.');return n;
 }
+
+// F2: las líneas nuevas pueden identificar facturas dentro de un único asiento.
+// Los asientos anteriores, sin allocationJournal, mantienen su interpretación.
+export function invoiceLinkedEntries(entries,id){
+ return entries.flatMap(e=>e.allocationJournal?((e.lines||[]).some(l=>l.invoiceId===id)?[{...e,invoiceId:id,lines:e.lines.filter(l=>l.invoiceId===id)}]:[]):e.id===id||e.invoiceId===id||e.reversalOf===id?[e]:[]);
+}
+export function treasuryDebt(entries,invoice,through='9999-12-31'){
+ const sign=invoice.pay==='1201'?1:-1;
+ return treasurySum(invoiceLinkedEntries(entries,invoice.id).filter(e=>e.date<=through).flatMap(e=>e.lines||[]).filter(l=>l.a===invoice.pay).map(l=>sign*(moneyCents(l.d)-moneyCents(l.c))));
+}
+export function treasurySum(values){const n=values.reduce((s,v)=>{if(!Number.isSafeInteger(v)||!Number.isSafeInteger(s+v))throw new AccountingValidationError('Centavos fuera del rango seguro.');return s+v},0);return n}
+export const treasuryDayAdd=(day,n)=>{recurringDay(day);if(!Number.isInteger(n)||Math.abs(n)>3660)throw new AccountingValidationError('Plazo inválido.');return new Date(Date.parse(day+'T12:00:00Z')+n*86400000).toISOString().slice(0,10)};
+export function treasuryForecast({from,to,openingCents,events,scenarios,frequency='month',reserveCents=0}){
+ recurringDay(from);recurringDay(to);if(to<from||Date.parse(to)-Date.parse(from)>366*86400000||!['week','month'].includes(frequency)||!Number.isSafeInteger(reserveCents)||reserveCents<0)throw new AccountingValidationError('Revisa período, frecuencia y reserva.');
+ const defaults={optimista:{delayDays:0,badDebtBps:0},base:{delayDays:7,badDebtBps:200},pesimista:{delayDays:30,badDebtBps:1000}};
+ return Object.entries(defaults).map(([name,defaultValue])=>{
+  const assumption={...defaultValue,...scenarios?.[name]};if(!Number.isInteger(assumption.delayDays)||assumption.delayDays<0||assumption.delayDays>365||!Number.isInteger(assumption.badDebtBps)||assumption.badDebtBps<0||assumption.badDebtBps>10000)throw new AccountingValidationError('Supuestos inválidos.');
+  const adjusted=events.map(e=>({...e,date:e.amountCents>0?treasuryDayAdd(e.date,assumption.delayDays):e.date,amountCents:e.amountCents>0?recurringRatio(e.amountCents,10000-assumption.badDebtBps,10000):e.amountCents})).filter(e=>e.date<=to).sort((a,b)=>a.date.localeCompare(b.date));
+  let balanceCents=treasurySum([openingCents]),firstShortfall=balanceCents<0?from:null;const buckets=new Map();
+  for(let day=from;day<=to;day=treasuryDayAdd(day,1)){
+   const key=frequency==='month'?day.slice(0,7):treasuryDayAdd(from,Math.floor((Date.parse(day)-Date.parse(from))/604800000)*7);
+   const rows=adjusted.filter(e=>(e.date<from?from:e.date)===day),netCents=treasurySum(rows.map(e=>e.amountCents));balanceCents=treasurySum([balanceCents,netCents]);if(balanceCents<0&&!firstShortfall)firstShortfall=day;
+   const b=buckets.get(key)||{period:key,inCents:0,outCents:0};b.inCents=treasurySum([b.inCents,...rows.filter(e=>e.amountCents>0).map(e=>e.amountCents)]);b.outCents=treasurySum([b.outCents,...rows.filter(e=>e.amountCents<0).map(e=>-e.amountCents)]);b.balanceCents=balanceCents;buckets.set(key,b);
+  }
+  return {name,assumption,openingCents,firstShortfall,liquidity:firstShortfall?'rojo':balanceCents<reserveCents?'amarillo':'verde',balanceCents,buckets:[...buckets.values()]};
+ });
+}
+export function treasuryIndirect(data,from,to){
+ recurringDay(from);recurringDay(to);const cash=new Set(data.accounts.filter(a=>a.sub==='ef').map(a=>a.code)),accounts=new Map(data.accounts.map(a=>[a.code,a])),entries=(data.entries||[]).filter(e=>e.date>=from&&e.date<=to&&e.type!=='apertura');
+ let profitCents=0,adjustmentCents=0,directCents=0,exchangeEffectCents=0;const adjustments=[];
+ for(const e of entries){
+  if(e.revaluation)exchangeEffectCents=treasurySum([exchangeEffectCents,...e.lines.filter(l=>cash.has(l.a)).map(l=>moneyCents(l.d)-moneyCents(l.c))]);
+  directCents=treasurySum([directCents,...e.lines.filter(l=>cash.has(l.a)).map(l=>moneyCents(l.d)-moneyCents(l.c))]);
+  for(const l of e.lines){const a=accounts.get(l.a),net=moneyCents(l.c)-moneyCents(l.d);if(['ingreso','gasto','costo'].includes(a?.tipo))profitCents=treasurySum([profitCents,net]);else if(!cash.has(l.a)){adjustmentCents=treasurySum([adjustmentCents,net]);adjustments.push({entryId:e.id,account:l.a,amountCents:net,classification:!e.lines.some(l=>cash.has(l.a))&&(a?.sub==='fijo'||a?.sub==='fin'||a?.tipo==='patrimonio')?'no_monetario':a?.sub==='fijo'?'inversion':a?.sub==='fin'||a?.tipo==='patrimonio'?'financiacion':'capital_trabajo'})}}
+ }
+ const indirectCents=treasurySum([profitCents,adjustmentCents]),differenceCents=treasurySum([directCents,-indirectCents]);
+ const investmentCents=treasurySum(adjustments.filter(a=>a.classification==='inversion').map(a=>a.amountCents)),financingCents=treasurySum(adjustments.filter(a=>a.classification==='financiacion').map(a=>a.amountCents)),operatingCents=treasurySum([indirectCents,-investmentCents,-financingCents,-exchangeEffectCents]);
+ return {profitCents,adjustmentCents,adjustments,operatingCents,investmentCents,financingCents,exchangeEffectCents,indirectCents,directCents,differenceCents,explanation:differenceCents?'Diferencia entre efectivo y resultado ajustado: revisa asientos descuadrados, cuentas sin clasificación y aperturas excluidas; verifica con tu contador.':'Resultado más variaciones no monetarias, de capital de trabajo, inversión y financiación; aperturas excluidas igual que en el método actual. Verifica con tu contador.'};
+}
+export function treasuryRateRows(grid,existing=[],baseCurrency='NIO'){
+ if(!Array.isArray(grid)||!grid.length||grid.length>1000)throw new AccountingValidationError('Importa de 1 a 1000 tasas.');const seen=new Set(existing.map(r=>r.currency+'-'+r.date));
+ return grid.map(row=>{if(!Array.isArray(row)||row.length!==4)throw new AccountingValidationError('Usa fecha, moneda, tasa y fuente sin encabezado.');const [date,currency,rate,source]=row.map(v=>String(v).trim());recurringDay(date);const rateMicros=bankRateMicros(rate),key=currency+'-'+date;if(!['NIO','USD'].includes(currency)||currency===baseCurrency||seen.has(key)||source.length<3||source.length>200)throw new AccountingValidationError('Moneda, fuente o fecha duplicada inválida.');seen.add(key);return {id:key,date,currency,rateMicros,rate:rateMicros/1000000,source,rateDate:date}});
+}
+export function treasuryDiscountUsed(entries,invoiceId){return treasurySum(invoiceLinkedEntries(entries,invoiceId).filter(e=>e.allocationJournal).flatMap(e=>e.lines).filter(l=>l.a==='4192').map(l=>moneyCents(l.c)-moneyCents(l.d)))}
