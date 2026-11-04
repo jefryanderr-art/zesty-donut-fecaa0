@@ -9,8 +9,8 @@ const check=(ok,message)=>{if(!ok)throw new Error(message)};
 const context={check,permit:(a,m)=>check(!a.blocked?.includes(m),'Bloqueado: '+m),amount:v=>{moneyCents(Number(v));return Number(v)},date:v=>v,entry:(data,s,record)=>{const e={id:'entry-'+data.entries.length,...record};data.entries.push(e);return e},financialCash:()=>{}};
 const access={owner:true,branchId:'principal',company:{businessType:'comercio',onboardingDone:true,data:{businessRecords:[],products:[]}}};
 const state=()=>({businessRecords:[],entries:[],products:[],accounts:[],customers:[],employees:[],cfg:{}});
-test('26 perfiles únicos y todas las capacidades bloqueables sin cambiar comercio',()=>{
- assert.equal(catalog.profiles.length,26);assert.equal(new Set(catalog.profiles.map(p=>p.id)).size,26);
+test('32 perfiles únicos y todas las capacidades bloqueables sin cambiar comercio',()=>{
+ assert.equal(catalog.profiles.length,32);assert.equal(new Set(catalog.profiles.map(p=>p.id)).size,32);
  assert.equal(catalog.get('comercio').modules,null);assert.deepEqual(catalog.get('comercio').capabilities,[]);
  for(const id of catalog.all){assert.ok(BLOCKABLE_MODULES.includes(id));assert.throws(()=>requirePlanModule({blockedModules:[id]},id));}
  assert.throws(()=>validateProfile('inventado'));assert.throws(()=>validateProfile('comercio',{labels:{customer:' '}}));
@@ -70,4 +70,35 @@ test('vincular una compra no duplica asiento y rechaza un segundo proyecto',asyn
  const before=structuredClone(data.entries),body={operation:'businessPurchase',module:'proyectos',id:'project1',date:'2026-10-29',purchaseId:'purchase',confirmed:true};
  await businessOperation(data,access,{},body,context);assert.deepEqual(data.entries,before);
  await assert.rejects(businessOperation(data,access,{}, {...body,id:'project2'},context),/vinculada/);
+});
+
+test('los seis perfiles adicionales solo recomiendan capacidades implementadas y ejemplos sin saldos',()=>{
+ for(const id of ['software','recurrentes','comercio_electronico','freelance','inmobiliaria','seguros']){
+  const p=catalog.get(id);assert.equal(p.id,id);assert.doesNotThrow(()=>validateProfile(id));
+  for(const module of [...p.capabilities,...p.optionalCapabilities])assert.ok(catalog.all.includes(module));
+  assert.ok(p.salesFlow&&p.quickQuestions.length&&p.startup.examples.length);
+  for(const example of p.startup.examples){
+   assert.equal(example.price,undefined);assert.equal(example.stock,undefined);
+   assert.equal(example.kind,id==='comercio_electronico'?'stock':'service');
+  }
+ }
+ assert.equal(catalog.all.length,16);
+});
+test('servicios no consumen lotes, series, consignaciones ni producción aunque haya referencias inconsistentes',()=>{
+ const data=state();data.products=[{id:'service',kind:'service',stock:0,cost:0,price:25}];
+ data.businessRecords=[
+  {id:'lot',module:'lotes',productId:'service',date:'2026-11-01',due:'2026-12-01',q:1,status:'Disponible'},
+  {id:'serial',module:'variantes',productId:'service',serial:'S1',status:'Disponible'},
+  {id:'recipe',module:'produccion',productId:'service',autoProduce:true,status:'Activa'},
+  {id:'route',module:'rutas',consignment:true,status:'Preparada',items:[{p:'service',q:1}]}
+ ];
+ const before=structuredClone(data);
+ const allocations=prepareBusinessSale(data,access,{}, {date:'2026-11-04',items:[{p:'service',q:3}]},{...context,permit(){throw new Error('No debe solicitar permisos de inventario')}});
+ assert.deepEqual(allocations,[]);assert.deepEqual(data,before);
+});
+test('alta de servicio ignora stock/costo inyectados y conserva precio e IVA configurados',async()=>{
+ const data=state();
+ await businessOperation(data,access,{}, {operation:'businessProduct',name:'Atención',unit:'sesión',price:30,vatRate:15,stock:99,cost:8},context);
+ assert.equal(data.products[0].kind,'service');assert.equal(data.products[0].stock,0);assert.equal(data.products[0].cost,0);
+ assert.equal(data.products[0].price,30);assert.equal(data.products[0].vatRate,15);assert.deepEqual(data.entries,[]);
 });

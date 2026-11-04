@@ -10,7 +10,7 @@ const app=source('public/app.js'),access=source('public/access.js'),business=sou
 const baseMenu=app.slice(app.indexOf('const MENU='),app.indexOf('function shell()'));
 function browser(profile,plan,custom={},internalTest=false,profileOverride){
  const html=[];
- const context=vm.createContext({AcontecProfiles:profileOverride?{...catalog,get:()=>profileOverride}:catalog,CO:{owner:true,businessType:profile,billingPlan:structuredClone(plan),businessCustomization:custom,onboardingDone:true,entitlement:{access:true,state:internalTest?'prueba_interna':'activo',internalTest}},HOME:false,U:{},R:'businessMore',ACT:{},V:{panel(){}},BILLING_MODULES:[],READ_ACTIONS:new Set(),chrome(){},actionAllowed(){return true},$:()=>({insertAdjacentHTML:(_where,value)=>html.push(value)}),esc:value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),view(){},html});
+ const context=vm.createContext({uiT:(_key,fallback)=>fallback,S:{products:[]},AcontecProfiles:profileOverride?{...catalog,get:()=>profileOverride}:catalog,CO:{owner:true,businessType:profile,billingPlan:structuredClone(plan),businessCustomization:custom,onboardingDone:true,entitlement:{access:true,state:internalTest?'prueba_interna':'activo',internalTest}},HOME:false,U:{},R:'businessMore',ACT:{},V:{panel(){}},BILLING_MODULES:[],READ_ACTIONS:new Set(),chrome(){},actionAllowed(){return true},$:()=>({insertAdjacentHTML:(_where,value)=>html.push(value)}),esc:value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),view(){},html});
  vm.runInContext(baseMenu+access.slice(0,access.indexOf('function canSave()'))+business.slice(0,business.indexOf('const businessAuth='))+business.slice(business.indexOf('const businessPanel='),business.indexOf('ACT.businessOnboard=')),context);
  return {context,html,run:code=>vm.runInContext(code,context)};
 }
@@ -117,4 +117,38 @@ test('agregar y quitar reutiliza guardado con revisión, conserva preferencias y
  ui.run('CO.owner=false');
  await ui.run("ACT.businessMenu({r:'diario'},button)");
  assert.equal(button.disabled,false);
+});
+
+// Matriz de presentación: las autorizaciones del plan y colaborador preceden al perfil.
+for(const profile of catalog.profiles.filter(p=>p.serviceFirst))for(const plan of DEFAULT_PLANS){
+ test('servicios: '+profile.id+' × '+plan.id+' × personalización y stock',()=>{
+  const ui=browser(profile.id,plan);
+  ui.run("MENU.push(['Inventario',[['kardex','','Kardex'],['traslados','','Traslados']]]);ROUTE_MODULE.traslados='sucursales';");
+  for(const route of catalog.inventoryRoutes){
+   assert.equal(ui.run(`businessVisible('${route}')`),false,route);
+   const allowed=ui.run(`routeAllowed('${route}')`);
+   ui.context.CO.businessCustomization={shown:[route]};
+   assert.equal(ui.run(`businessVisible('${route}')`),allowed,route);
+   ui.context.CO.businessCustomization={};
+   ui.context.S.products=[{id:'service',kind:'service',stock:0}];
+   assert.equal(ui.run(`businessVisible('${route}')`),false,route);
+   // Un artículo histórico sin kind sigue siendo inventariable, incluso con stock cero.
+   ui.context.S.products=[{id:'legacy',stock:0}];
+   assert.equal(ui.run(`businessVisible('${route}')`),allowed,route);
+   ui.context.CO.businessCustomization={hidden:[route]};
+   assert.equal(ui.run(`businessVisible('${route}')`),false,route);
+   ui.context.CO.businessCustomization={};ui.context.S.products=[];
+  }
+  ui.context.CO.owner=false;ui.context.CO.permissions={inventario:'lectura'};
+  ui.context.CO.businessCustomization={shown:catalog.inventoryRoutes};
+  assert.equal(ui.run("businessVisible('compras')"),false);
+  assert.equal(ui.run("businessVisible('traslados')"),false);
+ });
+}
+test('etiqueta de catálogo respeta personalización sin cambiar datos',()=>{
+ const ui=browser('belleza',DEFAULT_PLANS[3]);
+ assert.equal(ui.run('businessCatalogName()'),'Servicios y tarifas');
+ ui.context.CO.businessCustomization={labels:{product:'tratamiento'}};
+ assert.equal(ui.run('businessCatalogName()'),'Tratamiento y tarifas');
+ assert.equal(ui.context.CO.businessType,'belleza');
 });

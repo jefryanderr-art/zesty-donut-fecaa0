@@ -1,9 +1,13 @@
 'use strict';
 // Adaptación aditiva: las autorizaciones y todos los cálculos definitivos residen en Functions.
 const BUSINESS=AcontecProfiles;
-const businessProfile=()=>BUSINESS.get(CO?.businessType);
+const businessProfile=()=>{const p=BUSINESS.get(CO?.businessType);return {...p,name:uiT('profiles.'+p.id+'.name',p.name),salesFlow:uiT('profiles.'+p.id+'.flow',p.salesFlow)}};
 const businessLabels=()=>({...businessProfile().labels,...CO?.businessCustomization?.labels});
-const businessTypeField=(selected='comercio')=>selectField('businessType',uiT("business.1","Tipo de negocio"),BUSINESS.profiles.map(p=>option(p.id,p.name,p.id===selected)).join(''));
+const businessCatalogName=()=>{
+ const custom=CO?.businessCustomization?.labels?.product;
+ return businessProfile().serviceFirst?(custom?custom.charAt(0).toUpperCase()+custom.slice(1)+uiT('services.rates',' y tarifas'):uiT('services.catalog','Servicios y tarifas')):businessLabels().product;
+};
+const businessTypeField=(selected='comercio')=>selectField('businessType',uiT("business.1","Tipo de negocio"),BUSINESS.profiles.map(p=>option(p.id,uiT('profiles.'+p.id+'.name',p.name),p.id===selected)).join(''));
 const businessRecords=(module)=>((S?.businessRecords)||[]).filter(r=>!module||r.module===module);
 const businessRecord=id=>businessRecords().find(r=>r.id===id);
 const businessModuleName=module=>BUSINESS.capabilities[module]?.name||module;
@@ -26,7 +30,7 @@ function businessVisible(route){
  if(!routeAllowed(route))return false;
  if(['panel','ajustes','accesibilidad','auditoria','businessMore'].includes(route))return true;
  const custom=CO.businessCustomization||{};if(custom.hidden?.includes(route))return false;if(custom.shown?.includes(route))return true;
- const p=businessProfile();if(p.id==='comercio')return !BUSINESS.all.includes(route);return MENU.some(([,items])=>items.some(([id])=>id===route))||p.modules.includes(route);
+ const p=businessProfile();if(BUSINESS.inventoryRoutes.includes(route)&&!BUSINESS.inventoryVisible(p,typeof S==='undefined'?[]:S?.products))return false;if(p.id==='comercio')return !BUSINESS.all.includes(route);return MENU.some(([,items])=>items.some(([id])=>id===route))||p.modules.includes(route);
 }
 const businessChrome=chrome;
 chrome=function(){
@@ -39,14 +43,14 @@ chrome=function(){
  if(routeAllowed('businessMore'))drawer.querySelector('.bot')?.insertAdjacentHTML('beforebegin','<button data-a="nav" data-r="businessMore" class="'+(R==='businessMore'?'on':'')+`"><span>＋</span>${esc(uiT("business.3","Más módulos"))}</button>`);
  for(const button of $('#bnav')?.querySelectorAll('[data-r]')||[])if(!businessVisible(button.dataset.r))button.remove();
  if(businessProfile().id!=='comercio'){
-  const labels=businessLabels(),names={clientes:labels.customer,productos:labels.product};
-  for(const button of document.querySelectorAll('#drawer [data-r],#bnav [data-r]')){const label=names[button.dataset.r];if(label){const icon=button.querySelector('span');button.replaceChildren(...(icon?[icon]:[]),document.createTextNode(label.charAt(0).toUpperCase()+label.slice(1)+(button.dataset.r==='productos'?' · inventario':'')));}}
+  const labels=businessLabels(),names={clientes:labels.customer,productos:businessCatalogName()};
+  for(const button of document.querySelectorAll('#drawer [data-r],#bnav [data-r]')){const label=names[button.dataset.r];if(label){const icon=button.querySelector('span');button.replaceChildren(...(icon?[icon]:[]),document.createTextNode(label.charAt(0).toUpperCase()+label.slice(1)+(button.dataset.r==='productos'&&!businessProfile().serviceFirst?' · inventario':'')));}}
  }
 };
 V.businessMore=(message='')=>{
  if(!routeAllowed('businessMore')){R=firstAllowedRoute();view();return}
  const existing=MENU.flatMap(([,list])=>list).filter(([route])=>routeAllowed(route)),canCustomize=CO.owner&&permission('ajustes',true);
- main(pageHead(uiT("business.4","Más módulos"))+notice(uiT("business.5","El perfil organiza el menú. Ocultar una herramienta no bloquea el acceso ni elimina información. Los permisos y el plan siempre se aplican."))+(message?notice(esc(message)):'')+`<div class="business-modules">${[...existing,...BUSINESS.all.filter(id=>routeAllowed(id)).map(id=>[id,'◫',businessModuleName(id)])].map(([route,icon,name])=>`<div class="card business-module"><button class="btn ghost" style="min-height:44px;white-space:normal;text-align:left" data-a="nav" data-r="${esc(route)}"><b>${esc(name)}</b></button><small>${esc(BUSINESS.capabilities[route]?.flow||'Abrir módulo existente')}</small>${canCustomize&&!businessFixedMenuRoutes.includes(route)?`<button class="btn ghost" style="min-height:44px;white-space:normal" data-a="businessMenu" data-r="${esc(route)}">${businessVisible(route)?'Quitar de mi menú':'Agregar a mi menú'}</button>`:''}</div>`).join('')}</div>`+(canCustomize?`<button class="btn ghost" data-a="businessProfile">${esc(uiT("business.6","Personalizar mi sistema"))}</button>`:''));
+ main(pageHead(uiT("business.4","Más módulos"))+notice(uiT("business.5","El perfil organiza el menú. Ocultar una herramienta no bloquea el acceso ni elimina información. Los permisos y el plan siempre se aplican."))+(message?notice(esc(message)):'')+`<div class="business-modules">${[...existing,...BUSINESS.all.filter(id=>routeAllowed(id)).map(id=>[id,'◫',businessModuleName(id)])].map(([route,icon,originalName])=>{const name=route==='productos'&&businessProfile().serviceFirst?businessCatalogName():originalName;return `<div class="card business-module"><button class="btn ghost" style="min-height:44px;white-space:normal;text-align:left" data-a="nav" data-r="${esc(route)}"><b>${esc(name)}</b></button><small>${esc(BUSINESS.capabilities[route]?.flow||'Abrir módulo existente')}</small>${canCustomize&&!businessFixedMenuRoutes.includes(route)?`<button class="btn ghost" style="min-height:44px;white-space:normal" data-a="businessMenu" data-r="${esc(route)}">${businessVisible(route)?'Quitar de mi menú':'Agregar a mi menú'}</button>`:''}</div>`}).join('')}</div>`+(canCustomize?`<button class="btn ghost" data-a="businessProfile">${esc(uiT("business.6","Personalizar mi sistema"))}</button>`:''));
 };
 // Igual que en Personalizar mi sistema: los accesos fijos no se ocultan.
 const businessFixedMenuRoutes=['panel','ajustes','accesibilidad','auditoria'];
@@ -84,15 +88,16 @@ const businessSettings=V.ajustes;
 V.ajustes=async function(){const id=CO.id;await businessSettings();if(R!=='ajustes'||CO?.id!==id)return;$('#main').insertAdjacentHTML('afterbegin',`<section class="card"><h3>${esc(uiT("business.8","Mi tipo de negocio"))}</h3><p>${esc(businessProfile().name)}</p><p>${esc(businessProfile().salesFlow)}</p>${CO.owner?`<button class="btn ghost" data-a="businessProfile">${esc(uiT("business.7","Personalizar mi sistema"))}</button>`:''}</section>`);enforceAccessUI()};
 ACT.businessProfile=()=>{
  const current=CO.businessCustomization||{},routes=[...new Map([...MENU.flatMap(([,list])=>list).map(([id,,name])=>[id,name]),...Object.entries(BUSINESS.moduleLabels)]).entries()];
- const form=modal(uiT("business.extra.3","Personalizar mi sistema"),(U?.admin?businessTypeField(CO.businessType||'comercio'):`<p><b>${esc(uiT("business.9","Tipo de negocio"))}</b><br>`+esc(businessProfile().name)+'</p>'+notice(uiT("business.10","Para cambiarlo, contacta a Acontec")))+bField('businessTimeZone','Zona horaria IANA para tarifas',current.timeZone||'America/Managua','text','required maxlength="80"')+notice(uiT("business.11","Cambiar de rubro solo cambia la organización y las etiquetas. Ningún registro ni operación se convierte o elimina."))+`<p id="business-description"></p><h4>${esc(uiT("business.12","Módulos del menú"))}</h4><p>Automático sigue el perfil. `+(businessInvoiceOnly()?'El plan y los permisos determinan los accesos disponibles.':'Oculto queda disponible en Más módulos según tus permisos y plan.')+'</p><div class="business-module-settings">'+routes.filter(([id])=>!['panel','ajustes','accesibilidad','auditoria'].includes(id)).map(([id,name])=>selectField('module_'+id,name,option('auto',uiT("business.extra.4","Automático"),!current.shown?.includes(id)&&!current.hidden?.includes(id))+option('show',uiT("business.extra.5","Visible"),current.shown?.includes(id))+option('hide',uiT("business.extra.6","Oculto"),current.hidden?.includes(id)))).join('')+`</div><h4>${esc(uiT("business.13","Etiquetas personalizadas (opcionales)"))}</h4>`+['customer','product','document'].map((key,i)=>field('label_'+key,['Cliente / paciente / alumno','Producto / servicio','Factura / cuenta / recibo'][i],current.labels?.[key]||'','text','maxlength="40"')).join(''),async f=>{
+ const form=modal(uiT("business.extra.3","Personalizar mi sistema"),(U?.admin?businessTypeField(CO.businessType||'comercio'):`<p><b>${esc(uiT("business.9","Tipo de negocio"))}</b><br>`+esc(businessProfile().name)+'</p>'+notice(uiT("business.10","Para cambiarlo, contacta a Acontec")))+bField('businessTimeZone','Zona horaria IANA para tarifas',current.timeZone||'America/Managua','text','required maxlength="80"')+notice(uiT("business.11","Cambiar de rubro solo cambia la organización y las etiquetas. Ningún registro ni operación se convierte o elimina."))+`<p id="business-description"></p><h4>${esc(uiT("business.12","Módulos del menú"))}</h4><p>Automático sigue el perfil. `+(businessInvoiceOnly()?'El plan y los permisos determinan los accesos disponibles.':'Oculto queda disponible en Más módulos según tus permisos y plan.')+'</p><div class="business-module-settings">'+routes.filter(([id])=>!['panel','ajustes','accesibilidad','auditoria'].includes(id)).map(([id,name])=>selectField('module_'+id,id==='productos'&&businessProfile().serviceFirst?businessCatalogName():name,option('auto',uiT("business.extra.4","Automático"),!current.shown?.includes(id)&&!current.hidden?.includes(id))+option('show',uiT("business.extra.5","Visible"),current.shown?.includes(id))+option('hide',uiT("business.extra.6","Oculto"),current.hidden?.includes(id)))).join('')+`</div><h4>${esc(uiT("business.13","Etiquetas personalizadas (opcionales)"))}</h4>`+['customer','product','document'].map((key,i)=>field('label_'+key,['Cliente / paciente / alumno','Producto / servicio','Factura / cuenta / recibo'][i],current.labels?.[key]||'','text','maxlength="40"')).join(''),async f=>{
   const businessCustomization={shown:[],hidden:[],labels:{},timeZone:v(f,'businessTimeZone').trim()};for(const [id]of routes){const value=f.elements['module_'+id]?.value;if(value==='show')businessCustomization.shown.push(id);if(value==='hide')businessCustomization.hidden.push(id)}for(const key of ['customer','product','document'])if(v(f,'label_'+key).trim())businessCustomization.labels[key]=v(f,'label_'+key).trim();
   if(await businessSaveProfile(U?.admin?v(f,'businessType'):CO.businessType,businessCustomization)){shell();view()}
  });
- const update=()=>{const p=BUSINESS.get(form.elements.businessType?.value||CO.businessType);form.querySelector('#business-description').textContent=p.description;};form.elements.businessType?.addEventListener('change',update);update();
+ const update=()=>{const p=BUSINESS.get(form.elements.businessType?.value||CO.businessType);form.querySelector('#business-description').textContent=uiT('profiles.'+p.id+'.flow',p.description);};form.elements.businessType?.addEventListener('change',update);update();
 };
 const businessPanel=V.panel;
 V.panel=function(){
  businessPanel();if(!CO||HOME)return;const p=businessProfile();
+ for(const button of $('#main')?.querySelectorAll?.('[data-a="nav"][data-r]')||[])if(BUSINESS.inventoryRoutes.includes(button.dataset.r)&&!businessVisible(button.dataset.r))button.remove();
  if(businessInvoiceOnly())$('#main .accounting-actions')?.insertAdjacentHTML('beforeend',['documentos_venta','comprobantes'].filter(id=>routeAllowed(id)).map(id=>`<button class="btn ghost" data-a="nav" data-r="${esc(id)}">${esc(businessModuleName(id))}</button>`).join(''));
  if(CO.owner&&!CO.onboardingDone)$('#main').insertAdjacentHTML('afterbegin',`<section class="card business-start"><h3>${esc(uiT("business.14","Empieza a tu ritmo"))}</h3><p>${esc(uiT("business.15","Revisa las sugerencias para tu tipo de negocio. El catálogo de ejemplo se agrega sin precios, IVA ni existencias."))}</p><div class="accounting-actions"><button class="btn" data-a="businessOnboard">${esc(uiT("business.16","Ver arranque opcional"))}</button></div></section>`);
  if(p.id!=='comercio'&&!businessInvoiceOnly()){
@@ -119,7 +124,15 @@ ACT.businessRemoveItem=(d,button)=>button.closest('.business-item').remove();
 document.addEventListener('change',event=>{if(!event.target.matches('.business-item [name=bp]'))return;const p=S.products.find(p=>p.id===event.target.value);if(p)event.target.closest('.business-item').querySelector('[name=bu]').value=p.price});
 const bItems=(items=[])=>'<div class="business-items">'+items.map(businessItemRow).join('')+`</div><button type="button" class="btn ghost" data-a="businessAddItem">${esc(uiT("business.21","Agregar producto o servicio"))}</button>`;
 const businessLegal=()=>notice(uiT("business.22","Las tasas, intereses, mora, propinas y cargos son configurables; verifica con tu contador. No se configura ninguna obligación legal automáticamente."));
-ACT.businessService=()=>modal(uiT("business.extra.10","Crear servicio sin inventario"),bField('name','Nombre','','text','required maxlength="200"')+bField('unit','Unidad de cobro','servicio','text','required maxlength="40"')+bMoney('price','Precio sin IVA')+bField('vatRate','IVA configurado (%)',0,'number','min="0" max="100" step="0.01"'),async f=>{await operate('businessProduct',{name:v(f,'name'),unit:v(f,'unit'),price:+v(f,'price'),vatRate:+v(f,'vatRate')});view()});
+ACT.businessService=()=>modal(uiT("business.extra.10","Crear servicio sin inventario"),bField('name',uiT('services.formName','Nombre'),'','text','required maxlength="200"')+bField('unit',uiT('services.unit','Unidad de cobro'),'servicio','text','required maxlength="40"')+bMoney('price',uiT('services.price','Precio sin IVA'))+bField('vatRate',uiT('services.vatPercent','IVA configurado (%)'),0,'number','min="0" max="100" step="0.01"'),async f=>{await operate('businessProduct',{name:v(f,'name'),unit:v(f,'unit'),price:+v(f,'price'),vatRate:+v(f,'vatRate')});view()});
+const businessProductsBase=V.productos;
+V.productos=()=>{
+ if(!businessProfile().serviceFirst||BUSINESS.hasInventory(S.products)){businessProductsBase();return}
+ const title=businessCatalogName();
+ const headers=[uiT('services.code','Código'),uiT('services.name','Servicio'),uiT('services.unit','Unidad de cobro'),uiT('services.price','Precio sin IVA'),uiT('services.vat','IVA configurado'),uiT('services.actions','Acciones')];
+ const actions=`<button class="btn" data-a="businessService">${esc(uiT('services.create','Crear servicio'))}</button> <button class="btn ghost" data-a="newprod">${esc(uiT('services.stockCreate','Crear producto con inventario'))}</button>`;
+ main(pageHead(title,actions)+notice(uiT('services.help','Los servicios no tienen existencias ni costo inventariable. El IVA depende de la configuración de cada servicio; verifica con tu contador.'))+(S.products.length?accountingTable(headers,S.products.map(p=>`<tr><td>${esc(p.code||'')}</td><td>${esc(p.name)}</td><td>${esc(p.unit||'servicio')}</td><td>${money(p.price)}</td><td>${esc(p.vatRate||0)}%</td><td>${actionButton('editprod',p.id,uiT('services.edit','Editar'))}</td></tr>`).join('')):notice(uiT('services.empty','Aún no hay servicios. Crea el primero con su unidad de cobro, precio e IVA configurado.'))));
+};
 const bLocalTime=t=>t?new Date(new Date(t).getTime()-new Date(t).getTimezoneOffset()*60000).toISOString().slice(0,16):'';
 function businessForm(module,record){
  const r=record||{},label=businessLabels(),financial=['cartera','comisiones','aportes'].includes(module),itemModules=['cuentas_abiertas','agenda','proyectos','contratos','reservas','rutas','despacho','documentos_venta'];
@@ -282,7 +295,7 @@ ACT.switch=function(...args){BUSINESS_FILTER='';BUSINESS_DATE='';return business
 // Adapta textos de interfaz, sin cambiar nombres de cuentas, registros ni documentos guardados.
 function applyBusinessLabels(root){
  if(!CO||(businessProfile().id==='comercio'&&!Object.keys(CO.businessCustomization?.labels||{}).length))return;
- const labels=businessLabels(),cap=s=>s.charAt(0).toUpperCase()+s.slice(1),map={Cliente:cap(labels.customer),Producto:cap(labels.product),'Productos e inventario':cap(labels.product)+' e inventario','Cartera de clientes':cap(labels.customer)+' · directorio'};
+ const labels=businessLabels(),cap=s=>s.charAt(0).toUpperCase()+s.slice(1),map={Cliente:cap(labels.customer),Producto:cap(labels.product),'Productos e inventario':businessProfile().serviceFirst?businessCatalogName():cap(labels.product)+' e inventario','Cartera de clientes':cap(labels.customer)+' · directorio'};
  for(const element of root.querySelectorAll('h2,h3,label,th'))for(const node of element.childNodes)if(node.nodeType===Node.TEXT_NODE&&map[node.textContent.trim()])node.textContent=map[node.textContent.trim()];
 }
 const businessViewBase=view;

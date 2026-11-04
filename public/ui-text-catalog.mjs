@@ -9523,5 +9523,140 @@ export const UI_CATALOG = {
     "original": "El cliente debe iniciar su suscripción antes del registro manual.",
     "group": "Transferencias",
     "max": 200
+  },
+  "services.catalog": {
+    "original": "Servicios y tarifas",
+    "group": "Servicios y perfiles",
+    "max": 200
+  },
+  "services.code": {
+    "original": "Código",
+    "group": "Servicios y perfiles",
+    "max": 200
+  },
+  "services.name": {
+    "original": "Servicio",
+    "group": "Servicios y perfiles",
+    "max": 200
+  },
+  "services.unit": {
+    "original": "Unidad de cobro",
+    "group": "Servicios y perfiles",
+    "max": 200
+  },
+  "services.price": {
+    "original": "Precio sin IVA",
+    "group": "Servicios y perfiles",
+    "max": 200
+  },
+  "services.vat": {
+    "original": "IVA configurado",
+    "group": "Servicios y perfiles",
+    "max": 200
+  },
+  "services.actions": {
+    "original": "Acciones",
+    "group": "Servicios y perfiles",
+    "max": 200
+  },
+  "services.create": {
+    "original": "Crear servicio",
+    "group": "Servicios y perfiles",
+    "max": 200
+  },
+  "services.stockCreate": {
+    "original": "Crear producto con inventario",
+    "group": "Servicios y perfiles",
+    "max": 200
+  },
+  "services.help": {
+    "original": "Los servicios no tienen existencias ni costo inventariable. El IVA depende de la configuración de cada servicio; verifica con tu contador.",
+    "group": "Servicios y perfiles",
+    "max": 414
+  },
+  "services.empty": {
+    "original": "Aún no hay servicios. Crea el primero con su unidad de cobro, precio e IVA configurado.",
+    "group": "Servicios y perfiles",
+    "max": 261
+  },
+  "services.edit": {
+    "original": "Editar",
+    "group": "Servicios y perfiles",
+    "max": 200
+  },
+  "services.rates": {
+    "original": " y tarifas",
+    "group": "Servicios y perfiles",
+    "max": 200
+  },
+  "services.formName": {
+    "original": "Nombre",
+    "group": "Servicios y perfiles",
+    "max": 200
+  },
+  "services.vatPercent": {
+    "original": "IVA configurado (%)",
+    "group": "Servicios y perfiles",
+    "max": 200
+  },
+  "profiles.software.name": {
+    "original": "Software, tecnología y agencias",
+    "group": "Servicios y perfiles",
+    "max": 200
+  },
+  "profiles.software.flow": {
+    "original": "Cotiza desarrollo, licencias o soporte y confirma la factura de cada entrega o período.",
+    "group": "Servicios y perfiles",
+    "max": 261
+  },
+  "profiles.recurrentes.name": {
+    "original": "Suscripciones y servicios recurrentes",
+    "group": "Servicios y perfiles",
+    "max": 200
+  },
+  "profiles.recurrentes.flow": {
+    "original": "Configura el contrato de mantenimiento o membresía y confirma cada factura del período.",
+    "group": "Servicios y perfiles",
+    "max": 261
+  },
+  "profiles.comercio_electronico.name": {
+    "original": "Comercio electrónico y venta en línea",
+    "group": "Servicios y perfiles",
+    "max": 200
+  },
+  "profiles.comercio_electronico.flow": {
+    "original": "Prepara el pedido en línea, confirma la factura y registra el despacho.",
+    "group": "Servicios y perfiles",
+    "max": 213
+  },
+  "profiles.freelance.name": {
+    "original": "Freelance y consultoría individual",
+    "group": "Servicios y perfiles",
+    "max": 200
+  },
+  "profiles.freelance.flow": {
+    "original": "Cotiza horas o entregables y confirma la factura del trabajo realizado.",
+    "group": "Servicios y perfiles",
+    "max": 213
+  },
+  "profiles.inmobiliaria.name": {
+    "original": "Inmobiliaria e intermediación",
+    "group": "Servicios y perfiles",
+    "max": 200
+  },
+  "profiles.inmobiliaria.flow": {
+    "original": "Registra la intermediación, confirma los honorarios y revisa la comisión vinculada.",
+    "group": "Servicios y perfiles",
+    "max": 249
+  },
+  "profiles.seguros.name": {
+    "original": "Seguros y corretaje",
+    "group": "Servicios y perfiles",
+    "max": 200
+  },
+  "profiles.seguros.flow": {
+    "original": "Registra el servicio de corretaje, confirma sus honorarios y revisa la comisión.",
+    "group": "Servicios y perfiles",
+    "max": 240
   }
 };

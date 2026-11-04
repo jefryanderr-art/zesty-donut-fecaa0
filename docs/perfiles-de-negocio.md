@@ -162,3 +162,12 @@ El candado aplica hacia adelante, también a empresas existentes, sin migrar ni 
 Solo el administrador real de plataforma puede corregirlo. Desde Administración de clientes → Editar ficha y plan aparece un selector por empresa propia activa. La corrección exige contexto de plataforma, confirmación, motivo, revisión vigente y tipo anterior bajo bloqueo transaccional. Solo actualiza el tipo y la fecha de modificación; conserva la personalización, documentos y revisiones contables y relacionales. Registra actor, empresa, valor anterior, nuevo y motivo en auditoría de empresa e historial administrativo. El aviso previo explica: «El menú y las etiquetas del cliente cambiarán a este tipo de negocio. Sus datos no se modifican». Las etiquetas personalizadas guardadas conservan su prioridad.
 
 Las pruebas de bloqueo, personalización, restauración y corrección administrativa quedaron preparadas para la plataforma, sin ejecutarse localmente. Quedan pendientes tras desplegar la ejecución de esas pruebas, permisos reales/RLS, conflictos entre pestañas y validación visual del formulario en teléfono y laptop.
+
+
+## Ampliación de servicios: primera entrega
+
+El catálogo actual contiene 32 perfiles: se añadieron Software, tecnología y agencias; Suscripciones y servicios recurrentes; Comercio electrónico y venta en línea; Freelance y consultoría individual; Inmobiliaria e intermediación; Seguros y corretaje. Todos reutilizan capacidades A–P existentes. No se incorporó todavía la capacidad Q. La lista inicial de 26 perfiles anterior describe la entrega histórica y conserva sus identificadores.
+
+Los perfiles de servicios usan Servicios y tarifas y una vista sin existencias cuando no hay artículos inventariables. Kardex, Compras y Traslados se ocultan automáticamente hasta que exista un artículo inventariable o el dueño elija Visible en Personalizar. Oculto explícito conserva prioridad; los permisos y el plan se evalúan primero. Artículos históricos sin kind siguen siendo inventariables incluso con stock cero. No se altera el significado de productos ni documentos históricos. Más módulos conserva las rutas autorizadas cuando el plan permite esa pantalla.
+
+El alcance, limitaciones y verificaciones pendientes están en [Servicios y modelos de negocio](servicios-y-modelos.md). Esta ampliación es parcial y no sustituye las nueve fases solicitadas.
