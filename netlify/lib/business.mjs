@@ -1,3 +1,5 @@
+import {validateBankRecord} from './banks.mjs';
+import {validateRecurringRecord} from './recurring.mjs';
 import {randomUUID} from 'node:crypto';
 import {catalog} from './business-profile.mjs';
 import {invoiceTotals,normalizeItemQuantity,businessLoanSchedule,businessCommission,businessLateCharge,businessBillItems,businessContractLateItems,moneyCents} from './accounting-engine.mjs';
@@ -6,7 +8,7 @@ const round=v=>Math.round(v*100)/100;
 const qty=v=>Number(v)===0?0:normalizeItemQuantity(v);
 const sameDay=(day,delta)=>new Date(Date.parse(day+'T12:00:00Z')+delta*86400000).toISOString().slice(0,10);
 function nextDate(day,frequency,n){if(frequency==='mensual'){const d=new Date(day+'T12:00:00Z'),last=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+n+1,0)).getUTCDate();d.setUTCDate(1);d.setUTCMonth(d.getUTCMonth()+n);d.setUTCDate(Math.min(+day.slice(8),last));return d.toISOString().slice(0,10)}return sameDay(day,n*({diaria:1,semanal:7,quincenal:15}[frequency]||0))}
-const flows={cuentas_abiertas:['Abierta','Cerrada'],agenda:['Pendiente','Confirmada','Atendida','Cancelada'],proyectos:['Recibida','Diagnóstico','Presupuestada','En proceso','Entregada','Cancelada'],lotes:['Disponible','Agotado'],variantes:['Disponible','Vendida'],produccion:['Activa','Inactiva'],medidas:['Pendiente','Facturada'],cartera:['Borrador','Vigente','Liquidada'],contratos:['Activo','Suspendido','Finalizado'],reservas:['Reservada','Ocupada','Finalizada','Cancelada'],rutas:['Preventa','Preparada','Entregada','Cancelada'],despacho:['Recibido','Preparando','Listo','Entregado','Cancelado'],comisiones:['Pendiente','Liquidada'],aportes:['Pendiente','Registrado'],documentos_venta:['Pendiente','Convertido','Cancelado'],comprobantes:['Pendiente']};
+const flows={bancos:['Abierta','Cerrada'],suscripciones:['Activa','Pausada','Cancelada'],cuentas_abiertas:['Abierta','Cerrada'],agenda:['Pendiente','Confirmada','Atendida','Cancelada'],proyectos:['Recibida','Diagnóstico','Presupuestada','En proceso','Entregada','Cancelada'],lotes:['Disponible','Agotado'],variantes:['Disponible','Vendida'],produccion:['Activa','Inactiva'],medidas:['Pendiente','Facturada'],cartera:['Borrador','Vigente','Liquidada'],contratos:['Activo','Suspendido','Finalizado'],reservas:['Reservada','Ocupada','Finalizada','Cancelada'],rutas:['Preventa','Preparada','Entregada','Cancelada'],despacho:['Recibido','Preparando','Listo','Entregado','Cancelado'],comisiones:['Pendiente','Liquidada'],aportes:['Pendiente','Registrado'],documentos_venta:['Pendiente','Convertido','Cancelado'],comprobantes:['Pendiente']};
 export const BUSINESS_OPS=['businessProduct','businessCost','businessPurchase','businessConsume','businessSave','businessState','businessBill','businessAdvance','businessRefund','businessMove','businessMerge','businessSplit','businessProduce','businessDisburse','businessCollect','businessAccrue','businessGenerate','businessCheckin','businessCheckout','businessCommission','businessLiquidate','businessDonate','businessRelease','businessOnboard'];
 export function validateBusinessRecords(data,check){
  if(data.businessRecords===undefined)return;
@@ -18,6 +20,8 @@ export function validateBusinessRecords(data,check){
   for(const k of ['total','principal','interest','penalty','paid','deposit','valuation','cost','price'])if(r[k]!==undefined)check(moneyCents(r[k])>=0,'Importe de negocio negativo.');
   if(r.q!==undefined)check(Number.isFinite(r.q)&&r.q>=0&&r.q<=1e9,'Cantidad de negocio inválida.');
   for(const key of ['items','ingredients'])if(r[key]!==undefined){check(Array.isArray(r[key])&&r[key].length<=200,'Líneas de negocio inválidas.');for(const i of r[key])check(data.products.some(p=>p.id===i.p)&&Number.isFinite(i.q)&&i.q>0&&moneyCents(i.u)>=0,'Producto o línea de negocio inválidos.');}
+  if(r.module==='bancos')validateBankRecord(r,data,check);
+  if(r.module==='suscripciones')validateRecurringRecord(r,data,check);
   if(r.entryId)check(data.entries.some(e=>e.id===r.entryId),'Conserva el asiento vinculado al registro de negocio.');
   if(r.schedule)for(const row of r.schedule){for(const key of ['principal','interest','total','paid','penalty','balance','interestPaid'])if(row[key]!==undefined)check(moneyCents(row[key])>=0,'Cuota inválida.');check(moneyCents(row.total)===moneyCents(row.principal)+moneyCents(row.interest),'La cuota no coincide con capital e interés.');}
  }
@@ -63,6 +67,7 @@ export async function businessOperation(data,access,session,body,context){
   return {onboardingDone:true};
  }
  const module=body.module,existing=body.id?records.find(r=>r.id===body.id):null;
+ check(!['suscripciones','bancos'].includes(module),'Usa las operaciones específicas de Suscripciones.');
  check(catalog.all.includes(module)&&(!body.id||existing?.module===module),'Registro no encontrado.');permit(module);
  if(op!=='businessSave')check(existing,'Registro no encontrado.');
  if(body.date&&op!=='businessSave')check(ctx.date(body.date)>=existing.date,'La operación no puede ser anterior al registro.');

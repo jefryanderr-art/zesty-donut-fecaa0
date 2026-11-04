@@ -2,6 +2,7 @@
 // Catálogo compartido por el navegador y Functions. Sin acceso al DOM ni datos de clientes.
 (() => {
  const capabilities={
+  bancos:{letter:'R',name:'Bancos y conciliación',group:'Finanzas',flow:'Importa, revisa y confirma las partidas antes de cerrar la conciliación.'},
   cuentas_abiertas:{letter:'A',name:'Cuentas abiertas',group:'Servicio',flow:'Acumula consumos y confirma el cobro al cerrar la cuenta.'},
   agenda:{letter:'B',name:'Agenda y citas',group:'Servicio',flow:'Reserva un recurso, registra la atención y factura al finalizar.'},
   proyectos:{letter:'C',name:'Órdenes de trabajo y proyectos',group:'Servicio',flow:'Recibe, presupuesta, registra avances y factura por etapas.'},
@@ -17,6 +18,7 @@
   comisiones:{letter:'M',name:'Comisiones por servicio',group:'Personal',flow:'Calcula una comisión sobre una venta confirmada y liquídala una sola vez.'},
   aportes:{letter:'N',name:'Donaciones, cuotas y aportes',group:'Finanzas',flow:'Identifica al socio o donante y el fondo; confirma el recibo y su asiento.'},
   documentos_venta:{letter:'O',name:'Documentos de venta',group:'Ventas',flow:'Prepara cotizaciones, proformas, pedidos y notas de entrega; convierte a factura.'},
+  suscripciones:{letter:'Q',name:'Suscripciones y facturación recurrente',group:'Servicio',flow:'Confirma cada período, anticipo y reconocimiento; sin cobros automáticos.'},
   comprobantes:{letter:'P',name:'Comprobantes adaptados',group:'Ventas',flow:'Imprime los registros autorizados en A4, Carta o ticket.'}
  };
  const all=Object.keys(capabilities), common=['panel','facturacion','ventas','clientes','compras','gastos','productos','cobrar','pagar','ajustes','accesibilidad','auditoria'];
@@ -56,6 +58,7 @@
  ];
  const serviceProfiles=new Set(['catering','profesionales','belleza','salud','educacion','gimnasio','taller','lavanderia','hotel','alquiler','prestamista','construccion','transporte','organizacion','software','recurrentes','freelance','inmobiliaria','seguros']);
  const inventoryRoutes=['kardex','traslados','compras'];
+ for(const row of rows){if(row[0]!=='personalizado')row[4]=[...row[4],'bancos'];if(['software','recurrentes'].includes(row[0]))row[3]=[...row[3],'suscripciones'];else if(row[0]!=='personalizado')row[4]=[...row[4],'suscripciones'];}
  const profiles=rows.map(([id,name,group,active,optional,customer,product,document,flow,category,unit,example])=>({id,name,description:flow,group,serviceFirst:serviceProfiles.has(id),capabilities:active,optionalCapabilities:optional,modules:id==='comercio'?null:[...common,...active,'comprobantes'],labels:{customer,product,document},salesFlow:flow,quickQuestions:[[active[0]||'facturacion','¿Cómo empiezo en '+name.toLowerCase()+'?',flow+' Usa Más módulos para consultar otras herramientas.'],['facturacion','¿Cómo cobro?', 'Abre Facturación. Selecciona '+product+', confirma cantidad, precio e IVA y registra el pago. Las operaciones de rubro se facturan una sola vez desde su ficha.']],startup:{categories:[category],units:[unit],examples:[{name:example,unit,category,kind:serviceProfiles.has(id)||['servicio','hora','mes','consulta','noche','día','viaje','cuota'].includes(unit)?'service':'stock'}]}}));
  // Solo presentación: debe comprobarse routeAllowed antes de usar esta recomendación.
  const hasInventory=products=>Array.isArray(products)&&products.some(p=>p&&p.kind!=='service');

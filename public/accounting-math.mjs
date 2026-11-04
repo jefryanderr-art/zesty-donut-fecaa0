@@ -130,3 +130,78 @@ export function customerCreditBalance(customerId, entries){
  const invoices=new Set(entries.filter(entry=>entry.customerId===customerId).map(entry=>entry.id));
  return entries.filter(entry=>invoices.has(entry.id)||invoices.has(entry.invoiceId)).reduce((sum,entry)=>sum+(entry.lines||[]).filter(line=>line.a==='1201').reduce((total,line)=>total+line.d-line.c,0),0);
 }
+
+// Recurrentes: fechas civiles con fin exclusivo e importes nativos en centavos.
+export function recurringDay(day) {
+ if(typeof day!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(day)||!Number.isFinite(Date.parse(day))||new Date(day).toISOString().slice(0,10)!==day)throw new AccountingValidationError('Fecha recurrente inválida.');
+ return day;
+}
+export function recurringBoundary(anchor,months,index){
+ recurringDay(anchor);if(![1,3,6,12].includes(months)||!Number.isInteger(index)||index<0||index>1200)throw new AccountingValidationError('Periodicidad o período inválidos.');
+ const [y,m,d]=anchor.split('-').map(Number),target=new Date(Date.UTC(y,m-1+months*index,1));target.setUTCDate(Math.min(d,new Date(Date.UTC(target.getUTCFullYear(),target.getUTCMonth()+1,0)).getUTCDate()));return recurringDay(target.toISOString().slice(0,10));
+}
+export function recurringRatio(cents,numerator,denominator){
+ if(!Number.isSafeInteger(cents)||cents<0||!Number.isSafeInteger(numerator)||numerator<0||!Number.isSafeInteger(denominator)||denominator<=0)throw new AccountingValidationError('Prorrateo inválido.');
+ const n=(BigInt(cents)*BigInt(numerator)*2n+BigInt(denominator))/(BigInt(denominator)*2n),value=Number(n);if(!Number.isSafeInteger(value))throw new AccountingValidationError('Importe fuera de rango.');return value;
+}
+export function recurringActiveDays(record,from,to){
+ recurringDay(from);recurringDay(to);let activeDays=0;const changes=[{date:record.date,status:'Activa'},...(record.events||[]).filter(e=>e.status)].sort((a,b)=>a.date.localeCompare(b.date));
+ for(let i=0;i<changes.length;i++){const e=changes[i],start=[from,e.date].sort().at(-1),end=[to,changes[i+1]?.date||to].sort()[0];if(e.status==='Activa'&&start<end)activeDays+=(Date.parse(end)-Date.parse(start))/86400000;}return activeDays;
+}
+export function recurringPeriod(record,index){
+ const from=recurringBoundary(record.anchor,record.months,index),to=recurringBoundary(record.anchor,record.months,index+1),days=(Date.parse(to)-Date.parse(from))/86400000;
+ const activeDays=recurringActiveDays(record,from,to);
+ return {from,to,days,activeDays,baseCents:recurringRatio(record.amountCents,activeDays,days)};
+}
+export function recurringMetrics(records,entries,from,to){
+ recurringDay(from);recurringDay(to);if(from>to)throw new AccountingValidationError('Período inválido.');
+ const active=(r,day)=>r.date<=day&&([{date:r.date,status:'Activa'},...(r.events||[]).filter(e=>e.status)].filter(e=>e.date<=day).at(-1)?.status==='Activa');
+ const opening=records.filter(r=>active(r,from)),canceled=opening.filter(r=>(r.events||[]).some(e=>e.status==='Cancelada'&&e.date>=from&&e.date<=to));
+ const mrrCents=records.filter(r=>active(r,to)).reduce((s,r)=>s+recurringRatio(r.amountCents,1,r.months),0),arrCents=mrrCents*12;
+ if(!Number.isSafeInteger(arrCents))throw new AccountingValidationError('Métricas fuera de rango.');
+ const ids=new Set(records.flatMap(r=>(r.billed||[]).map(b=>b.entryId))),portfolio=aging(entries.filter(e=>ids.has(e.id)||ids.has(e.invoiceId)),'1201',to);
+ return {mrrCents,arrCents,opening:opening.length,canceled:canceled.length,churnBps:opening.length?recurringRatio(10000,canceled.length,opening.length):0,portfolio};
+}
+// Dos tarifas diarias enteras reparten exactamente el precio sin modificar el emisor.
+export function recurringInvoiceItems(record,period){
+ const low=Math.floor(record.amountCents/period.days),highDays=period.baseCents-low*period.activeDays,lowDays=period.activeDays-highDays;
+ if(!Number.isSafeInteger(low)||!Number.isInteger(highDays)||highDays<0||lowDays<0)throw new AccountingValidationError('Distribución diaria inválida.');
+ return [...(lowDays?[{p:record.productId,q:lowDays,u:low/100}]:[]),...(highDays?[{p:record.roundingProductId,q:highDays,u:(low+1)/100}]:[])];
+}
+
+// Tesorería: importación y conciliación puras. Los saldos nuevos son centavos enteros.
+export function bankAmountCents(value,decimal='.') {
+ if(!['.',','].includes(decimal))throw new AccountingValidationError('Selecciona el separador decimal.');
+ let s=String(value??'').trim(),negative=false;
+ if(/^\(.*\)$/.test(s)){negative=true;s=s.slice(1,-1);}
+ if(s.startsWith('-')){negative=!negative;s=s.slice(1);}else if(s.startsWith('+'))s=s.slice(1);
+ const sep=decimal==='.'?'\\.':',',group=decimal==='.'?',':'\\.';
+ if(!new RegExp('^(?:\\d+|\\d{1,3}(?:'+group+'\\d{3})+)(?:'+sep+'\\d{1,2})?$').test(s))throw new AccountingValidationError('Importe inválido o con fracciones de centavo.');
+ s=s.split(decimal==='.'?',':'.').join('');const parts=s.split(decimal),n=BigInt(parts[0])*100n+BigInt((parts[1]||'').padEnd(2,'0'));
+ if(n>99999999900n)throw new AccountingValidationError('Importe fuera de rango.');return Number(n)*(negative?-1:1);
+}
+export function bankGridRows(grid,mapping){
+ if(!mapping||typeof mapping!=='object'||Array.isArray(mapping))throw new AccountingValidationError('Configura el mapeo de columnas antes de importar.');
+ if(!Array.isArray(grid)||grid.length<2||grid.length>1001)throw new AccountingValidationError('Importa entre 1 y 1000 movimientos.');
+ const headers=grid[0];if(!Array.isArray(headers)||headers.length>50||headers.some(c=>typeof c!=='string'||c.length>500))throw new AccountingValidationError('Encabezados inválidos.');
+ const indexes=['date','amount','reference'].map(k=>mapping[k]);
+ if(indexes.some(i=>!Number.isInteger(i)||i<0||i>=headers.length)||new Set(indexes).size!==3||!['ISO','DMY'].includes(mapping.dateFormat))throw new AccountingValidationError('Revisa el mapeo de columnas y fechas.');
+ return grid.slice(1).map((r,i)=>{
+  if(!Array.isArray(r)||r.length>50||r.some(c=>typeof c!=='string'||c.length>500))throw new AccountingValidationError('Fila inválida: '+(i+2));
+  let date=r[mapping.date]?.trim();if(mapping.dateFormat==='DMY'){const m=/^(\d{2})[/-](\d{2})[/-](\d{4})$/.exec(date);if(!m)throw new AccountingValidationError('Fecha inválida: '+(i+2));date=m[3]+'-'+m[2]+'-'+m[1];}
+  recurringDay(date);const amountCents=bankAmountCents(r[mapping.amount],mapping.decimal);
+  if(!amountCents)throw new AccountingValidationError('Movimiento sin importe: '+(i+2));
+  return {date,amountCents,reference:String(r[mapping.reference]||'').trim().slice(0,200).replace(/(?:\d[ -]?){12,19}/g,n=>'•••• '+n.replace(/\D/g,'').slice(-4)),sourceRow:i+2};
+ });
+}
+export function bankSuggestions(rows,ledger,maxDays=3){
+ if(!Number.isInteger(maxDays)||maxDays<0||maxDays>30)throw new AccountingValidationError('Tolerancia de fecha inválida.');
+ const ref=s=>String(s||'').normalize('NFKC').trim().toLocaleLowerCase('es');
+ return rows.map(row=>({sourceRow:row.sourceRow,candidates:ledger.filter(e=>e.amountCents===row.amountCents&&Math.abs(Date.parse(e.date)-Date.parse(row.date))<=maxDays*86400000).map(e=>({entryId:e.entryId,days:Math.abs(Date.parse(e.date)-Date.parse(row.date))/86400000,referenceMatch:!!ref(row.reference)&&ref(row.reference)===ref(e.reference)})).sort((a,b)=>Number(b.referenceMatch)-Number(a.referenceMatch)||a.days-b.days||a.entryId.localeCompare(b.entryId))}));
+}
+export function bankReconciliationTotals({bookCents,bankCents,pendingBank=[],transit=[]}){
+ const sum=rows=>rows.reduce((n,r)=>{if(!Number.isSafeInteger(r.amountCents))throw new AccountingValidationError('Saldo inválido.');const next=n+r.amountCents;if(!Number.isSafeInteger(next))throw new AccountingValidationError('Saldo fuera de rango.');return next},0);
+ const pendingCents=sum(pendingBank),transitCents=sum(transit),adjustedBookCents=bookCents+pendingCents,adjustedBankCents=bankCents+transitCents,differenceCents=adjustedBookCents-adjustedBankCents;
+ if(![bookCents,bankCents,adjustedBookCents,adjustedBankCents,differenceCents].every(Number.isSafeInteger))throw new AccountingValidationError('Saldo fuera de rango.');
+ return {bookCents,bankCents,pendingCents,transitCents,adjustedBookCents,adjustedBankCents,differenceCents};
+}

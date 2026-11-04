@@ -63,7 +63,7 @@ operate=async function(operation,body={}){
   const candidates=operation==='sale'?(body.items||[]):(businessRecord(body.id)?.items||[]);
   const usesConsumables=(pid)=>{const def=S.products.find(p=>p.id===pid)?.serviceDefinition;return def?.enabled&&(def.consumables?.length||def.components?.some(row=>S.products.find(p=>p.id===row.p)?.serviceDefinition?.enabled&&S.products.find(p=>p.id===row.p)?.serviceDefinition?.consumables?.length));};
   if(candidates.some(row=>usesConsumables(row.p))){
-   if(!confirm(serviceText('consumeConfirm','Esta prestación descontará los consumibles configurados de la sucursal activa y registrará su costo. Una nota de crédito no los repone. ¿Confirmas la prestación y el consumo?')))throw new Error(serviceText('cancelled','Prestación cancelada antes de guardar.'));
+   if(!confirm(serviceText('consumeConfirm','Esta prestación descontará los consumibles configurados de la sucursal activa y registrará su costo. Una nota de crédito no los repone automáticamente. ¿Confirmas la prestación y el consumo?')))throw new Error(serviceText('cancelled','Prestación cancelada antes de guardar.'));
    body={...body,serviceConsumptionConfirmed:true};
   }
  }

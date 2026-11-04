@@ -9790,9 +9790,9 @@ export const UI_CATALOG = {
     "max": 200
   },
   "serviceCatalog.consumeConfirm": {
-    "original": "Esta prestación descontará los consumibles configurados de la sucursal activa y registrará su costo. Una nota de crédito no los repone. ¿Confirmas la prestación y el consumo?",
+    "original": "Esta prestación descontará los consumibles configurados de la sucursal activa y registrará su costo. Una nota de crédito no los repone automáticamente. ¿Confirmas la prestación y el consumo?",
     "group": "Características de servicios",
-    "max": 522
+    "max": 570
   },
   "serviceCatalog.cancelled": {
     "original": "Prestación cancelada antes de guardar.",
@@ -10035,8 +10035,1798 @@ export const UI_CATALOG = {
     "max": 200
   },
   "serviceCatalog.quickAnswer": {
-    "original": "1. Crea el servicio y pulsa Editar y Configurar características del servicio. Activa la ampliación, configura duración, unidad, IVA o exención con motivo y comisión; confirma con un motivo del cambio.\n2. Un paquete contiene servicios sin paquetes anidados y utiliza su propio precio. Los consumibles requieren artículos inventariables con stock libre en la sucursal. No se consumen automáticamente lotes, series o producción.\n3. Al emitir, confirma la prestación y sus consumibles. El costo queda vinculado a la factura; una nota de crédito no repone insumos ya utilizados. Las comisiones individuales requieren Personal y no generan pagos ni nómina automáticamente. Verifica con tu contador.",
+    "original": "1. Crea el servicio y pulsa Editar y Configurar características del servicio. Activa la ampliación, configura duración, unidad, IVA o exención con motivo y comisión; confirma con un motivo del cambio.\n2. Un paquete contiene servicios sin paquetes anidados y utiliza su propio precio. Los consumibles requieren artículos inventariables con stock libre en la sucursal. No se consumen automáticamente lotes, series o producción.\n3. Al emitir, confirma la prestación y sus consumibles. El costo queda vinculado a la factura; la reposición requiere recuperar los insumos y confirmarla al devolver todos los servicios. Las comisiones individuales requieren Personal y no generan pagos ni nómina automáticamente. Verifica con tu contador.",
     "group": "Características de servicios",
-    "max": 2076
+    "max": 2193
+  },
+  "recurring.allBranches": {
+    "original": "Todas las sucursales",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.title": {
+    "original": "Suscripciones y facturación recurrente",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.help": {
+    "original": "Cada emisión, anticipo, devolución y reconocimiento requiere confirmación. No hay cargos automáticos. Los períodos usan fin exclusivo y prorrateo por días activos; verifica con tu contador.",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 567
+  },
+  "recurring.create": {
+    "original": "Crear suscripción",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.name": {
+    "original": "Nombre del plan del cliente",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.customer": {
+    "original": "Cliente identificado",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.amount": {
+    "original": "Precio por período sin IVA (centavos enteros)",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.months": {
+    "original": "Periodicidad",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.monthly": {
+    "original": "Mensual",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.quarter": {
+    "original": "Trimestral",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.half": {
+    "original": "Semestral",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.year": {
+    "original": "Anual",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.anchor": {
+    "original": "Inicio del primer período",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.date": {
+    "original": "Fecha efectiva",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.vat": {
+    "original": "IVA configurado (%)",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.liability": {
+    "original": "Pasivo exclusivo para anticipos e ingresos diferidos",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.deferred": {
+    "original": "Diferir el ingreso y reconocerlo mediante asientos confirmados",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.reason": {
+    "original": "Motivo",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.confirm": {
+    "original": "Confirmo los datos y el efecto contable",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.save": {
+    "original": "Confirmar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.period": {
+    "original": "Período (0 es el primero)",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.due": {
+    "original": "Vencimiento de la factura",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.series": {
+    "original": "Serie autorizada de la sucursal",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.bill": {
+    "original": "Vista previa de emisión",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.emit": {
+    "original": "Confirmar factura a crédito",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.preview": {
+    "original": "Base / IVA / total calculados por el servidor al emitir",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.details": {
+    "original": "Historial",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.state": {
+    "original": "Cambiar estado",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.advance": {
+    "original": "Registrar anticipo",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.refund": {
+    "original": "Devolver anticipo",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.recognize": {
+    "original": "Reconocer ingreso",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.cash": {
+    "original": "Cuenta de dinero",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.total": {
+    "original": "Importe",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.status": {
+    "original": "Estado",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.amountColumn": {
+    "original": "Precio sin IVA",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.actions": {
+    "original": "Acciones",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.empty": {
+    "original": "No hay suscripciones. El dueño puede crear una con confirmación; el catálogo y las facturas anteriores se conservan.",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 348
+  },
+  "recurring.pdf": {
+    "original": "Descargar PDF",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.csv": {
+    "original": "Descargar CSV para Excel",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.from": {
+    "original": "Desde",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.to": {
+    "original": "Hasta / fecha de métricas",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.refresh": {
+    "original": "Consultar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.mrr": {
+    "original": "MRR sin IVA",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.arr": {
+    "original": "ARR sin IVA",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.churn": {
+    "original": "Churn de suscripciones",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.aging": {
+    "original": "Antigüedad de cartera recurrente",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.reference": {
+    "original": "Documento",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.balance": {
+    "original": "Saldo",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.days": {
+    "original": "Días vencidos",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.renewals": {
+    "original": "Renovaciones confirmadas",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.events": {
+    "original": "Historial de operaciones",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.generated": {
+    "original": "Generado",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.author": {
+    "original": "Generado por",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.version": {
+    "original": "Versión",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.company": {
+    "original": "Empresa",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.branch": {
+    "original": "Sucursal",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.field": {
+    "original": "Campo",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.value": {
+    "original": "Valor",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.noEvents": {
+    "original": "Sin operaciones",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.periodHelp": {
+    "original": "No se emiten períodos futuros ni se repite uno ya facturado. Las facturas se emiten a crédito; los cobros posteriores usan Cuentas por cobrar. El anticipo disponible se aplica hasta cubrir el total.",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 594
+  },
+  "recurring.recognizeHelp": {
+    "original": "El reconocimiento es proporcional a los días activos transcurridos y nunca supera la base neta de notas de crédito. La fecha indicada es fin exclusivo.",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 453
+  },
+  "recurring.stateHelp": {
+    "original": "Pausar o cancelar un período facturado exige confirmar su nota de crédito por los días sin servicio. Si hubo cobros, se necesita un turno abierto para devolverlos. La reanudación empieza en el siguiente período; Cancelada es definitiva. Las notas previas requieren revisión del contador.",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 861
+  },
+  "recurring.error": {
+    "original": "No se completó la operación.",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.loading": {
+    "original": "Consultando suscripciones autorizadas…",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.status.Activa": {
+    "original": "Activa",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.status.Pausada": {
+    "original": "Pausada",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.status.Cancelada": {
+    "original": "Cancelada",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.base": {
+    "original": "Base sin IVA",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.tax": {
+    "original": "IVA",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.next": {
+    "original": "Próxima emisión no confirmada",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.deposit": {
+    "original": "Anticipo disponible",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.newStatus": {
+    "original": "Nuevo estado",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.close": {
+    "original": "Cerrar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.actor": {
+    "original": "Operación",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.readOnly": {
+    "original": "Solo lectura",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.invalid": {
+    "original": "Revisa el período y las fechas.",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.catalog": {
+    "original": "Se crean dos servicios exclusivos por día, con precio de catálogo cero. Dos tarifas diarias distribuyen exactamente los centavos del precio por período, sin descuentos ni cambios a servicios existentes.",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 606
+  },
+  "recurring.moneyCash": {
+    "original": "Caja general",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.moneyBank": {
+    "original": "Banco",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.shift": {
+    "original": "Turno abierto para devoluciones",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.refundMethod": {
+    "original": "Medio de devolución",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.revision": {
+    "original": "Revisión de empresa",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.employee": {
+    "original": "Empleado",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.confirmCredit": {
+    "original": "Confirmo las notas de crédito necesarias para los días sin servicio",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 201
+  },
+  "charts.title": {
+    "original": "Plantilla especializada por perfil y sector",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.help": {
+    "original": "Vista previa aditiva para empresas sin movimientos. Conserva las cuentas existentes; verifica con tu contador.",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 330
+  },
+  "charts.open": {
+    "original": "Revisar plantilla especializada",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.sector": {
+    "original": "Sector de la plantilla",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account": {
+    "original": "Cuenta",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.application": {
+    "original": "Aplicación",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.keep": {
+    "original": "Conservar existente",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.add": {
+    "original": "Agregar nueva",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "restock.title": {
+    "original": "Reposición opcional de consumibles",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "restock.help": {
+    "original": "Solo si se recuperaron físicamente los insumos y se devolvieron todos los servicios de esta factura. Se conserva el costo actual del catálogo; cualquier diferencia se registra en la cuenta elegida. Sin marcar, el consumo se conserva. Verifica con tu contador.",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 777
+  },
+  "restock.enable": {
+    "original": "Solicitar reposición de los insumos consumidos",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "restock.confirm": {
+    "original": "Confirmo que los insumos se recuperaron físicamente",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "restock.reason": {
+    "original": "Motivo de la reposición",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "restock.variance": {
+    "original": "Gasto para diferencias de valoración",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "commissions.accrue": {
+    "original": "Devengar referencias del catálogo de servicios",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "commissions.help": {
+    "original": "Acción opcional y confirmada. Usa las referencias conservadas en la factura y descuenta las notas de crédito previas. Se liquida desde Comisiones; no se agrega de nuevo a nómina. Una devolución posterior exige revisar y corregir el devengo con tu contador.",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 768
+  },
+  "commissions.expense": {
+    "original": "Cuenta de gasto",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "commissions.liability": {
+    "original": "Cuenta de comisión por pagar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.quickQuestion": {
+    "original": "¿Cómo confirmo una suscripción del cliente?",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.quickAnswer": {
+    "original": "1. Abre Suscripciones y facturación recurrente. El dueño crea el plan del cliente con periodicidad y motivo. Revisa precio, IVA y sucursal.\n2. Vista previa de emisión muestra el prorrateo; confirma para emitir a crédito. Los anticipos se aplican sin cargos automáticos. Pausar o cancelar un período emitido requiere confirmar su nota de crédito; reanudar empieza en el siguiente período.\n3. Reconocer ingreso crea un asiento solo cuando lo confirmas. Consulta MRR, ARR, churn y antigüedad, o descarga PDF/CSV. Verifica con tu contador.",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 1605
+  },
+  "charts.account.1291.comercio": {
+    "original": "Anticipos a proveedores",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1292.comercio": {
+    "original": "Servicios ejecutados por facturar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1491.comercio": {
+    "original": "Pagos anticipados de operación",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2198.comercio": {
+    "original": "Anticipos de clientes",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2199.comercio": {
+    "original": "Ingresos diferidos de suscripciones",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2197.comercio": {
+    "original": "Comisiones devengadas por pagar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.6197.comercio": {
+    "original": "Gastos por comisiones de servicios",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.6198.comercio": {
+    "original": "Servicios contratados a terceros",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1391.comercio": {
+    "original": "Mercadería en tránsito",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5191.comercio": {
+    "original": "Fletes de comercialización",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1291.servicios": {
+    "original": "Anticipos a proveedores",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1292.servicios": {
+    "original": "Servicios ejecutados por facturar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1491.servicios": {
+    "original": "Pagos anticipados de operación",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2198.servicios": {
+    "original": "Anticipos de clientes",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2199.servicios": {
+    "original": "Ingresos diferidos de suscripciones",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2197.servicios": {
+    "original": "Comisiones devengadas por pagar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.6197.servicios": {
+    "original": "Gastos por comisiones de servicios",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.6198.servicios": {
+    "original": "Servicios contratados a terceros",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4191.servicios": {
+    "original": "Ingresos por mantenimiento",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5191.servicios": {
+    "original": "Costos de prestación de servicios",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1291.industria": {
+    "original": "Anticipos a proveedores",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1292.industria": {
+    "original": "Servicios ejecutados por facturar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1491.industria": {
+    "original": "Pagos anticipados de operación",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2198.industria": {
+    "original": "Anticipos de clientes",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2199.industria": {
+    "original": "Ingresos diferidos de suscripciones",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2197.industria": {
+    "original": "Comisiones devengadas por pagar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.6197.industria": {
+    "original": "Gastos por comisiones de servicios",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.6198.industria": {
+    "original": "Servicios contratados a terceros",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1391.industria": {
+    "original": "Producción en proceso",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5191.industria": {
+    "original": "Costos indirectos de fabricación",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1291.agro": {
+    "original": "Anticipos a proveedores",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1292.agro": {
+    "original": "Servicios ejecutados por facturar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1491.agro": {
+    "original": "Pagos anticipados de operación",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2198.agro": {
+    "original": "Anticipos de clientes",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2199.agro": {
+    "original": "Ingresos diferidos de suscripciones",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2197.agro": {
+    "original": "Comisiones devengadas por pagar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.6197.agro": {
+    "original": "Gastos por comisiones de servicios",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.6198.agro": {
+    "original": "Servicios contratados a terceros",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1391.agro": {
+    "original": "Cultivos en proceso",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5191.agro": {
+    "original": "Costos de cosecha",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1291.construccion": {
+    "original": "Anticipos a proveedores",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1292.construccion": {
+    "original": "Servicios ejecutados por facturar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1491.construccion": {
+    "original": "Pagos anticipados de operación",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2198.construccion": {
+    "original": "Anticipos de clientes",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2199.construccion": {
+    "original": "Ingresos diferidos de suscripciones",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2197.construccion": {
+    "original": "Comisiones devengadas por pagar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.6197.construccion": {
+    "original": "Gastos por comisiones de servicios",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.6198.construccion": {
+    "original": "Servicios contratados a terceros",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1391.construccion": {
+    "original": "Obras en ejecución",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5191.construccion": {
+    "original": "Costos de subcontratos de obra",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1291.financiero": {
+    "original": "Anticipos a proveedores",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1292.financiero": {
+    "original": "Servicios ejecutados por facturar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1491.financiero": {
+    "original": "Pagos anticipados de operación",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2198.financiero": {
+    "original": "Anticipos de clientes",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2199.financiero": {
+    "original": "Ingresos diferidos de suscripciones",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2197.financiero": {
+    "original": "Comisiones devengadas por pagar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.6197.financiero": {
+    "original": "Gastos por comisiones de servicios",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.6198.financiero": {
+    "original": "Servicios contratados a terceros",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1293.financiero": {
+    "original": "Intereses devengados por cobrar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4191.financiero": {
+    "original": "Ingresos por intermediación",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1291.sin_fines_de_lucro": {
+    "original": "Anticipos a proveedores",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1292.sin_fines_de_lucro": {
+    "original": "Servicios ejecutados por facturar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1491.sin_fines_de_lucro": {
+    "original": "Pagos anticipados de operación",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2198.sin_fines_de_lucro": {
+    "original": "Anticipos de clientes",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2199.sin_fines_de_lucro": {
+    "original": "Ingresos diferidos de suscripciones",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2197.sin_fines_de_lucro": {
+    "original": "Comisiones devengadas por pagar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.6197.sin_fines_de_lucro": {
+    "original": "Gastos por comisiones de servicios",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.6198.sin_fines_de_lucro": {
+    "original": "Servicios contratados a terceros",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2196.sin_fines_de_lucro": {
+    "original": "Fondos restringidos por ejecutar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5191.sin_fines_de_lucro": {
+    "original": "Costos de programas y proyectos",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.comercio": {
+    "original": "Ingresos de Comercio general",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.comercio": {
+    "original": "Costos directos de Comercio general",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.minorista": {
+    "original": "Ingresos de Tienda minorista, pulpería y supermercado",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.minorista": {
+    "original": "Costos directos de Tienda minorista, pulpería y supermercado",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.medidas": {
+    "original": "Ingresos de documentos_venta",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.medidas": {
+    "original": "Costos directos de documentos_venta",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.ropa": {
+    "original": "Ingresos de Ropa, calzado y accesorios",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.ropa": {
+    "original": "Costos directos de Ropa, calzado y accesorios",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.variantes": {
+    "original": "Ingresos de rutas",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.variantes": {
+    "original": "Costos directos de rutas",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.ferreteria": {
+    "original": "Ingresos de Ferretería, materiales y repuestos",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.ferreteria": {
+    "original": "Costos directos de Ferretería, materiales y repuestos",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.documentos_venta": {
+    "original": "Ingresos de despacho",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.documentos_venta": {
+    "original": "Costos directos de despacho",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.farmacia": {
+    "original": "Ingresos de Farmacia y productos naturales",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.farmacia": {
+    "original": "Costos directos de Farmacia y productos naturales",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.lotes": {
+    "original": "Ingresos de medidas",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.lotes": {
+    "original": "Costos directos de medidas",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.tecnologia": {
+    "original": "Ingresos de Electrónica, celulares y tecnología",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.tecnologia": {
+    "original": "Costos directos de Electrónica, celulares y tecnología",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.restaurante": {
+    "original": "Ingresos de Restaurante, bar y cafetería",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.restaurante": {
+    "original": "Costos directos de Restaurante, bar y cafetería",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.cuentas_abiertas": {
+    "original": "Ingresos de medidas",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.cuentas_abiertas": {
+    "original": "Costos directos de medidas",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.comida_rapida": {
+    "original": "Ingresos de Comida rápida, food truck y panadería",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.comida_rapida": {
+    "original": "Costos directos de Comida rápida, food truck y panadería",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.despacho": {
+    "original": "Ingresos de produccion",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.despacho": {
+    "original": "Costos directos de produccion",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.catering": {
+    "original": "Ingresos de Catering y eventos",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.catering": {
+    "original": "Costos directos de Catering y eventos",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.profesionales": {
+    "original": "Ingresos de Servicios profesionales",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.profesionales": {
+    "original": "Costos directos de Servicios profesionales",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.agenda": {
+    "original": "Ingresos de proyectos",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.agenda": {
+    "original": "Costos directos de proyectos",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.belleza": {
+    "original": "Ingresos de Belleza, barbería y spa",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.belleza": {
+    "original": "Costos directos de Belleza, barbería y spa",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.salud": {
+    "original": "Ingresos de Clínicas, consultorios, odontología y veterinaria",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.salud": {
+    "original": "Costos directos de Clínicas, consultorios, odontología y veterinaria",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 204
+  },
+  "charts.account.2195.educacion": {
+    "original": "Matrículas anticipadas",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.educacion": {
+    "original": "Ingresos por enseñanza",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.contratos": {
+    "original": "Ingresos de documentos_venta",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.contratos": {
+    "original": "Costos directos de documentos_venta",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.gimnasio": {
+    "original": "Ingresos de Gimnasio, deportes y recreación",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.gimnasio": {
+    "original": "Costos directos de Gimnasio, deportes y recreación",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.taller": {
+    "original": "Ingresos de Taller mecánico, carpintería y reparaciones",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.taller": {
+    "original": "Costos directos de Taller mecánico, carpintería y reparaciones",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.proyectos": {
+    "original": "Ingresos de documentos_venta",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.proyectos": {
+    "original": "Costos directos de documentos_venta",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.lavanderia": {
+    "original": "Ingresos de Autolavado y lavandería",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.lavanderia": {
+    "original": "Costos directos de Autolavado y lavandería",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.2195.hotel": {
+    "original": "Reservas de hospedaje anticipadas",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.hotel": {
+    "original": "Ingresos de alojamiento",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.reservas": {
+    "original": "Ingresos de cuentas_abiertas",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.reservas": {
+    "original": "Costos directos de cuentas_abiertas",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.alquiler": {
+    "original": "Ingresos de Alquiler de propiedades, equipos y vehículos",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.alquiler": {
+    "original": "Costos directos de Alquiler de propiedades, equipos y vehículos",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.prestamista": {
+    "original": "Ingresos de Préstamos, microfinanzas y casas de empeño",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.prestamista": {
+    "original": "Costos directos de Préstamos, microfinanzas y casas de empeño",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.construccion": {
+    "original": "Ingresos de Construcción y contratistas",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.construccion": {
+    "original": "Costos directos de Construcción y contratistas",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.agro": {
+    "original": "Ingresos de Agropecuario y agroindustria",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.agro": {
+    "original": "Costos directos de Agropecuario y agroindustria",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.manufactura": {
+    "original": "Ingresos de Manufactura y producción artesanal",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.manufactura": {
+    "original": "Costos directos de Manufactura y producción artesanal",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.produccion": {
+    "original": "Ingresos de documentos_venta",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.produccion": {
+    "original": "Costos directos de documentos_venta",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.distribuidora": {
+    "original": "Ingresos de Distribuidoras y mayoristas",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.distribuidora": {
+    "original": "Costos directos de Distribuidoras y mayoristas",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.rutas": {
+    "original": "Ingresos de documentos_venta",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.rutas": {
+    "original": "Costos directos de documentos_venta",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.transporte": {
+    "original": "Ingresos de Transporte y logística",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.transporte": {
+    "original": "Costos directos de Transporte y logística",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.organizacion": {
+    "original": "Ingresos de Organizaciones, iglesias y asociaciones",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.organizacion": {
+    "original": "Costos directos de Organizaciones, iglesias y asociaciones",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.aportes": {
+    "original": "Ingresos de contratos",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.aportes": {
+    "original": "Costos directos de contratos",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1591.software": {
+    "original": "Licencias adquiridas e intangibles",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.software": {
+    "original": "Ingresos por licencias y soporte",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1294.recurrentes": {
+    "original": "Suscripciones por cobrar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.recurrentes": {
+    "original": "Ingresos reconocidos de membresías",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.comercio_electronico": {
+    "original": "Ingresos de Comercio electrónico y venta en línea",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.comercio_electronico": {
+    "original": "Costos directos de Comercio electrónico y venta en línea",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.freelance": {
+    "original": "Ingresos de Freelance y consultoría individual",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.freelance": {
+    "original": "Costos directos de Freelance y consultoría individual",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1294.inmobiliaria": {
+    "original": "Honorarios de intermediación por cobrar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.inmobiliaria": {
+    "original": "Ingresos por corretaje inmobiliario",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.1294.seguros": {
+    "original": "Comisiones de corretaje por cobrar",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.seguros": {
+    "original": "Ingresos de intermediación de seguros",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.4192.personalizado": {
+    "original": "Ingresos de Personalizado",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "charts.account.5192.personalizado": {
+    "original": "Costos directos de Personalizado",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.creditNote": {
+    "original": "Nota de crédito recurrente",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.currency": {
+    "original": "Moneda base",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.recognized": {
+    "original": "Ingreso reconocido sin IVA",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.credited": {
+    "original": "Base corregida por notas de crédito",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "recurring.activeDays": {
+    "original": "Días de servicio",
+    "group": "Mejoras de servicios y suscripciones",
+    "max": 200
+  },
+  "banks.title": {
+    "original": "Bancos y conciliación",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.flow": {
+    "original": "Importa, revisa y confirma antes de cerrar; verifica con tu contador.",
+    "group": "Tesorería y respaldo",
+    "max": 207
+  },
+  "banks.create": {
+    "original": "Registrar banco o tarjeta",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.name": {
+    "original": "Nombre de la cuenta",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.bank": {
+    "original": "Banco o emisor",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.lastFour": {
+    "original": "Últimos cuatro dígitos (no ingreses el número completo)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.currency": {
+    "original": "Moneda",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.account": {
+    "original": "Cuenta contable exclusiva",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.card": {
+    "original": "Tarjeta empresarial",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.cutDay": {
+    "original": "Día de corte",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.payDay": {
+    "original": "Día de pago",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.date": {
+    "original": "Fecha efectiva",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.reason": {
+    "original": "Motivo",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.confirmed": {
+    "original": "Confirmo los datos y su efecto",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.save": {
+    "original": "Confirmar",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.import": {
+    "original": "Importar extracto",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.mapping": {
+    "original": "Guardar mapeo del banco",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.from": {
+    "original": "Inicio del extracto",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.to": {
+    "original": "Fin del extracto",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.opening": {
+    "original": "Saldo inicial del extracto (centavos)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.closing": {
+    "original": "Saldo final del extracto (centavos)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.file": {
+    "original": "Extracto CSV o XLSX (máximo 5 MB)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.dateColumn": {
+    "original": "Columna de fecha (desde 0)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.amountColumn": {
+    "original": "Columna de importe con signo (desde 0)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.referenceColumn": {
+    "original": "Columna de referencia (desde 0)",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.dateFormat": {
+    "original": "Formato de fecha",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.decimal": {
+    "original": "Separador decimal",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.preview": {
+    "original": "Leer y revisar vista previa",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.previewRequired": {
+    "original": "Lee y revisa nuevamente el archivo tras cambiar el mapeo.",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.invalidFile": {
+    "original": "Selecciona un archivo CSV o XLSX de hasta 5 MB y 1000 movimientos.",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.invalidSheet": {
+    "original": "La hoja supera 1000 movimientos o 50 columnas.",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.limit": {
+    "original": "Solo se muestran las primeras 50 filas; se validan y guardan hasta 1000.",
+    "group": "Tesorería y respaldo",
+    "max": 216
+  },
+  "banks.empty": {
+    "original": "No hay cuentas incorporadas. Registrar una exige acción expresa del dueño y una cuenta contable exclusiva.",
+    "group": "Tesorería y respaldo",
+    "max": 318
+  },
+  "banks.baseOnly": {
+    "original": "Esta conciliación opera en la moneda base. Las cuentas en otra moneda conservan su tratamiento en Multimoneda. No hay conexión al banco, pagos ni cargos automáticos.",
+    "group": "Tesorería y respaldo",
+    "max": 495
+  },
+  "banks.details": {
+    "original": "Revisar conciliación",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.status": {
+    "original": "Estado",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.open": {
+    "original": "Abierta",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.closed": {
+    "original": "Cerrada",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.sourceRow": {
+    "original": "Fila del archivo",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.amount": {
+    "original": "Importe",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.reference": {
+    "original": "Referencia",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.entry": {
+    "original": "Asiento del libro",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.match": {
+    "original": "Confirmar emparejamiento",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.post": {
+    "original": "Crear asiento de comisión o interés",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.counter": {
+    "original": "Contrapartida de gasto o ingreso",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.close": {
+    "original": "Cerrar conciliación",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.closeHelp": {
+    "original": "El cierre es irreversible en esta interfaz y conserva una instantánea. Bloquea cambios y nuevos movimientos de esta cuenta en el período cerrado. Las correcciones se registran después del cierre. Confirma y explica el motivo.",
+    "group": "Tesorería y respaldo",
+    "max": 675
+  },
+  "banks.pending": {
+    "original": "Partidas del banco pendientes",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.matched": {
+    "original": "Partidas conciliadas",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.transit": {
+    "original": "Partidas del libro en tránsito",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.suggestions": {
+    "original": "Sugerencias: requieren selección y confirmación",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.book": {
+    "original": "Saldo libro",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.bankBalance": {
+    "original": "Saldo banco",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.adjustedBook": {
+    "original": "Libro ajustado",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.adjustedBank": {
+    "original": "Banco ajustado",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.difference": {
+    "original": "Diferencia ajustada",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.pdf": {
+    "original": "Descargar PDF",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.csv": {
+    "original": "Descargar CSV para Excel",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.directory": {
+    "original": "Directorio de cuentas",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.statements": {
+    "original": "Extractos",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.view": {
+    "original": "Consultar",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.error": {
+    "original": "No se completó la conciliación.",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.select": {
+    "original": "Selecciona una partida",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.importHelp": {
+    "original": "Una columna de importe con signo: ingresos positivos y egresos negativos. En tarjetas: cargos positivos, abonos negativos. Fechas ISO o día/mes/año de cuatro dígitos. Revisa saldo inicial y final; no se infieren coincidencias ni fechas.",
+    "group": "Tesorería y respaldo",
+    "max": 708
+  },
+  "banks.mask": {
+    "original": "Número enmascarado",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.all": {
+    "original": "Todas las sucursales",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.generated": {
+    "original": "Generado",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.author": {
+    "original": "Generado por",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.version": {
+    "original": "Versión",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.revision": {
+    "original": "Revisión de empresa",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.company": {
+    "original": "Empresa",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.branch": {
+    "original": "Sucursal",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.period": {
+    "original": "Período",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.field": {
+    "original": "Campo",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.value": {
+    "original": "Valor",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.dateISO": {
+    "original": "AAAA-MM-DD",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.dateDMY": {
+    "original": "DD/MM/AAAA",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.dot": {
+    "original": "Punto decimal",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.comma": {
+    "original": "Coma decimal",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.notMatched": {
+    "original": "Sin emparejar",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.dayDistance": {
+    "original": "Diferencia de días",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.exactReference": {
+    "original": "Referencia coincidente",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.mappingHelp": {
+    "original": "Guarda posiciones de columnas, separador decimal y formato de fechas para este banco. La importación permite revisar otro mapeo sin reemplazar el guardado.",
+    "group": "Tesorería y respaldo",
+    "max": 465
+  },
+  "backup.fullPdf": {
+    "original": "Descargar respaldo PDF completo",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "backup.allPeriods": {
+    "original": "Todos los períodos conservados",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.disabled": {
+    "original": "La ampliación de tesorería no está habilitada.",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.enableClosing": {
+    "original": "Configurar permiso de cierre bancario",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.closingEnabled": {
+    "original": "Permitir futuros cierres bancarios en esta empresa",
+    "group": "Tesorería y respaldo",
+    "max": 200
+  },
+  "banks.closingHelp": {
+    "original": "Apagado por defecto. Solo el dueño cambia este interruptor con confirmación y motivo. Desactivarlo impide nuevos cierres, pero conserva las conciliaciones ya cerradas y sus bloqueos.",
+    "group": "Tesorería y respaldo",
+    "max": 546
   }
 };

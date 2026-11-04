@@ -82,7 +82,7 @@ export function serviceConsumptionPlan(data,items){
   const soldQuantity=sold.get(pid)||0;
   const reserved=(data.businessRecords||[]).filter(r=>r.module==='rutas'&&r.consignment&&r.status==='Preparada'&&!r.entryId).flatMap(r=>r.items||[]).filter(i=>i.p===pid).reduce((s,i)=>s+i.q,0);
   ensure(p.stock+0.000000001>=q+soldQuantity+reserved,'No hay existencias libres suficientes para los consumibles del servicio.');
-  ensure(!(data.businessRecords||[]).some(r=>r.productId===pid&&(['lotes','produccion'].includes(r.module)||(r.module==='variantes'&&r.serial))),'Los consumibles con lotes, series o producción requieren una operación manual; no se consumen automáticamente.');
+  ensure(!(data.businessRecords||[]).some(r=>r.productId===pid&&(['lotes','produccion'].includes(r.module)||(r.module==='variantes'&&r.serial))),'No se permite usar como consumible un artículo con lotes, series o producción. Selecciona un insumo libre de esa trazabilidad; no se descontó inventario.');
   const costCents=serviceLineCostCents(p.cost,q);totalCents+=costCents;ensure(Number.isSafeInteger(totalCents),'El costo supera el rango seguro.');
   rows.push({pid,q,unit:p.unit||'unidad',unitCost:p.cost,costCents});
  }

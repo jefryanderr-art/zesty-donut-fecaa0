@@ -1,3 +1,5 @@
+import {guardBankReconciliations} from './banks.mjs';
+import {guardServicePayroll} from './service-commission.mjs';
 import { catalog, validateProfile } from './business-profile.mjs';
 import {projectServiceProduct,projectServiceEntry} from './service-catalog.mjs';
 import { fiscalAnnualTotals } from './fiscal-projection.mjs';
@@ -437,6 +439,8 @@ export async function updateCompany(companyId, session, revision, mutate, action
     if (patch.data) {
       if(!crossBranch) patch.data = mergeBranch(fullCompany.data, company.data, patch.data, access, action === 'Operación: branch' && access.owner);
       materializeBranches(patch.data);
+      guardBankReconciliations(fullCompany.data,patch.data,(ok,message)=>{if(!ok)accessError(message,400)});
+      guardServicePayroll(fullCompany.data,patch.data,(ok,message)=>{if(!ok)accessError(message,400)});
       guardPeriods(fullCompany.data, patch.data, action);
       await syncBarcodes(client, fullCompany, patch.data);
     }
