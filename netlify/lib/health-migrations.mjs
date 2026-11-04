@@ -83,5 +83,9 @@ export const EXPECTED_MIGRATIONS=[
   {
     "name": "20261103182013_add_payment_receipt_details",
     "hash": "286b3b42fc6c1214a298e1daf09e9dbbf0cbcc63d482ff5af5548576fa196a94"
+  },
+  {
+    "name": "20261104165424_add_fifo_inventory_layers",
+    "hash": "fa582cc697bff9fe1fc69e9c1dc96218f29d8cee53db574fa276b00bcf157514"
   }
 ];
