@@ -521,8 +521,8 @@ const handleRequest = async (request, context, metrics) => {
             data = scopeBranch(backup.data, currentAccess); name = backup.name; description = backup.description;
             if(currentAccess.owner)profilePatch=restoredBusinessProfile(company,backup,isAdmin);
           }
-          mergeData(company.data, data, { owner: true });
-          guardLedgerMutation(company.data, data, currentAccess);
+          mergeData(company.data, data, { owner: true }, {restoreServiceConfiguration:true});
+          guardLedgerMutation(company.data, data, currentAccess, {restoreServiceConfiguration:true});
           if (!currentAccess.owner && ((company.data?.taxes || []).some(tax => tax.receipt) || (data.taxes || []).some(tax => tax.receipt))) accessError('Cuando hay comprobantes privados, solo el dueño puede restaurar la empresa.');
           const historical = await retainedCompanyData(client, companyId);
           const trustedReceipts = new Map([company.data, ...historical.map(backup => backup.data)].flatMap(document => receiptRecords(document).map(tax => [tax.receipt.key, { id: tax.id, receipt: tax.receipt }])));
