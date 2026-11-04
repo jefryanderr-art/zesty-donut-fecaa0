@@ -1,3 +1,4 @@
+import {accountingEntries} from './accounting-engine.mjs';
 import {catalog} from './business-profile.mjs';
 import {randomUUID} from 'node:crypto';
 import {cents} from './accounting-codec.mjs';
@@ -33,7 +34,7 @@ const div=(a,b)=>b>0?a/b:null;
 const sum=values=>{const n=values.reduce((a,b)=>a+b,0);check(Number.isSafeInteger(n),'Importe fuera de rango seguro.');return n};
 export function financialSnapshot(data,from,to,mapping=DEFAULT_MAPPING){
  const match=(a,key)=>mapping[key].some(p=>String(a).startsWith(p));
- const balance=(key,until,flow=false)=>sum((data.entries||[]).filter(e=>e.date<=until&&(!flow||e.date>=from)).flatMap(e=>(e.lines||[]).filter(l=>match(l.a,key)).map(l=>cents(l.d||0)-cents(l.c||0))));
+ const balance=(key,until,flow=false)=>sum(accountingEntries(data.entries,until).filter(e=>(!flow||e.date>=from)&&(!flow||!['cierre','cierre-anual'].includes(e.type))).flatMap(e=>(e.lines||[]).filter(l=>match(l.a,key)).map(l=>cents(l.d||0)-cents(l.c||0))));
  const credit=k=>-balance(k,to,true),debit=k=>balance(k,to,true),end=k=>balance(k,to),before=new Date(Date.parse(from)-86400000).toISOString().slice(0,10),avg=k=>(balance(k,before)+end(k))/2;
  const sales=credit('sales'),cogs=debit('cogs'),expenses=debit('expenses'),net=sales-cogs-expenses,days=(Date.parse(to)-Date.parse(from))/86400000+1;
  const dso=div(avg('receivables')*days,sales),dpo=div(-avg('payables')*days,cogs),dio=div(avg('inventory')*days,cogs),margin=div(sales-cogs,sales);

@@ -87,5 +87,9 @@ export const EXPECTED_MIGRATIONS=[
   {
     "name": "20261104165424_add_fifo_inventory_layers",
     "hash": "fa582cc697bff9fe1fc69e9c1dc96218f29d8cee53db574fa276b00bcf157514"
+  },
+  {
+    "name": "20261104172553_add_declarations_annual_close",
+    "hash": "716c70085b19873a4564147294d7045f0360556be2deeb22e461e7187add1e67"
   }
 ];

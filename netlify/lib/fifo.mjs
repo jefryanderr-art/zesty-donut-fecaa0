@@ -1,3 +1,4 @@
+import {accountingEntries} from './accounting-engine.mjs';
 import { randomUUID } from 'node:crypto';
 import { canonical } from './accounting-codec.mjs';
 import { branchStock, companyBranches, recordBranch } from './branches.mjs';
@@ -12,7 +13,7 @@ const validQty=n=>Number.isFinite(n)&&n>=0&&Number.isSafeInteger(Math.round(n*1e
 const safe=n=>Number.isSafeInteger(n)&&n>=0;
 export const fifoEnabled=data=>data?.cfg?.costing?.method==='fifo';
 const activeLayers=data=>(data.inventoryLayers||[]).filter(l=>l.epoch===data.cfg?.costing?.epoch);
-const inventoryCents=(data,branch)=>(data.entries||[]).filter(e=>recordBranch(e)===branch).flatMap(e=>e.lines||[]).filter(l=>l.a==='1301').reduce((s,l)=>s+moneyCents(l.d)-moneyCents(l.c),0);
+const inventoryCents=(data,branch)=>accountingEntries(data.entries).filter(e=>recordBranch(e)===branch).flatMap(e=>e.lines||[]).filter(l=>l.a==='1301').reduce((s,l)=>s+moneyCents(l.d)-moneyCents(l.c),0);
 const unsupported=data=>{
  const records=data.businessRecords||[];
  check(!records.some(r=>r.module==='lotes'),'PEPS no admite lotes: la salida física actual usa FEFO y no enlaza cada lote con su capa de costo.');

@@ -468,3 +468,12 @@ body{font-family:var(--ui-font,'DM Sans',sans-serif)}
 :root[data-ui-appearance] :is(.auth-wordmark,.hero-a h1,.access-heading h2){color:var(--ink)}
 :root[data-ui-appearance] :is(.hero-a>p,.header-note,.auth-footer p,.access-heading p){color:var(--mut)}
 .public-editor-sections>.hero-a{padding:32px 20px;margin-bottom:24px}.public-editor-sections>.public-contacts{width:100%;margin:20px 0}
+
+/* Declaraciones y cierre: una lectura continua, con formularios en su sección. */
+.dw-declaration header{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.dw-declaration h3{margin:0}.dw-declaration details,.dw-list{margin-top:1rem;padding-top:1rem;border-top:1px solid var(--line,#c7cdc7)}
+.dw-declaration form,[data-dw-template],#dw-close,#dw-package{display:grid;gap:.8rem;margin:1rem 0;max-width:52rem}
+.dw-declaration summary,.dw-list summary{cursor:pointer;font-weight:600;min-height:2.75rem;padding:.5rem 0}
+[data-dw-template] textarea{width:100%;min-height:15rem;font:inherit;overflow-wrap:anywhere}.dw-job{display:grid;gap:.6rem;margin:1rem 0}.dw-job progress{width:100%;accent-color:var(--green,#315e49)}
+.dw-declaration td{overflow-wrap:anywhere;max-width:32rem}.dw-error{white-space:pre-wrap}
+@media(max-width:640px){.dw-declaration header{align-items:flex-start}.dw-declaration .btn{width:100%}.dw-declaration td{max-width:16rem}}

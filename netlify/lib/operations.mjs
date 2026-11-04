@@ -1,3 +1,7 @@
+import '../../public/fiscal-calculations.js';
+import {WORKFLOW_OPS,workflowOperation,workflowReport,workflowModule,permitPackage} from './fiscal-workflows.mjs';
+import {workflowEnabled,WORKFLOW_MODULES} from './declaration-rules.mjs';
+import {accountingEntries} from './accounting-engine.mjs';
 import {fifoEnabled,configureCosting,applyFifo,guardFifoOperation} from './fifo.mjs';
 import {REVIEW_OPS,auditReviewOperation} from './audit-review.mjs';
 import {PERSONNEL_MODULES,PERSONNEL_OPS,personnelOperation,personnelReport} from './personnel.mjs';
@@ -54,7 +58,7 @@ const dateValue = value => {
   requireValue(/^\d{4}-\d{2}-\d{2}$/.test(value || '') && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value, 'Fecha inválida.');
   return value;
 };
-export const ledgerBalance = (data, account, through = '9999') => round((data.entries || []).filter(entry => entry.date <= through).reduce((total, entry) => total + (entry.lines || []).filter(line => line.a === account).reduce((sum, line) => sum + line.d - line.c, 0), 0));
+export const ledgerBalance = (data, account, through = '9999') => round(accountingEntries(data.entries,through).filter(entry => entry.date <= through).reduce((total, entry) => total + (entry.lines || []).filter(line => line.a === account).reduce((sum, line) => sum + line.d - line.c, 0), 0));
 const linesBetween = (debit, credit, total) => [{ a: debit, d: total, c: 0 }, { a: credit, d: 0, c: total }];
 const requirePermission = (access, module) => requireModule(access,module,true);
 const financialCash = access => { requirePermission(access,'cajas'); if (!cashAdministrator(access) || !allowed(access, 'cajas', true)) accessError('Solo un responsable de caja autorizado realiza esta operación.'); };
@@ -175,7 +179,7 @@ export function guardCash(previous, next) {
     const minimum = data => {
       let balance = 0, lowest = 0;
       const days = new Map();
-      for (const entry of data?.entries || []) days.set(entry.date, (days.get(entry.date) || 0) + (entry.lines || []).filter(line => line.a === code).reduce((total, line) => total + line.d - line.c, 0));
+      for (const entry of accountingEntries(data?.entries)) days.set(entry.date, (days.get(entry.date) || 0) + (entry.lines || []).filter(line => line.a === code).reduce((total, line) => total + line.d - line.c, 0));
       for (const [, net] of [...days].sort(([first], [second]) => first.localeCompare(second))) {
         balance = round(balance + net);
         lowest = Math.min(lowest, balance);
@@ -197,7 +201,7 @@ export function guardLedgerMutation(previous, next, access, {restoreServiceConfi
     requireValue(restoreService||equal(product.serviceDefinition,previous?.products?.find(p=>p.id===product.id)?.serviceDefinition),'Usa la configuración del servicio para modificar duración, comisiones, paquetes o consumibles.');
     requireValue(Number.isFinite(product.price) && product.price >= 0 && Number.isFinite(Number(product.min || 0)) && Number(product.min || 0) >= 0 && Number.isFinite(Number(product.vatRate || 0)) && Number(product.vatRate || 0) >= 0 && Number(product.vatRate || 0) <= 100, 'Precio, mínimo o IVA del producto inválido.');
   }
-  for (const name of [...OPERATION_ARRAYS, 'assets','loans','recurringEntries','exchangeRates','foreignDocuments','budgets','quotations','purchaseOrders','attendance','vacationRequests','employeeAdvances','stockTransfers','withholdings','instruments','partners', 'invoiceSequences','inventoryLayers']) {
+  for (const name of [...OPERATION_ARRAYS, 'assets','loans','recurringEntries','exchangeRates','foreignDocuments','budgets','quotations','purchaseOrders','attendance','vacationRequests','employeeAdvances','stockTransfers','withholdings','instruments','partners', 'invoiceSequences','inventoryLayers','fiscalWorkflows']) {
     const empty = name === 'invoiceSequences' ? {} : [];
     requireValue(equal(previous?.[name] || empty, next[name] || empty), 'Usa la operación específica para modificar facturación, cajas o costos.');
   }
@@ -473,7 +477,7 @@ async function saveAttachment(data, companyId, body, record, addedKeys, historic
   const bytes = Buffer.from(file.content, 'base64');
   const valid = file.type === 'application/pdf' ? bytes.subarray(0, 5).toString() === '%PDF-' : file.type === 'image/jpeg' ? bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255 : file.type === 'image/png' ? bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) : file.type === 'image/webp' && bytes.subarray(0, 4).toString() === 'RIFF' && bytes.subarray(8, 12).toString() === 'WEBP';
   requireValue(bytes.length > 0 && bytes.length <= 1048576 && valid, 'Adjunta PDF, JPG, PNG o WebP de hasta 1 MB.');
-  const receipts = [...new Map([data, ...historical.map(row => row.data)].flatMap(document => receiptRecords(document).map(item => [item.receipt.key, item.receipt]))).values()];
+  const receipts = [...new Map([data, ...historical.map(row => row.data)].flatMap(document => receiptRecords(document).map(item => [item.receipt.key, item.receipt]))).values()].filter(receipt=>!receipt.generated);
   requireValue(receipts.length < 100 && receipts.reduce((total, receipt) => total + receipt.size, 0) + bytes.length <= 50 * 1048576, 'La empresa supera 100 comprobantes o 50 MB, incluidas las versiones recuperables.');
   const key = `${companyId}/${randomUUID()}`;
   addedKeys.push(key);
@@ -481,6 +485,14 @@ async function saveAttachment(data, companyId, body, record, addedKeys, historic
   record.receipt = { key, name: text(file.name, 180).replace(/[\x00-\x1f\x7f/\\]/g, '') || 'comprobante', type: file.type, size: bytes.length };
 }
 export async function runOperation(companyId, session, body) {
+  if(body.operation==='workflowReport')return db.transaction(async client=>{
+    const access=await companyAccess(client,companyId,session,true);requireModule(access,body.module);
+    requireValue(access.branchId&&WORKFLOW_MODULES.includes(body.module),'Selecciona un módulo y sucursal autorizados.');
+    const data=scopeBranch(access.company.data,access);
+    if(workflowEnabled(data,body.module)){try{permitPackage(access,(a,m,w)=>requireModule(a,m,w),data);}catch(error){return {enabled:true,module:body.module,blocked:'La consulta requiere lectura de todas las fuentes contables del paquete. Revisa permisos y plan con el dueño.'};}}
+    if(body.format&&body.format!=='VIEW'){requireValue(['PDF','CSV','XLSX'].includes(body.format),'Formato inválido.');await audit(client,companyId,session,'Exportación de declaración '+body.format,[{period:body.period,branchId:access.branchId}]);}
+    return workflowReport(data,body,{company:access.company.name,companyId,branchId:access.branchId,generatedAt:new Date().toISOString(),generatedBy:actorName(session),revision:access.company.revision});
+  });
   if(REVIEW_OPS.includes(body.operation)||body.operation==='auditReviewView')return auditReviewOperation(companyId,session,body);
   if(body.operation==='clientReport')return db.transaction(async client=>{
     const access=await companyAccess(client,companyId,session,true);requireModule(access,body.module);requireModule(access,'facturacion');
@@ -611,7 +623,7 @@ export async function runOperation(companyId, session, body) {
     accessError('La ampliación de tesorería no está habilitada.',503);
   });
   const addedKeys = [];
-  if((PERSONNEL_OPS.includes(body.operation)||CERTIFICATE_OPS.includes(body.operation)||CLIENT_OPS.includes(body.operation)||FISCAL_OPS.includes(body.operation)||INVENTORY_OPS.includes(body.operation)||ANALYSIS_OPS.includes(body.operation)||BUDGET_OPS.includes(body.operation)||TREASURY_OPS.includes(body.operation)||BANK_OPS.includes(body.operation)||RECURRING_OPS.includes(body.operation)||BUSINESS_OPS.includes(body.operation)||['serviceDefinition','economicSector','specializedChart','serviceAccrueCommission'].includes(body.operation))&&!body.operationId)accessError('La operación requiere un identificador único.',400);
+  if((WORKFLOW_OPS.includes(body.operation)||PERSONNEL_OPS.includes(body.operation)||CERTIFICATE_OPS.includes(body.operation)||CLIENT_OPS.includes(body.operation)||FISCAL_OPS.includes(body.operation)||INVENTORY_OPS.includes(body.operation)||ANALYSIS_OPS.includes(body.operation)||BUDGET_OPS.includes(body.operation)||TREASURY_OPS.includes(body.operation)||BANK_OPS.includes(body.operation)||RECURRING_OPS.includes(body.operation)||BUSINESS_OPS.includes(body.operation)||['serviceDefinition','economicSector','specializedChart','serviceAccrueCommission'].includes(body.operation))&&!body.operationId)accessError('La operación requiere un identificador único.',400);
   let output = null;
   if(body.operationId && !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.operationId)) accessError('Identificador de operación inválido.',400);
   const receipt=body.operationId?{id:body.operationId,actor:session.email+':'+(session.memberId||''),hash:createHash('sha256').update(JSON.stringify(body)).digest('hex'),resultId:()=>typeof output==='string'?output:null}:null;
@@ -645,6 +657,7 @@ export async function runOperation(companyId, session, body) {
       else if(ANALYSIS_OPS.includes(operation))output=await analysisOperation(data,access,operationSession,body,{permit:requirePermission});
       else if(BUDGET_OPS.includes(operation))output=await budgetOperation(data,access,operationSession,body,{permit:requirePermission});
       else if(INVENTORY_OPS.includes(operation))output=await inventoryOperation(data,access,operationSession,body,{permit:requirePermission});
+      else if(WORKFLOW_OPS.includes(operation))output=await workflowOperation(data,access,operationSession,body,{companyId,addedKeys,newReceipts:[],permit:(a,m,w=true)=>requireModule(a,m,w),append:appendEntry,receipts:async()=>{const history=await retainedCompanyData(client,companyId);const refs=[access.company.data,...history.map(r=>r.data)].flatMap(d=>receiptRecords(d).map(r=>r.receipt));const newly=addedKeys.map(key=>({key,size:0}));return [...new Map([...refs,...newly].map(r=>[r.key,r])).values()]}});
       else if(FISCAL_OPS.includes(operation))output=await fiscalOperation(data,access,operationSession,body,{permit:requirePermission});
       else if(TREASURY_OPS.includes(operation)){
         const members=operation==='batchPolicy'?await client.select({id:companyMembers.id}).from(companyMembers).where(and(eq(companyMembers.companyId,companyId),eq(companyMembers.active,true))):[];
@@ -958,7 +971,7 @@ export async function runOperation(companyId, session, body) {
         requireValue(/^\d{4}-(0[1-9]|1[0-2])$/.test(month || ''), 'Período inválido.');
         requireValue(!data.taxes.some(tax => tax.source === 'anticipo' && tax.period === month), 'Ya existe una obligación de anticipo para ese mes.');
         const base = round(data.entries.filter(entry => entry.date.slice(0, 7) === month && ['venta', 'nota-credito'].includes(entry.type)).reduce((total, entry) => total + (entry.subtotal ?? entry.total - (entry.vat || 0)) * (entry.type === 'nota-credito' ? -1 : 1), 0));
-        const withholdings = amount(body.withholdings || 0, true), grossAdvance = round(Math.max(0, base) * settings.rate / 100), total = Math.max(0, round(grossAdvance - withholdings));
+        const withholdings = amount(body.withholdings || 0, true), sharedAdvance=globalThis.AcontecFiscalMath.advance(data,month,settings.rate,withholdings), grossAdvance=sharedAdvance.grossAdvance,total=sharedAdvance.total;
         requireValue(total > 0, 'No hay anticipo a pagar; no se genera una obligación ni un gasto en cero.');
         const end = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5)), 0)).toISOString().slice(0, 10);
         requireValue(end < new Date().toISOString().slice(0, 10), 'El mes debe haber terminado antes de crear su obligación de anticipo. Puedes consultar la estimación mientras está en curso.');

@@ -32,7 +32,8 @@ export function balancedLines(lines,accounts){
  if(debit!==credit||!debit||!Number.isSafeInteger(debit))throw new AccountingValidationError('El debe y el haber deben ser iguales y mayores que cero.');return result;
 }
 export function yearClosing(entries,accounts,year){
- const balances=new Map();for(const e of entries.filter(e=>e.date<=year+'-12-31'))for(const l of e.lines||[])balances.set(l.a,(balances.get(l.a)||0)+moneyCents(l.d)-moneyCents(l.c));
+ const selected=globalThis.AcontecAnnualLedger?.select(entries,year+'-12-31')||entries.filter(e=>e.date<=year+'-12-31');
+ const balances=new Map();for(const e of selected)for(const l of e.lines||[])balances.set(l.a,(balances.get(l.a)||0)+moneyCents(l.d)-moneyCents(l.c));
  const lines=[];let result=0;for(const account of accounts.filter(a=>['ingreso','gasto','costo'].includes(a.tipo))){const net=balances.get(account.code)||0;if(net){lines.push({a:account.code,d:net<0?-net/100:0,c:net>0?net/100:0});result+=net}}
  if(result)lines.push({a:'3102',d:result>0?result/100:0,c:result<0?-result/100:0});return lines;
 }

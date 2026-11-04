@@ -1,3 +1,4 @@
+import {accountingEntries} from './accounting-engine.mjs';
 import {randomUUID,createHash} from 'node:crypto';
 import {moneyCents,recurringDay,recurringPeriod,recurringBoundary,treasurySum,treasuryDebt,treasuryDiscountUsed,treasuryForecast,treasuryIndirect,treasuryDayAdd,treasuryRateRows,bankRateMicros,bankConvertCents} from './accounting-engine.mjs';
 import {bankBaseCurrency,bankLedger,bankBaseLedger} from './banks.mjs';
@@ -12,7 +13,7 @@ const integer=v=>Number.isSafeInteger(v)&&v>0&&v<=99999999900;
 const rows=(data,module)=>data.businessRecords?.filter(r=>r.module===module)||[];
 export const treasuryModule=body=>body.operation==='treasuryEnable'?body.module:body.operation.startsWith('batch')?'pagos_lote':body.operation.startsWith('advance')?'anticipos':body.operation.startsWith('revalue')?'revalorizacion':'tipos_cambio';
 const identity=(access,session)=>access.member?.id||session.email;
-const balance=(data,account,date)=>treasurySum(data.entries.filter(e=>e.date<=date).flatMap(e=>e.lines||[]).filter(l=>l.a===account).map(l=>moneyCents(l.d)-moneyCents(l.c)));
+const balance=(data,account,date)=>treasurySum(accountingEntries(data.entries,date).flatMap(e=>e.lines||[]).filter(l=>l.a===account).map(l=>moneyCents(l.d)-moneyCents(l.c)));
 const newRecord=(module,kind,date,branchId,name)=>({id:randomUUID(),module,kind,date,branchId,name,status:'Abierta',events:[]});
 const documentInvoices=data=>data.entries.filter(e=>['1201','2101'].includes(e.pay)&&!e.invoiceId&&!e.allocationJournal);
 export function treasuryForecastReport(data,body){
@@ -26,7 +27,7 @@ export function treasuryForecastReport(data,body){
  for(const loan of data.loans||[])for(const installment of loan.schedule||[])if(!installment.entryId)add('prestamos',loan.id+':'+installment.number,installment.due||recurringBoundary(loan.date,1,installment.number),-moneyCents(installment.total));
  for(const template of data.recurringEntries||[])if(template.active)for(let m=from.slice(0,7)+'-01';m<=to;m=recurringBoundary(m,1,1))if(!template.postedMonths?.includes(m.slice(0,7)))add('plantillas',template.id+':'+m,m,treasurySum(template.lines.filter(l=>data.accounts.find(a=>a.code===l.a)?.sub==='ef').map(l=>moneyCents(l.d)-moneyCents(l.c))));
  for(const r of rows(data,'suscripciones'))if(r.status==='Activa'){let depositAvailable=moneyCents(r.deposit||0);for(let p=0;p<1200;p++){const period=recurringPeriod(r,p);if(period.from>to)break;if(period.to<=from||r.billed.some(b=>b.period===p))continue;const vat=data.products.find(x=>x.id===r.productId)?.vatRate||0;const gross=bankConvertCents(period.baseCents,1000000+Math.round(vat*10000));const used=Math.min(gross,depositAvailable);depositAvailable-=used;add('suscripciones',r.id+':'+p,period.from<from?from:period.from,gross-used)}}
- const openingCents=treasurySum(data.entries.filter(e=>e.date<from||e.type==='apertura'&&e.date===from).flatMap(e=>e.lines).filter(l=>data.accounts.find(a=>a.code===l.a)?.sub==='ef').map(l=>moneyCents(l.d)-moneyCents(l.c)));
+ const openingCents=treasurySum(accountingEntries(data.entries,from).filter(e=>e.date<from||['apertura','apertura-anual'].includes(e.type)&&e.date===from).flatMap(e=>e.lines).filter(l=>data.accounts.find(a=>a.code===l.a)?.sub==='ef').map(l=>moneyCents(l.d)-moneyCents(l.c)));
  const forecast=treasuryForecast({...body,from,to,openingCents,events});
  const original=[];for(const currency of ['NIO','USD'].filter(c=>c!==baseCurrency)){
   const banks=rows(data,'bancos').filter(b=>b.kind==='bank'&&!b.card&&b.currency===currency&&b.date<=from),opening=treasurySum(banks.map(b=>treasurySum([b.openingCents,...bankLedger(data,b,treasuryDayAdd(from,-1)).map(e=>e.amountCents)])));
