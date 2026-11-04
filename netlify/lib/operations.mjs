@@ -1,3 +1,4 @@
+import {fifoEnabled,configureCosting,applyFifo,guardFifoOperation} from './fifo.mjs';
 import {REVIEW_OPS,auditReviewOperation} from './audit-review.mjs';
 import {PERSONNEL_MODULES,PERSONNEL_OPS,personnelOperation,personnelReport} from './personnel.mjs';
 import {ANALYSIS_MODULES,ANALYSIS_OPS,analysisOperation,analysisReport} from './analysis.mjs';
@@ -185,6 +186,7 @@ export function guardCash(previous, next) {
   }
 }
 export function guardLedgerMutation(previous, next, access, {restoreServiceConfiguration=false}={}) {
+  requireValue(equal(previous?.cfg?.costing,next.cfg?.costing)&&equal(previous?.cfg?.costingHistory,next.cfg?.costingHistory),'Cambia el método de costeo desde su operación específica.');
   const restoreService=restoreServiceConfiguration===true&&access.owner;
   requireValue(typeof next.cfg?.cur === 'string' && next.cfg.cur.length > 0 && next.cfg.cur.length <= 20 && !/[<>&"'`]/.test(next.cfg.cur), 'Usa un símbolo o código de moneda, sin contenido HTML.');
   for(const record of next.payrolls||[]){const old=previous?.payrolls?.find(p=>p.id===record.id);if(!equal(old,record)){const calculated=payrollTotals(record);requireValue(calculated.gross===record.gross&&calculated.net===record.net,'Los importes de la nómina no coinciden.');}}
@@ -195,7 +197,7 @@ export function guardLedgerMutation(previous, next, access, {restoreServiceConfi
     requireValue(restoreService||equal(product.serviceDefinition,previous?.products?.find(p=>p.id===product.id)?.serviceDefinition),'Usa la configuración del servicio para modificar duración, comisiones, paquetes o consumibles.');
     requireValue(Number.isFinite(product.price) && product.price >= 0 && Number.isFinite(Number(product.min || 0)) && Number(product.min || 0) >= 0 && Number.isFinite(Number(product.vatRate || 0)) && Number(product.vatRate || 0) >= 0 && Number(product.vatRate || 0) <= 100, 'Precio, mínimo o IVA del producto inválido.');
   }
-  for (const name of [...OPERATION_ARRAYS, 'assets','loans','recurringEntries','exchangeRates','foreignDocuments','budgets','quotations','purchaseOrders','attendance','vacationRequests','employeeAdvances','stockTransfers','withholdings','instruments','partners', 'invoiceSequences']) {
+  for (const name of [...OPERATION_ARRAYS, 'assets','loans','recurringEntries','exchangeRates','foreignDocuments','budgets','quotations','purchaseOrders','attendance','vacationRequests','employeeAdvances','stockTransfers','withholdings','instruments','partners', 'invoiceSequences','inventoryLayers']) {
     const empty = name === 'invoiceSequences' ? {} : [];
     requireValue(equal(previous?.[name] || empty, next[name] || empty), 'Usa la operación específica para modificar facturación, cajas o costos.');
   }
@@ -615,8 +617,10 @@ export async function runOperation(companyId, session, body) {
   const receipt=body.operationId?{id:body.operationId,actor:session.email+':'+(session.memberId||''),hash:createHash('sha256').update(JSON.stringify(body)).digest('hex'),resultId:()=>typeof output==='string'?output:null}:null;
   try {
     const result = await updateCompany(companyId, session, body.revision, async (company, access, client) => {
-      const crossBranch=CROSS_BRANCH_OPS.includes(body.operation);
+      const crossBranch=CROSS_BRANCH_OPS.includes(body.operation)||body.operation==='costingMethod';
       const data = initializeOperations(structuredClone(crossBranch?access.company.data:company.data));
+      guardFifoOperation(data,body);
+      const fifoBefore=structuredClone(data);
       const operationSession = access.member ? { ...session, member: access.member } : session;
       const historical = body.file ? await retainedCompanyData(client, companyId) : [];
       const beforeIds=new Set(data.entries.map(e=>e.id));
@@ -624,7 +628,18 @@ export async function runOperation(companyId, session, body) {
       const operation = body.operation, userId = operatorId(access, session);
       if (['printSettings','settings','creditNote'].includes(operation)) ensurePrintVersions(data, access.company, operationSession);
       if(operation==='sale') await consumeDiscount(client,companyId,access,operationSession,body);
-      if(PERSONNEL_OPS.includes(operation))output=personnelOperation(data,access,operationSession,body,{permit:(a,m,write=true)=>requireModule(a,m,write),entry:appendEntry,financialCash});
+      if(operation==='costingMethod'){requireValue(body.operationId,'El cambio requiere un identificador único.');output=configureCosting(data,access,operationSession,body,requirePermission);}
+      else if(operation==='fifoPurchase'){
+        requireValue(fifoEnabled(data)&&body.operationId,'La compra PEPS requiere activación e identificador único.');requirePermission(access,'compras');requirePermission(access,'inventario');
+        const date=dateValue(body.date);requireValue(text(body.reference)&&['1101','1102','2101'].includes(body.pay),'Indica factura y forma de pago.');
+        requireValue(!body.supplierId||data.suppliers.some(s=>s.id===body.supplierId&&s.active!==false),'Selecciona un proveedor activo.');requireValue(Array.isArray(body.items)&&body.items.length>0&&body.items.length<=200,'Agrega entre 1 y 200 productos.');
+        const used=new Set(),items=body.items.map(row=>{const p=data.products.find(p=>p.id===row.p),q=normalizeItemQuantity(row.q),u=amount(row.u,true),vatRate=Number(row.vatRate||0);requireValue(p&&p.kind!=='service'&&!used.has(p.id)&&q>0&&q<=1e6&&Number.isFinite(q)&&Number.isFinite(vatRate)&&vatRate>=0&&vatRate<=100,'Producto duplicado, cantidad o IVA inválido.');used.add(p.id);return {p:p.id,name:p.name,q,u,cost:u,unit:p.unit||'unidad',vatRate}});
+        const totals=invoiceTotals(items);requireValue(totals.total>0,'El total debe ser positivo.');const due=dateValue(body.due||date);requireValue(body.pay!=='2101'||due>=date,'Revisa el vencimiento.');
+        const lines=[{a:'1301',d:totals.subtotal,c:0},{a:body.pay,d:0,c:totals.total}];if(totals.vat)lines.push({a:'1202',d:totals.vat,c:0});
+        const entry=appendEntry(data,operationSession,{date,due,type:'compra',reference:text(body.reference),desc:'Compra - '+text(body.party),party:text(body.party),supplierId:body.supplierId||'',pay:body.pay,items,...totals,stock:items.map(i=>({pid:i.p,q:i.q,unit:i.unit,unitCost:i.u})),lines});
+        for(const i of items){const p=data.products.find(p=>p.id===i.p);p.stock=Math.round((p.stock+i.q)*1e6)/1e6;}output=entry.id;
+      }
+      else if(PERSONNEL_OPS.includes(operation))output=personnelOperation(data,access,operationSession,body,{permit:(a,m,write=true)=>requireModule(a,m,write),entry:appendEntry,financialCash});
       else if(CERTIFICATE_OPS.includes(operation))output=configureCertificates(data,access,operationSession,body,{permit:requirePermission});
       else if(CLIENT_OPS.includes(operation))output=await clientOperation(data,access,operationSession,body,{queue:{insert:values=>client.insert(serviceMessages).values(values),get:async id=>{const [message]=await client.select().from(serviceMessages).where(eq(serviceMessages.id,id)).for('update');return message},retry:id=>client.update(serviceMessages).set({state:'pending',lastError:null,attempts:0}).where(eq(serviceMessages.id,id))},permit:requirePermission,entry:appendEntry,financialCash});
       else if(ANALYSIS_OPS.includes(operation))output=await analysisOperation(data,access,operationSession,body,{permit:requirePermission});
@@ -955,6 +970,8 @@ export async function runOperation(companyId, session, body) {
         data.taxes.push({ id: randomUUID(), name: 'Anticipo mensual IR', source: 'anticipo', period: month, date: end, due, base, rate: settings.rate, withholdings, grossAdvance, amount: total, paid: 0, payments: [], entryId: entry.id, expense: '6108', liability: '2102', frequency: 'mensual', country: settings.country });
       } else accessError('Operación no encontrada.', 404);
       for(const entry of data.entries)if(!beforeIds.has(entry.id)){if(body.costCenter)entry.costCenter=text(body.costCenter,100);if(body.project)entry.project=text(body.project,100);}
+      if(fifoEnabled(fifoBefore)&&!crossBranch)for(const e of data.entries.filter(e=>!beforeIds.has(e.id))){requireValue(access.branchId||!e.stock?.length,'Selecciona una sucursal para mover inventario PEPS.');if(e.stock?.length)e.branchId=access.branchId;}
+      if(operation!=='costingMethod')applyFifo(fifoBefore,data);
       guardCash(crossBranch?access.company.data:company.data, data);
       validateBusinessRecords(data,requireValue);
       validateConfiguredServices(data,serviceEmployees(access.company.data,company.data,data));

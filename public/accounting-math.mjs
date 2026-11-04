@@ -277,3 +277,11 @@ export function employmentIncomeCents(payrolls,employeeId,from,to){
  for(const p of payrolls)if(p.employeeId===employeeId&&p.entryId&&p.date>=from&&p.date<=to){const cents=moneyCents(p.gross);if(cents<0||!Number.isSafeInteger(total+cents))throw new AccountingValidationError('Ingreso fuera de rango.');total+=cents}
  return total;
 }
+
+// Reparto PEPS: el último consumo recibe el residuo, sin perder centavos.
+export function inventoryLineCostCents(quantity,unitCost){return moneyCents(invoiceTotals([{q:quantity,u:unitCost,vatRate:0}]).subtotal)}
+export function inventoryShareCents(valueCents,quantity,totalQuantity){
+ const q=Math.round(quantity*1e6),total=Math.round(totalQuantity*1e6);
+ if(!Number.isSafeInteger(valueCents)||valueCents<0||!Number.isSafeInteger(q)||!Number.isSafeInteger(total)||q<0||total<=0||q>total)throw new AccountingValidationError('Reparto de capas PEPS inválido.');
+ return Number((BigInt(valueCents)*BigInt(q)*2n+BigInt(total))/(BigInt(total)*2n));
+}

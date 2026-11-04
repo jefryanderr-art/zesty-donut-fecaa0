@@ -6,13 +6,11 @@ Las casillas indican código, permisos, pruebas escritas, textos por uiT, descar
 
 La Fase 4 se implementó en 2026-11-04 (ver [fase-4.md](fase-4.md)), sin verificación funcional. La solicitud anterior abarcaba exclusivamente Fase 3 y sus controles. Las listas Fases 4–9 se conservan como seguimiento histórico de otra solicitud; no amplían el alcance actual.
 
-## Decisión recibida y excepción exclusiva de PEPS
+## PEPS: autorización actual y alcance seguro
 
-El propietario respondió **«No, mantener el motor sin cambios»** a la propuesta de estrategia PEPS optativa. F5.1 queda **impedido por esa decisión**, sin código operativo, capas, migraciones ni efecto sobre empresas. Implementarlo exigiría autorizar otra tarea que integre selección/consumo de capas en ventas futuras; no se solicitó de nuevo ese permiso ni se reinterpretó la respuesta. El promedio ponderado y las funciones emisoras existentes se conservaron.
+El propietario reemplazó expresamente la decisión de mantener el motor sin cambios y autorizó integrar PEPS en operaciones futuras. Se implementaron capas, compras, ventas, devoluciones con origen y ajustes, con elección exclusiva del dueño, motivo, confirmación, bitácora y conciliación estricta por sucursal. Promedio ponderado permanece como valor por defecto para todas las empresas.
 
-El propietario confirmó que **solo PEPS queda exceptuado de la secuencia**. F5.1 permanece sin marcar y sin efecto, pero no impide continuar con fases posteriores. Ningún otro ítem recibe esta excepción: si existe un impedimento real, se aplica B.4 con motivo exacto. No se vuelve a solicitar permiso para modificar el motor. La Fase 2 tiene conciliación NIO/USD escrita y activación exclusiva por empresa; empieza apagada y no se activó en empresas existentes. La fase completa todavía no está cerrada. Fases 3–9 no se iniciaron.
-
-**Estado 2026-11-04 (solicitud Fases 5–9):** solo se entregó el bloque parcial de F5.2 descrito abajo; el resto de las Fases 5–9 **no se realizó** en esta pasada (alcance excede una sola tarea). F5.1 sigue impedido. Ninguna casilla nueva marcada.
+F5.1 tiene implementación operativa de alcance limitado: traslados, lotes, series, recetas/producción y consumibles quedan bloqueados bajo PEPS con motivos específicos; tampoco se admiten revalorizaciones, edición/borrado ni restauraciones que reescriban capas o Kardex. El alcance, la migración aditiva y las verificaciones pendientes se detallan en [costeo-peps.md](costeo-peps.md). Las pruebas están escritas y no ejecutadas; la revisión local se limita a sintaxis.
 
 ## A. Base existente que se debe preservar
 
@@ -60,7 +58,7 @@ El propietario confirmó que **solo PEPS queda exceptuado de la secuencia**. F5.
 - [ ] D.19 Trabajar en el espacio administrado sin commits manuales, mezcla a principal ni despliegue.
 - [ ] D.20 Revisar cada diff y documentar rutas, permisos, planes, sucursales, RLS e índices por empresa.
 - [ ] D.21 Documentar compatibilidad de cada archivo existente modificado y alcance/límites/migración/verificaciones por fase.
-- [ ] D.22 Mantener PEPS apagado por defecto, hacia adelante, con confirmación, motivo y auditoría.
+- [x] D.22 PEPS apagado por defecto, hacia adelante, con confirmación, motivo y auditoría. Implementado; verificación funcional pendiente de la plataforma.
 - [ ] D.23 Mantener eliminaciones intercompañía apagadas por defecto, con confirmación, motivo y auditoría.
 - [ ] D.24 Mantener revalorización cambiaria apagada por defecto, con confirmación, motivo y auditoría.
 - [ ] D.25 Mantener bloqueo de períodos apagado por defecto para la ampliación, con confirmación, motivo y auditoría.
@@ -131,7 +129,7 @@ Estado detallado, límites y comprobaciones: [fase-2-tesoreria-bancos.md](fase-2
 
 ## Fase 5: inventario avanzado optativo
 
-- [ ] F5.1 **Impedido por decisión expresa del propietario:** conservar promedio ponderado; PEPS exige modificar el recorrido de costeo que no se autorizó. Sin implementación ni efecto. Continuación: nueva autorización de alcance antes de desarrollar capas para operaciones futuras.
+- [ ] F5.1 PEPS implementado para compras, ventas, devoluciones con capas originales y ajustes. Los casos incompatibles están bloqueados explícitamente; no se declara cobertura integral de traslados, lotes/series ni producción. Ver [costeo-peps.md](costeo-peps.md). Validación funcional pendiente.
 - [x] F5.2 Bodegas por sucursal, traslados, existencias y alertas mínimo/máximo/reposición (módulo `bodegas`, informativo, sin asientos). Escrito, **no verificado**.
 - [ ] F5.3 Kits: **parcial y sin efecto sobre ventas.** Hecho: definición de componentes, costo y disponibilidad del kit (módulo `kits`). Impedido: el descuento automático de componentes al vender exige modificar `makeSale` y la validación Kardex del motor contable, prohibido. Continuación: autorizar un cambio acotado en `makeSale` que expanda el kit en `entry.stock`.
 - [x] F5.4 Conteo cíclico por zona/categoría (módulo `conteo_ciclico`); el ajuste confirmado usa el conteo físico existente (`stockCount`) y se vincula al plan. Escrito, **no verificado**.
@@ -305,7 +303,7 @@ Esta sección expresa el estado actual de esta tarea; las listas transversales y
 ## Solicitud Fases 5–7 (2026-11-04) — estado real
 Solo se entregaron cálculos puros sin conexión (`public/advanced-math.mjs`, `netlify/lib/warehouse-stock.mjs`) con pruebas escritas y no ejecutadas, más `docs/fase-5.md`, `fase-6.md`, `fase-7.md`. **Ningún ítem cumple la definición de hecho** (faltan modelo/migración, operaciones, permisos, UI con uiT, descargas y respaldo). Todos permanecen sin marcar y apagados.
 
-- [ ] F5.1 PEPS: impedido por decisión del dueño.
+- [ ] F5.1 PEPS: implementación de alcance seguro; restricciones y verificaciones pendientes en costeo-peps.md.
 - [x] F5.2 Bodegas por sucursal, traslados, existencias y alertas mínimo/máximo/reposición (módulo `bodegas`, informativo, sin asientos). Escrito, **no verificado**.
 - [ ] F6.1 Presupuesto (`budgetVariance`) · [ ] F6.2 Asientos con flujo · [ ] F6.3 Intercompañía · [ ] F6.4 Activos avanzados · [ ] F6.5 Indicadores (`ratios`) · [ ] F6.6 ABC · [ ] F6.7 Tableros por rol · [ ] F6.8 Notas y paquete de cierre
 - [ ] F7.1 Adelantos/préstamos (`installments`) · [ ] F7.2 Vacaciones (`vacationBalance`) · [ ] F7.3 Planillas por área · [ ] F7.4 Comisiones por meta (`tierCommissionCents`) · [x] F7.5 Constancias (implementadas, no verificadas funcionalmente) · [ ] F7.6 Parámetros por país

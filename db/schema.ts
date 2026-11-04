@@ -141,6 +141,7 @@ function recordTable(definition: any, child = false) {
   if (child) columns.entryId = text('entry_id').notNull();
   for (const field of definition.text || []) columns[field] = text(snake(field));
   for (const field of definition.money || []) columns[field + 'Cents'] = bigint(snake(field) + '_cents', { mode: 'number' });
+  for (const field of definition.cents || []) columns[field] = bigint(snake(field), { mode: 'number' });
   for (const field of definition.numeric || []) columns[field] = numeric(snake(field));
   return pgTable(tableName, columns, (table: any) => [
     serverAccess(),
@@ -150,6 +151,7 @@ function recordTable(definition: any, child = false) {
     ...(definition.table === 'journal_lines' ? [check('acontec_line_nonnegative', sql`${table.dCents} >= 0 AND ${table.cCents} >= 0`)] : []),
   ]).enableRLS();
 }
+export const inventoryLayers = recordTable(collections.inventoryLayers);
 export const businessRecords = recordTable(collections.businessRecords);
 export const ledgerAccounts = recordTable(collections.accounts);
 export const products = recordTable(collections.products);

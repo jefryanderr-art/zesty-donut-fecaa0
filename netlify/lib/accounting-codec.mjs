@@ -22,7 +22,7 @@ const moneyNames = new Set([...Object.values(collections), ...Object.values(chil
 // El JSON residual conserva configuraciones y campos históricos, nunca el documento completo.
 // Las cantidades y tasas conservan precisión; todo campo monetario conocido usa centavos.
 // Metadatos nuevos que ya se expresan en centavos enteros (incluye discountAudit.amountCents).
-const nativeCentNames = new Set(['approvalCents','roundCents','salaryMinCents','salaryMaxCents','historicalTotalCents','grossCents','taxCents','socialCents','loanCents','netCents','employerCents','provisionCents','laborCents','liabilityCents','subtotalCents','vatCents','unitCents','limitCents','payableCents','operatingCents','investmentCents','financingCents','exchangeEffectCents','remainingCents','discountCents','thresholdCents','targetCents','carryingCents','originalCents','inCents','outCents','balanceCents','profitCents','adjustmentCents','directCents','indirectCents','reserveCents','amountCents','receivedCents','changeCents','costCents','totalCents','baseCents','commissionCents','recognizedCents','creditBaseCents','deferredCreditCents','openingCents','baseOpeningCents','baseBookCents','bankCents','bookCents','pendingCents','transitCents','adjustedBookCents','adjustedBankCents','differenceCents','sufferedCents','practicedCents','taxIdThresholdCents','unitCostCents']);
+const nativeCentNames = new Set([...Object.values(collections).flatMap(d=>d.cents||[]),'approvalCents','roundCents','salaryMinCents','salaryMaxCents','historicalTotalCents','grossCents','taxCents','socialCents','loanCents','netCents','employerCents','provisionCents','laborCents','liabilityCents','subtotalCents','vatCents','unitCents','limitCents','payableCents','operatingCents','investmentCents','financingCents','exchangeEffectCents','remainingCents','discountCents','thresholdCents','targetCents','carryingCents','originalCents','inCents','outCents','balanceCents','profitCents','adjustmentCents','directCents','indirectCents','reserveCents','amountCents','receivedCents','changeCents','costCents','totalCents','baseCents','commissionCents','recognizedCents','creditBaseCents','deferredCreditCents','openingCents','baseOpeningCents','baseBookCents','bankCents','bookCents','pendingCents','transitCents','adjustedBookCents','adjustedBankCents','differenceCents','sufferedCents','practicedCents','taxIdThresholdCents','unitCostCents']);
 function encode(value, key = '') {
   if (nativeCentNames.has(key) && typeof value === 'number') {
     if (!Number.isSafeInteger(value)) storageError('Los metadatos monetarios requieren centavos enteros seguros.');
@@ -48,13 +48,17 @@ function pack(record, definition, companyId, id, position, date = null) {
   const row = { companyId, id, position, date, extra: null };
   for (const field of definition.text || []) row[field] = null;
   for (const field of definition.money || []) row[field + 'Cents'] = null;
+  for (const field of definition.cents || []) row[field] = null;
   for (const field of definition.numeric || []) row[field] = null;
-  for (const field of ['date', ...(definition.text || []), ...(definition.money || []), ...(definition.numeric || [])]) {
+  for (const field of ['date', ...(definition.text || []), ...(definition.money || []), ...(definition.cents || []), ...(definition.numeric || [])]) {
     if (!Object.hasOwn(record, field)) continue;
     fields.push(field); delete extra[field];
     const value = record[field];
     if ((definition.money || []).includes(field)) row[field + 'Cents'] = value === null ? null : cents(value);
-    else if ((definition.numeric || []).includes(field)) {
+    else if ((definition.cents || []).includes(field)) {
+      if (!Number.isSafeInteger(value)) storageError('La capa requiere centavos enteros seguros.');
+      row[field] = value;
+    } else if ((definition.numeric || []).includes(field)) {
       if (value !== null && (typeof value !== 'number' || !Number.isFinite(value))) storageError('Cantidad inválida en el documento de origen.');
       row[field] = value === null ? null : String(value);
     } else {
@@ -73,6 +77,9 @@ function unpack(row, definition) {
       const value = row[field + 'Cents'];
       if (value !== null && !Number.isSafeInteger(Number(value))) storageError('Importe fuera del rango seguro.');
       record[field] = value === null ? null : Number(value) / 100;
+    } else if ((definition.cents || []).includes(field)) {
+      if (!Number.isSafeInteger(Number(row[field]))) storageError('Centavos PEPS fuera del rango seguro.');
+      record[field] = Number(row[field]);
     } else if ((definition.numeric || []).includes(field)) record[field] = row[field] === null ? null : Number(row[field]);
     else record[field] = row[field];
   }

@@ -1,3 +1,4 @@
+import {guardFifoMutation} from './fifo.mjs';
 import {guardAuditHistory,mergeAuditReviewPatch,REVIEW_OPS} from './audit-review.mjs';
 import {guardPersonnel} from './personnel.mjs';
 import {guardTreasury} from './treasury.mjs';
@@ -195,6 +196,7 @@ export function projectData(data, access) {
     if (name === 'cashMovements' && !cashAdministrator(access)) projected[name] = [];
     if (name === 'pettyFunds' && !cashAdministrator(access)) for (const fund of projected[name]) fund.ledgerBalance = Math.round((data.entries || []).flatMap(entry => entry.lines || []).filter(line => line.a === fund.account).reduce((sum, line) => sum + line.d - line.c, 0) * 100) / 100;
   }
+  if(data.inventoryLayers)projected.inventoryLayers=allowed(access,'inventario')&&!operationalOnly?structuredClone(data.inventoryLayers):[];
   projected.invoiceSequences = access.owner&&allowed(access,'facturacion')?structuredClone(data.invoiceSequences||{}):{};
   for (const name of ['employees', 'payrolls', 'settlements']) projected[name] = (allowed(access, 'personal')||(name==='employees'&&allowed(access,'control_personal'))) ? structuredClone(data[name] || []) : [];
   for (const name of ['taxes', 'properties']) projected[name] = allowed(access, 'fiscal') ? structuredClone(data[name] || []).map(record => {
@@ -306,6 +308,7 @@ export function mergeData(current, incoming, access, {restoreServiceConfiguratio
   const projected = projectData(current, { ...access, branchId: null });
   const merged = structuredClone(current);
   if(current.businessRecords) merged.businessRecords=structuredClone(current.businessRecords);
+  if(current.inventoryLayers)merged.inventoryLayers=structuredClone(current.inventoryLayers);else delete merged.inventoryLayers;
   merged.cfg ||= {};
   merged.customers = merged.customers || [];
   for (const [name, module] of Object.entries({ customers: 'ventas', accounts: 'contabilidad', employees: 'personal', payrolls: 'personal', settlements: 'personal', taxes: 'fiscal', properties: 'fiscal' })) {
@@ -440,11 +443,12 @@ export async function updateCompany(companyId, session, revision, mutate, action
     const patch = await mutate(company, access, client);
     timings.validateMs = Math.round(performance.now() - phase);
     const crossBranch=patch.crossBranch;delete patch.crossBranch;
-    if(crossBranch && !CROSS_BRANCH_OPS.some(op=>action==='Operación: '+op)) accessError('Operación entre sucursales no autorizada.');
+    if(crossBranch && !(action==='Operación: costingMethod'&&access.owner) && !CROSS_BRANCH_OPS.some(op=>action==='Operación: '+op)) accessError('Operación entre sucursales no autorizada.');
     if (patch.data) {
       const auditOnly=REVIEW_OPS.some(op=>action==='Operación: '+op);
       if(auditOnly)patch.data=mergeAuditReviewPatch(fullCompany.data,company.data,patch.data,access,action);
       else {if(!crossBranch) patch.data = mergeBranch(fullCompany.data, company.data, patch.data, access, action === 'Operación: branch' && access.owner);materializeBranches(patch.data);}
+      guardFifoMutation(fullCompany.data,patch.data,action);
       guardTreasury(fullCompany.data,patch.data,(ok,message)=>{if(!ok)accessError(message,400)},action);
       guardBankReconciliations(fullCompany.data,patch.data,(ok,message)=>{if(!ok)accessError(message,400)});
       guardPersonnel(fullCompany.data,patch.data,action);
