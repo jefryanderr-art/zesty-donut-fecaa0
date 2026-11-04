@@ -3,6 +3,16 @@ export class AccountingValidationError extends Error { constructor(message){supe
 export function normalizeItemQuantity(value){const q=Number(value);if(!Number.isFinite(q)||q<0.001)throw new AccountingValidationError('La cantidad mínima es 0.001.');return Math.round(q*1000)/1000}
 // Cálculos puros en centavos; usados por Functions y por las verificaciones de la plataforma.
 export function moneyCents(value){const n=Number(value),c=Math.round(n*100);if(!Number.isFinite(n)||!Number.isSafeInteger(c)||Math.abs(n*100-c)>0.000001)throw new AccountingValidationError('Usa importes seguros con un máximo de dos decimales.');return c}
+// Costos de consumibles y comisiones: aritmética entera, sin modificar el precio del servicio.
+export function serviceLineCostCents(unitCost,quantity){
+ const cost=moneyCents(unitCost),q=normalizeItemQuantity(quantity),milli=Math.round(q*1000);
+ if(cost<0||q!==Number(quantity)||!Number.isSafeInteger(milli)||!Number.isSafeInteger(cost*milli))throw new AccountingValidationError('Costo o cantidad de consumible inválidos.');
+ return Number((BigInt(cost)*BigInt(milli)+500n)/1000n);
+}
+export function serviceCommissionCents(baseCents,basisPoints){
+ if(!Number.isSafeInteger(baseCents)||baseCents<0||!Number.isInteger(basisPoints)||basisPoints<0||basisPoints>10000)throw new AccountingValidationError('Base o comisión inválida.');
+ return Number((BigInt(baseCents)*BigInt(basisPoints)+5000n)/10000n);
+}
 export function amortization(principal,annualRate,months){
  const initial=moneyCents(principal);if(initial<=0||!Number.isInteger(months)||months<1||months>600||!Number.isFinite(annualRate)||annualRate<0||annualRate>100)throw new AccountingValidationError('Revisa capital, tasa anual y plazo (1 a 600 meses).');
  const rate=annualRate/1200,payment=Math.round(rate?initial*rate/(1-Math.pow(1+rate,-months)):initial/months);let balance=initial;const rows=[];

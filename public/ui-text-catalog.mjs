@@ -9658,5 +9658,385 @@ export const UI_CATALOG = {
     "original": "Registra el servicio de corretaje, confirma sus honorarios y revisa la comisión.",
     "group": "Servicios y perfiles",
     "max": 240
+  },
+  "serviceCatalog.select": {
+    "original": "Selecciona",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.remove": {
+    "original": "Quitar",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.add": {
+    "original": "Agregar línea",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.name": {
+    "original": "Nombre del servicio",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.code": {
+    "original": "Código",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.price": {
+    "original": "Precio por unidad sin IVA",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.enabled": {
+    "original": "Activar características del servicio para ventas futuras",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.duration": {
+    "original": "Duración estándar en minutos (0: sin duración)",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.unit": {
+    "original": "Unidad de cobro",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.tax": {
+    "original": "Tratamiento del IVA",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.taxed": {
+    "original": "Gravado",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.exempt": {
+    "original": "Exento (requiere motivo)",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.zero": {
+    "original": "Tasa cero",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.vat": {
+    "original": "IVA configurado (%)",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.taxReason": {
+    "original": "Motivo de exención / referencia para revisión",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.commission": {
+    "original": "Comisión del catálogo en puntos básicos (100 = 1%)",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.commissionHelp": {
+    "original": "La comisión se calcula sobre el importe sin IVA después del descuento y queda como referencia; no genera pago ni nómina.",
+    "group": "Características de servicios",
+    "max": 360
+  },
+  "serviceCatalog.employees": {
+    "original": "Comisiones por empleado",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.personalHelp": {
+    "original": "Las comisiones individuales requieren permiso de Personal; una configuración que las use solo puede cambiarse con ese permiso.",
+    "group": "Características de servicios",
+    "max": 378
+  },
+  "serviceCatalog.components": {
+    "original": "Paquete de servicios (sin stock ni paquetes anidados)",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.consumables": {
+    "original": "Consumibles inventariables por prestación",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.help": {
+    "original": "El precio del paquete es el del catálogo; no suma precios de componentes ni los factura dos veces. Los consumibles requieren existencias libres en la sucursal activa. No se consumen automáticamente artículos con lotes, series o producción. Una nota de crédito no repone insumos ya utilizados. El IVA y las comisiones requieren revisión: verifica con tu contador.",
+    "group": "Características de servicios",
+    "max": 1086
+  },
+  "serviceCatalog.reason": {
+    "original": "Motivo del cambio",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.confirmed": {
+    "original": "Confirmo el cambio solo para operaciones futuras, sin modificar documentos anteriores.",
+    "group": "Características de servicios",
+    "max": 258
+  },
+  "serviceCatalog.title": {
+    "original": "Características del servicio",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.confirmError": {
+    "original": "Confirma el cambio antes de guardar.",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.consumeConfirm": {
+    "original": "Esta prestación descontará los consumibles configurados de la sucursal activa y registrará su costo. Una nota de crédito no los repone. ¿Confirmas la prestación y el consumo?",
+    "group": "Características de servicios",
+    "max": 522
+  },
+  "serviceCatalog.cancelled": {
+    "original": "Prestación cancelada antes de guardar.",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.saleEmployee": {
+    "original": "Empleado para comisión de servicios (opcional)",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.noEmployee": {
+    "original": "Sin asignar",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.employee": {
+    "original": "Empleado",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.concept": {
+    "original": "Concepto",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.bps": {
+    "original": "Comisión en puntos básicos (100 = 1%)",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.quantity": {
+    "original": "Cantidad por servicio",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.unit.hora": {
+    "original": "hora",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.unit.sesión": {
+    "original": "sesión",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.unit.mes": {
+    "original": "mes",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.unit.visita": {
+    "original": "visita",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.unit.servicio": {
+    "original": "servicio",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.configure": {
+    "original": "Configurar características del servicio",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.sectorTitle": {
+    "original": "Sector económico y plantilla contable",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.sectorEmpty": {
+    "original": "Sin sector seleccionado",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.sectorHelp": {
+    "original": "El sector solo organiza sugerencias; no cambia datos, impuestos ni documentos anteriores. La plantilla agrega cuentas sugeridas únicamente cuando toda la empresa carece de movimientos. Verifica con tu contador.",
+    "group": "Características de servicios",
+    "max": 630
+  },
+  "serviceCatalog.sectorConfigure": {
+    "original": "Configurar sector y ver plantilla",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.sector": {
+    "original": "Sector económico",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.applyTemplate": {
+    "original": "Agregar las cuentas de esta vista previa (solo empresa sin movimientos)",
+    "group": "Características de servicios",
+    "max": 213
+  },
+  "serviceCatalog.templateHelp": {
+    "original": "La plantilla es una sugerencia aditiva, no reemplaza el catálogo. Las cuentas existentes conservan nombre y saldo; una naturaleza incompatible impide aplicarla. El servidor revisa los movimientos de todas las sucursales.",
+    "group": "Características de servicios",
+    "max": 660
+  },
+  "serviceCatalog.sectorConfirmed": {
+    "original": "Confirmo el sector y, si lo marqué, la aplicación de la plantilla mostrada.",
+    "group": "Características de servicios",
+    "max": 225
+  },
+  "serviceCatalog.account": {
+    "original": "Cuenta sugerida",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.templateAction": {
+    "original": "Aplicación",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.keepAccount": {
+    "original": "Conservar cuenta existente",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.addAccount": {
+    "original": "Agregar cuenta nueva",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.sectorSelect": {
+    "original": "Selecciona un sector para revisar las cuentas sugeridas.",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.sector.comercio": {
+    "original": "Comercio",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.account.comercio.4108": {
+    "original": "Ingresos comerciales adicionales",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.account.comercio.5108": {
+    "original": "Costos comerciales adicionales",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.sector.servicios": {
+    "original": "Servicios",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.account.servicios.4108": {
+    "original": "Ingresos por servicios",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.account.servicios.5108": {
+    "original": "Costos directos de servicios",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.sector.industria": {
+    "original": "Industria",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.account.industria.4108": {
+    "original": "Ingresos de producción",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.account.industria.5108": {
+    "original": "Costos de producción",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.sector.agro": {
+    "original": "Agro",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.account.agro.4108": {
+    "original": "Ingresos agropecuarios",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.account.agro.5108": {
+    "original": "Costos agropecuarios",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.sector.construccion": {
+    "original": "Construcción",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.account.construccion.4108": {
+    "original": "Ingresos de obras",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.account.construccion.5108": {
+    "original": "Costos directos de obras",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.sector.financiero": {
+    "original": "Financiero",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.account.financiero.4108": {
+    "original": "Ingresos financieros de operación",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.account.financiero.5108": {
+    "original": "Costos financieros de operación",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.sector.sin_fines_de_lucro": {
+    "original": "Sin fines de lucro",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.account.sin_fines_de_lucro.4108": {
+    "original": "Aportes y donaciones de operación",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.account.sin_fines_de_lucro.5108": {
+    "original": "Costos de programas",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.quickQuestion": {
+    "original": "¿Cómo configuro duración, paquetes y consumibles?",
+    "group": "Características de servicios",
+    "max": 200
+  },
+  "serviceCatalog.quickAnswer": {
+    "original": "1. Crea el servicio y pulsa Editar y Configurar características del servicio. Activa la ampliación, configura duración, unidad, IVA o exención con motivo y comisión; confirma con un motivo del cambio.\n2. Un paquete contiene servicios sin paquetes anidados y utiliza su propio precio. Los consumibles requieren artículos inventariables con stock libre en la sucursal. No se consumen automáticamente lotes, series o producción.\n3. Al emitir, confirma la prestación y sus consumibles. El costo queda vinculado a la factura; una nota de crédito no repone insumos ya utilizados. Las comisiones individuales requieren Personal y no generan pagos ni nómina automáticamente. Verifica con tu contador.",
+    "group": "Características de servicios",
+    "max": 2076
   }
 };

@@ -1,4 +1,5 @@
 import { catalog, validateProfile } from './business-profile.mjs';
+import {projectServiceProduct,projectServiceEntry} from './service-catalog.mjs';
 import { fiscalAnnualTotals } from './fiscal-projection.mjs';
 import { normalizeItemQuantity } from './accounting-engine.mjs';
 import { requireBilling } from './billing.mjs';
@@ -148,7 +149,13 @@ const restrictedPlan = access => !!access.billingPlan?.blockedModules?.length;
 
 export function projectData(data, access) {
   data = scopeBranch(data, access);
-  if (!data || (access.owner && !restrictedPlan(access))) return data;
+  const serviceEmployeeIds=new Set((data?.employees||[]).map(e=>e.id));
+  if (!data) return data;
+  if(access.owner&&!restrictedPlan(access)){
+    if(Array.isArray(data.products))data.products=data.products.map(p=>p.serviceDefinition?projectServiceProduct(p,true,serviceEmployeeIds):p);
+    if(Array.isArray(data.entries))data.entries=data.entries.map(e=>projectServiceEntry(e,true,serviceEmployeeIds));
+    return data;
+  }
   const operationalOnly = ['cajero', 'vendedor'].includes(String(access.member?.role).toLowerCase());
   const ownId = access.member?.id;
   const ownShiftIds = new Set((data.shifts || []).filter(shift => shift.operatorId === ownId).map(shift => shift.id));
@@ -158,8 +165,8 @@ export function projectData(data, access) {
   const visibleIds = new Set((data.entries || []).filter(canSeeEntry).map(entry => entry.id));
   const entries = (data.entries || []).filter(entry => visibleIds.has(entry.id) || (!operationalOnly && entry.invoiceId && visibleIds.has(entry.invoiceId) && visibleEntry(access,entry,data)) || (!operationalOnly && allowed(access, 'inventario') && entry.stock?.length)).map(entry => {
     if (visibleIds.has(entry.id) || (entry.invoiceId && visibleIds.has(entry.invoiceId) && visibleEntry(access,entry,data))) {
-      if (!operationalOnly) return entry;
-      const copy = structuredClone(entry); copy.lines = []; copy.stock = [];
+      if (!operationalOnly) return projectServiceEntry(entry,allowed(access,'personal'),serviceEmployeeIds);
+      const copy = structuredClone(projectServiceEntry(entry,allowed(access,'personal'),serviceEmployeeIds)); copy.lines = []; copy.stock = [];
       for (const item of copy.items || []) delete item.cost;
       return copy;
     }
@@ -172,7 +179,7 @@ export function projectData(data, access) {
   const projected = { branches: access.branches, cfg, accounts: structuredClone(data.accounts || []), entries, products: [] };
   if(allowed(access,'fiscal')&&!allowed(access,'contabilidad'))projected.fiscalSummary=fiscalAnnualTotals(data);
   projected.customers = allowed(access, 'ventas') || allowed(access, 'facturacion') ? structuredClone(data.customers || []) : [];
-  if (['ventas', 'facturacion', 'compras', 'inventario', 'contabilidad', 'finanzas', 'fiscal'].some(module => allowed(access, module))) projected.products = structuredClone(data.products || []).map(product => operationalOnly ? { ...product, cost: 0 } : product);
+  if (['ventas', 'facturacion', 'compras', 'inventario', 'contabilidad', 'finanzas', 'fiscal'].some(module => allowed(access, module))) projected.products = (data.products || []).map(product => {const copy=projectServiceProduct(product,allowed(access,'personal'),serviceEmployeeIds);return operationalOnly ? { ...copy, cost: 0 } : copy});
   for (const name of OPERATION_ARRAYS) {
     const module = name === 'suppliers' ? 'proveedores' : ['costCatalog', 'costs'].includes(name) ? 'costos' : name === 'shifts' ? 'facturacion' : 'cajas';
     projected[name] = allowed(access, module) ? structuredClone(data[name] || []) : [];
@@ -250,14 +257,40 @@ function validateCustomers(data) {
     if (!customer) accessError('El cliente de la venta no está en esta cartera.', 400);
   }
 }
-export function mergeData(current, incoming, access) {
+function restoreServiceCommissionProjection(current,products,access){
+ const visibleIds=new Set((current?.employees||[]).map(e=>e.id));
+ const originals=new Map((current?.products||[]).filter(p=>p.serviceDefinition).map(p=>[p.id,p.serviceDefinition]));
+ for(const product of products)if(product.serviceDefinition){
+  if(!allowed(access,'personal')&&Object.hasOwn(product.serviceDefinition,'employeeCommissions'))accessError('Usa la configuración del servicio con permiso de Personal.',403);
+  const original=originals.get(product.id);
+  if(!original)continue;
+  const proposed=allowed(access,'personal')?(product.serviceDefinition.employeeCommissions||[]):[];
+  if(proposed.some(row=>!visibleIds.has(row.employeeId)))accessError('Las comisiones pertenecen a otra sucursal.',403);
+  const expected=allowed(access,'personal')?(original.employeeCommissions||[]).filter(row=>visibleIds.has(row.employeeId)):[];
+  if(!equal(proposed,expected))accessError('Usa la configuración del servicio para cambiar las comisiones.',403);
+  product.serviceDefinition={...product.serviceDefinition,employeeCommissions:structuredClone(original.employeeCommissions||[])};
+ }
+}
+function restoreServiceEntryProjections(current,entries,access){
+ const originals=new Map((current?.entries||[]).filter(e=>e.serviceSnapshots).map(e=>[e.id,e]));
+ if(!originals.size)return;
+ const visibleIds=new Set((current?.employees||[]).map(e=>e.id));
+ for(const entry of entries){
+  const original=originals.get(entry.id);
+  if(!original?.serviceSnapshots)continue;
+  const expected=projectServiceEntry(original,allowed(access,'personal'),visibleIds).serviceSnapshots;
+  if(!equal(entry.serviceSnapshots,expected))accessError('Conserva la instantánea del servicio contabilizado.',403);
+  entry.serviceSnapshots=structuredClone(original.serviceSnapshots);
+ }
+}
+export function mergeData(current, incoming, access, {restoreServiceConfiguration=false}={}) {
   if (!incoming || !['accounts', 'entries', 'products'].every(name => Array.isArray(incoming[name]))) accessError('Datos contables inválidos.', 400);
   delete incoming.fiscalSummary;
   if (incoming.customers === undefined) incoming.customers = allowed(access, 'ventas') ? structuredClone(current?.customers || []) : [];
   for (const name of ['employees', 'payrolls', 'taxes', 'properties', 'settlements']) if (incoming[name] !== undefined && !Array.isArray(incoming[name])) accessError('Datos contables inválidos.', 400);
   if (!Array.isArray(incoming.customers)) accessError('Cartera de clientes inválida.', 400);
   if(access.support||access.readOnlyLimit)accessError('Este acceso es de solo lectura.');
-  if (access.owner && !restrictedPlan(access)) { validateEntries(incoming); validateCustomers(incoming); return incoming; }
+  if (access.owner && !restrictedPlan(access)) { if(!restoreServiceConfiguration){restoreServiceCommissionProjection(current,incoming.products,access);restoreServiceEntryProjections(current,incoming.entries,access)}validateEntries(incoming); validateCustomers(incoming); return incoming; }
   if (!MODULES.some(module => allowed(access, module, true))) accessError('Tu acceso es de solo lectura.');
   if(!current){
     if(!access.owner||incoming.entries.length)accessError('Inicializa la empresa sin movimientos.',400);
@@ -335,8 +368,10 @@ export function mergeData(current, incoming, access) {
       if (!Number.isFinite(product.cost) || product.cost < 0) accessError('Costo de producto inválido.', 400);
       product.cost = products.find(record => record.id === product.id)?.cost;
     }
-    if (!equal(proposed, products)) accessError('No puedes modificar el catálogo o el inventario directamente.');
+    if (!equal(proposed, products.map(p=>projectServiceProduct(p,allowed(access,'personal'),new Set((current.employees||[]).map(e=>e.id)))))) accessError('No puedes modificar el catálogo o el inventario directamente.');
   }
+  // La proyección nunca permite borrar o inyectar comisiones personales desde un guardado genérico.
+  if(allowed(access,'inventario',true))restoreServiceCommissionProjection(current,merged.products,access);
   const oldReceipts = new Map((current.taxes || []).filter(tax => tax.receipt).map(tax => [tax.id, tax.receipt]));
   for (const tax of merged.taxes || []) if (oldReceipts.has(tax.id)) tax.receipt = oldReceipts.get(tax.id);
   for(const [name,module] of Object.entries({...ADVANCED_ARRAYS,...TRADE_ARRAYS})) if(!equal(incoming[name]||[],projected[name]||[])) accessError('Usa la operación autorizada para modificar '+name+'.');

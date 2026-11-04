@@ -5,13 +5,14 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {invoiceTotals,normalizeItemQuantity,moneyCents} from '../public/accounting-math.mjs';
 import {prepareBusinessSale} from '../netlify/lib/business.mjs';
+import {serviceConsumptionPlan,serviceSaleSnapshot} from '../netlify/lib/service-catalog.mjs';
 const source=readFileSync(new URL('../netlify/lib/operations.mjs',import.meta.url),'utf8');
 // Se evalúa la implementación real del emisor; solo se sustituyen sus dependencias de infraestructura.
 const saleSource=source.slice(source.indexOf('async function makeSale('),source.indexOf('function creditNote('));
 const check=(value,message)=>assert.ok(value,message);
 function saleHarness(){
  const permissions=[];
- const context=vm.createContext({invoiceTotals,normalizeItemQuantity,prepareBusinessSale,
+ const context=vm.createContext({invoiceTotals,normalizeItemQuantity,prepareBusinessSale,serviceConsumptionPlan,serviceSaleSnapshot,
   ensurePrintVersions(){},requirePermission:(_access,module)=>permissions.push(module),requireValue:check,
   dateValue:value=>value,amount:Number,text:value=>String(value||''),round:value=>Math.round(value*100)/100,cents:moneyCents,
   currentShift:()=>null,salesAdministrator:()=>true,operatorId:()=> 'owner',actorName:()=> 'Dueño',
