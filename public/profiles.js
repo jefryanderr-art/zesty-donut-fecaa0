@@ -2,6 +2,7 @@
 // Catálogo compartido por el navegador y Functions. Sin acceso al DOM ni datos de clientes.
 (() => {
  const capabilities={
+  constancias_laborales:{letter:'AK',name:'Constancias laborales',group:'Personal',flow:'Configura textos y descarga constancias de trabajo o ingresos; verifica con tu contador.'},
   comunicacion:{letter:'X',name:'Comunicación con clientes',group:'Ventas',flow:'Revisa el documento y confirma cada envío.'},
   cobranza:{letter:'Y',name:'Gestión de cobranza',group:'Ventas',flow:'Revisa vencimientos, promesas y recordatorios antes de aprobar.'},
   terminos_pago:{letter:'Z',name:'Términos de pago',group:'Ventas',flow:'Configura condiciones futuras y confirma descuentos al cobrar; verifica con tu contador.'},

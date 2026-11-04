@@ -1963,3 +1963,193 @@ Object.assign(UI_CATALOG, {
     "max": 200
   }
 });
+
+Object.assign(UI_CATALOG, {
+  "employment.title": {
+    "original": "Constancias laborales",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.loading": {
+    "original": "Consultando permisos y configuración…",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.help": {
+    "original": "Constancias con texto definido por el dueño. Sin validez oficial garantizada; verifica con tu contador. Cada descarga queda en bitácora.",
+    "group": "Personal y nómina",
+    "max": 272
+  },
+  "employment.configure": {
+    "original": "Configurar constancias de esta sucursal",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.enabled": {
+    "original": "Constancias habilitadas en esta sucursal.",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.disabled": {
+    "original": "Apagado por defecto. El dueño debe configurar y activar esta sucursal.",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.pdf": {
+    "original": "Descargar PDF",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.csv": {
+    "original": "Descargar CSV para Excel",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.enable": {
+    "original": "Habilitar constancias futuras en esta sucursal",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.workText": {
+    "original": "Texto de la constancia de trabajo",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.incomeText": {
+    "original": "Texto de la constancia de ingresos",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.plainText": {
+    "original": "Texto literal, sin HTML ni variables. Los datos del empleado y el período se agregan por separado. Cambiar el texto conserva versiones de respaldo y no cambia documentos descargados.",
+    "group": "Personal y nómina",
+    "max": 364
+  },
+  "employment.reason": {
+    "original": "Motivo para la bitácora",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.confirm": {
+    "original": "Confirmo la configuración para futuras constancias",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.save": {
+    "original": "Guardar",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.employee": {
+    "original": "Empleado",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.kind": {
+    "original": "Tipo de constancia",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.work": {
+    "original": "Constancia de trabajo",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.income": {
+    "original": "Constancia de ingresos",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.from": {
+    "original": "Desde",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.to": {
+    "original": "Hasta",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.basis": {
+    "original": "Ingresos: percepciones brutas de nóminas pagadas según fecha de pago dentro del período. No incluye adelantos, liquidaciones ni nóminas pendientes. Verifica con tu contador.",
+    "group": "Personal y nómina",
+    "max": 346
+  },
+  "employment.company": {
+    "original": "Empresa",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.branch": {
+    "original": "Sucursal",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.period": {
+    "original": "Período",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.generated": {
+    "original": "Fecha de generación",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.author": {
+    "original": "Generado por",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.version": {
+    "original": "Versión del formato",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.templateVersion": {
+    "original": "Versión del texto",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.position": {
+    "original": "Cargo",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.start": {
+    "original": "Fecha de ingreso",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.text": {
+    "original": "Texto de la empresa",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.gross": {
+    "original": "Ingresos brutos pagados (centavos)",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.currency": {
+    "original": "Moneda",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.notice": {
+    "original": "Aviso",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.download": {
+    "original": "Descargar",
+    "group": "Personal y nómina",
+    "max": 200
+  },
+  "employment.error": {
+    "original": "No se pudo generar la constancia.",
+    "group": "Personal y nómina",
+    "max": 200
+  }
+});
+
+Object.assign(UI_CATALOG, {"employment.flow": {original: "Configura textos y descarga constancias de trabajo o ingresos; verifica con tu contador.", group: "Personal y nómina", max: 250}});

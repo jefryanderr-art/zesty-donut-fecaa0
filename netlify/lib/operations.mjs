@@ -1,3 +1,4 @@
+import {CERTIFICATE_OPS,configureCertificates,employmentCertificate,certificateConfig} from './employment-certificates.mjs';
 import {CLIENT_OPS,CLIENT_MODULES,clientOperation,clientReport} from './client-communications.mjs';
 import {INVENTORY_OPS,INVENTORY_MODULES,inventoryOperation,inventoryReport} from './inventory-advanced.mjs';
 import {BUDGET_OPS,BUDGET_MODULES,budgetOperation,budgetReport} from './budgets.mjs';
@@ -228,7 +229,7 @@ export function guardLedgerMutation(previous, next, access, {restoreServiceConfi
     const updated = next.taxes?.find(record => record.id === tax.id);
     requireValue(updated && ['source', 'period', 'base', 'rate', 'withholdings', 'amount', 'entryId'].every(name => equal(tax[name], updated[name])), 'Conserva la obligación y el cálculo del anticipo generado.');
   }
-  for(const module of [...CLIENT_MODULES,...FISCAL_MODULES,...INVENTORY_MODULES,...BUDGET_MODULES,...TREASURY_MODULES,'suscripciones','bancos'])requireValue(equal((previous?.businessRecords||[]).filter(r=>r.module===module),(next.businessRecords||[]).filter(r=>r.module===module)),'Conserva las fichas gestionadas de suscripciones y bancos; usa sus operaciones específicas.');
+  for(const module of [...CLIENT_MODULES,...FISCAL_MODULES,...INVENTORY_MODULES,...BUDGET_MODULES,...TREASURY_MODULES,'constancias_laborales','suscripciones','bancos'])requireValue(equal((previous?.businessRecords||[]).filter(r=>r.module===module),(next.businessRecords||[]).filter(r=>r.module===module)),'Conserva las fichas gestionadas de suscripciones y bancos; usa sus operaciones específicas.');
   validateBusinessRecords(next,requireValue);
   validateConfiguredServices(next,serviceEmployees(access.company?.data,previous,next));
   validateEconomicSector(next);
@@ -488,6 +489,18 @@ export async function runOperation(companyId, session, body) {
     if(body.format!=='VIEW')await audit(client,companyId,access.member?{...session,member:access.member}:session,'Descarga clientes '+body.format,[{area:body.module,branchId:access.branchId,from:body.from||body.date,to:body.to||body.date,version:1}]);
     return {...report,company:access.company.name,currency:data.cfg?.cur||'NIO',branchId:access.branchId,from:body.from||body.date,to:body.to||body.date,generatedAt:new Date().toISOString(),generatedBy:actor,revision:access.company.revision,version:1};
   });
+  if(['certificateView','certificateReport'].includes(body.operation))return db.transaction(async client=>{
+    const access=await companyAccess(client,companyId,session,true);
+    requireModule(access,'constancias_laborales');requireModule(access,'personal');
+    requireValue(access.branchId,'Selecciona una sucursal.');
+    const data=scopeBranch(access.company.data,access);requireValue(data?.employees,'Abre primero la empresa.');
+    const config=certificateConfig(data,access.branchId);
+    if(body.operation==='certificateView')return {enabled:!!config?.enabled,workText:config?.workText||'',incomeText:config?.incomeText||'',employees:data.employees.map(e=>({id:e.id,name:e.name})),templateVersion:config?.version||0};
+    requireValue(['PDF','CSV'].includes(body.format),'Formato inválido.');
+    const report=employmentCertificate(data,access,body),actor=actorName(access.member?{...session,member:access.member}:session);
+    await audit(client,companyId,access.member?{...session,member:access.member}:session,'Descarga constancia laboral '+body.format,[{area:'constancias_laborales',branchId:access.branchId,employeeId:body.employeeId,from:report.from,to:report.to,version:1,templateVersion:report.templateVersion}]);
+    return {...report,company:access.company.name,branchId:access.branchId,currency:data.cfg?.cur||'NIO',generatedAt:new Date().toISOString(),generatedBy:actor,version:1};
+  });
   if(body.operation==='budgetReport')return db.transaction(async client=>{
     const access=await companyAccess(client,companyId,session,true);requireModule(access,'presupuestos');
     requireValue(access.branchId&&['VIEW','PDF','CSV'].includes(body.format),'Informe inválido.');
@@ -573,7 +586,7 @@ export async function runOperation(companyId, session, body) {
     accessError('La ampliación de tesorería no está habilitada.',503);
   });
   const addedKeys = [];
-  if((CLIENT_OPS.includes(body.operation)||FISCAL_OPS.includes(body.operation)||INVENTORY_OPS.includes(body.operation)||BUDGET_OPS.includes(body.operation)||TREASURY_OPS.includes(body.operation)||BANK_OPS.includes(body.operation)||RECURRING_OPS.includes(body.operation)||BUSINESS_OPS.includes(body.operation)||['serviceDefinition','economicSector','specializedChart','serviceAccrueCommission'].includes(body.operation))&&!body.operationId)accessError('La operación requiere un identificador único.',400);
+  if((CERTIFICATE_OPS.includes(body.operation)||CLIENT_OPS.includes(body.operation)||FISCAL_OPS.includes(body.operation)||INVENTORY_OPS.includes(body.operation)||BUDGET_OPS.includes(body.operation)||TREASURY_OPS.includes(body.operation)||BANK_OPS.includes(body.operation)||RECURRING_OPS.includes(body.operation)||BUSINESS_OPS.includes(body.operation)||['serviceDefinition','economicSector','specializedChart','serviceAccrueCommission'].includes(body.operation))&&!body.operationId)accessError('La operación requiere un identificador único.',400);
   let output = null;
   if(body.operationId && !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.operationId)) accessError('Identificador de operación inválido.',400);
   const receipt=body.operationId?{id:body.operationId,actor:session.email+':'+(session.memberId||''),hash:createHash('sha256').update(JSON.stringify(body)).digest('hex'),resultId:()=>typeof output==='string'?output:null}:null;
@@ -588,7 +601,8 @@ export async function runOperation(companyId, session, body) {
       const operation = body.operation, userId = operatorId(access, session);
       if (['printSettings','settings','creditNote'].includes(operation)) ensurePrintVersions(data, access.company, operationSession);
       if(operation==='sale') await consumeDiscount(client,companyId,access,operationSession,body);
-      if(CLIENT_OPS.includes(operation))output=await clientOperation(data,access,operationSession,body,{queue:{insert:values=>client.insert(serviceMessages).values(values),get:async id=>{const [message]=await client.select().from(serviceMessages).where(eq(serviceMessages.id,id)).for('update');return message},retry:id=>client.update(serviceMessages).set({state:'pending',lastError:null,attempts:0}).where(eq(serviceMessages.id,id))},permit:requirePermission,entry:appendEntry,financialCash});
+      if(CERTIFICATE_OPS.includes(operation))output=configureCertificates(data,access,operationSession,body,{permit:requirePermission});
+      else if(CLIENT_OPS.includes(operation))output=await clientOperation(data,access,operationSession,body,{queue:{insert:values=>client.insert(serviceMessages).values(values),get:async id=>{const [message]=await client.select().from(serviceMessages).where(eq(serviceMessages.id,id)).for('update');return message},retry:id=>client.update(serviceMessages).set({state:'pending',lastError:null,attempts:0}).where(eq(serviceMessages.id,id))},permit:requirePermission,entry:appendEntry,financialCash});
       else if(BUDGET_OPS.includes(operation))output=await budgetOperation(data,access,operationSession,body,{permit:requirePermission});
       else if(INVENTORY_OPS.includes(operation))output=await inventoryOperation(data,access,operationSession,body,{permit:requirePermission});
       else if(FISCAL_OPS.includes(operation))output=await fiscalOperation(data,access,operationSession,body,{permit:requirePermission});

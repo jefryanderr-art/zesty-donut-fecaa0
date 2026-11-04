@@ -159,7 +159,7 @@ Estado detallado, límites y comprobaciones: [fase-2-tesoreria-bancos.md](fase-2
 - [ ] F7.2 Vacaciones: calendario, aprobación, saldos y pasivo laboral.
 - [ ] F7.3 Planillas por sucursal/área y costo total con cargas/provisiones.
 - [ ] F7.4 Comisiones por metas con escalas por tramo.
-- [ ] F7.5 Constancias de trabajo/ingresos PDF con texto editable.
+- [x] F7.5 Constancias de trabajo/ingresos PDF con texto editable y CSV; apagadas por sucursal, permisos propios y Personal, pruebas escritas sin ejecutar. Ver docs/fase-7.md.
 - [ ] F7.6 Parámetros laborales por país enlazados con F4.6.
 - [ ] F7.Cierre Revisión, permisos, pruebas, uiT, descargas, respaldo, documentación y compatibilidad por archivo.
 
@@ -308,4 +308,4 @@ Solo se entregaron cálculos puros sin conexión (`public/advanced-math.mjs`, `n
 - [ ] F5.1 PEPS: impedido por decisión del dueño.
 - [x] F5.2 Bodegas por sucursal, traslados, existencias y alertas mínimo/máximo/reposición (módulo `bodegas`, informativo, sin asientos). Escrito, **no verificado**.
 - [ ] F6.1 Presupuesto (`budgetVariance`) · [ ] F6.2 Asientos con flujo · [ ] F6.3 Intercompañía · [ ] F6.4 Activos avanzados · [ ] F6.5 Indicadores (`ratios`) · [ ] F6.6 ABC · [ ] F6.7 Tableros por rol · [ ] F6.8 Notas y paquete de cierre
-- [ ] F7.1 Adelantos/préstamos (`installments`) · [ ] F7.2 Vacaciones (`vacationBalance`) · [ ] F7.3 Planillas por área · [ ] F7.4 Comisiones por meta (`tierCommissionCents`) · [ ] F7.5 Constancias · [ ] F7.6 Parámetros por país
+- [ ] F7.1 Adelantos/préstamos (`installments`) · [ ] F7.2 Vacaciones (`vacationBalance`) · [ ] F7.3 Planillas por área · [ ] F7.4 Comisiones por meta (`tierCommissionCents`) · [x] F7.5 Constancias (implementadas, no verificadas funcionalmente) · [ ] F7.6 Parámetros por país
