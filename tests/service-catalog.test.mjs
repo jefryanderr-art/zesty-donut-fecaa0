@@ -62,7 +62,7 @@ test('paquete suma consumibles de sus componentes sin consumir los propios servi
 test('consumibles con trazabilidad, inexistentes o que son servicios se rechazan',()=>{
  for(const p of ['inexistente','t'])assert.throws(()=>configure(state(),{consumables:[{p,q:1}]}));
  for(const record of [{module:'lotes'},{module:'variantes',serial:'ABC'},{module:'produccion'}]){
-  const data=state();configure(data,{consumables:[{p:'p',q:1}]});data.businessRecords.push({...record,productId:'p'});assert.throws(()=>serviceConsumptionPlan(data,[{p:'s',q:1}]),/manual/);
+  const data=state();configure(data,{consumables:[{p:'p',q:1}]});data.businessRecords.push({...record,productId:'p'});assert.throws(()=>serviceConsumptionPlan(data,[{p:'s',q:1}]),/No se permite/);
  }
 });
 test('cantidades de prestación que producen fracciones de milésima se rechazan sin redondear',()=>{

@@ -152,3 +152,10 @@ test('etiqueta de catálogo respeta personalización sin cambiar datos',()=>{
  assert.equal(ui.run('businessCatalogName()'),'Tratamiento y tarifas');
  assert.equal(ui.context.CO.businessType,'belleza');
 });
+test('Q respeta matriz de perfiles, cuatro planes y personalización sin conceder permisos',()=>{
+ for(const profile of catalog.profiles)for(const plan of DEFAULT_PLANS)for(const custom of [{},{shown:['suscripciones']},{hidden:['suscripciones']}]){
+  const ui=browser(profile.id,plan,custom),included=plan.id!=='facturacion'&&!plan.blockedModules.includes('suscripciones'),recommended=profile.capabilities.includes('suscripciones');
+  assert.equal(ui.run("businessVisible('suscripciones')"),included&&!custom.hidden?.includes('suscripciones')&&(custom.shown?.includes('suscripciones')||recommended||false),profile.id+' '+plan.id);
+  ui.run("CO.owner=false;CO.role='contador';CO.permissions={suscripciones:'ninguno'}");assert.equal(ui.run("businessVisible('suscripciones')"),false);
+ }
+});

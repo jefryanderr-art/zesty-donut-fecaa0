@@ -1,5 +1,8 @@
 # Fase 1: ampliación del catálogo y sector económico (parcial)
 
+> Actualización 2026-11-04: este documento describe la entrega inicial. La implementación posterior de Q, plantillas especializadas, reposición y devengo opcionales está en [Cierre de Fase 1](fase-1-cierre-mejoras.md). Su verificación funcional no se ha ejecutado; el estado de la solicitud completa está en [avance-mejoras.md](avance-mejoras.md).
+
+
 Esta entrega continuó la primera parte descrita en `servicios-y-modelos.md`. No rehízo sus perfiles, navegación ni exclusiones de trazabilidad. La Fase 1 **no quedó completa**: la capacidad Q, sus prorrateos, ingresos diferidos, renovaciones y métricas siguen pendientes. No se iniciaron las fases 2–9, conforme a la condición de terminar cada fase antes de avanzar. Los contratos existentes no sustituyen Q.
 
 ## Alcance incorporado

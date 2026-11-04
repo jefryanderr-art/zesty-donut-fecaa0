@@ -1,3 +1,8 @@
+import {BANKS_READY,BANK_OPS,bankOperation,bankReport} from './banks.mjs';
+import {serviceCommissionAccrual} from './service-commission.mjs';
+import {restoreServiceConsumables} from './service-restock.mjs';
+import {applySpecializedChart} from './chart-templates.mjs';
+import {RECURRING_OPS,recurringOperation,recurringReport,recurringCredit} from './recurring.mjs';
 import '../../public/invoice-design.js';
 import {BUSINESS_OPS,businessOperation,prepareBusinessSale,restoreBusinessReturn,validateBusinessRecords} from './business.mjs';
 import { normalizeItemQuantity } from './accounting-engine.mjs';
@@ -17,7 +22,7 @@ import { getStore } from '@netlify/blobs';
 import { and, eq } from 'drizzle-orm';
 import { companyMembers, siteContent, users } from '../../db/schema.ts';
 import { db } from '../../db/index.ts';
-import { companyAccess, projectData, allowed, requireModule, equal, accessError, updateCompany, actorName, audit } from './access.mjs';
+import { allData, companyAccess, projectData, allowed, requireModule, equal, accessError, updateCompany, actorName, audit } from './access.mjs';
 import { OPERATION_ARRAYS, operationalRole, salesAdministrator, supervisor, cashAdministrator, operatorId, receiptRecords } from './policies.mjs';
 
 const round = value => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -181,7 +186,8 @@ export function guardLedgerMutation(previous, next, access, {restoreServiceConfi
     requireValue(equal(previous?.[name] || empty, next[name] || empty), 'Usa la operación específica para modificar facturación, cajas o costos.');
   }
   requireValue(equal(previous?.cfg?.print || {}, next.cfg?.print || {}), 'Configura la impresión desde Edición de factura.');
-  for(const key of ['economicSector','chartTemplate'])requireValue(restoreService||equal(previous?.cfg?.[key],next.cfg?.[key]),'Usa la configuración de sector y plantilla contable.');
+  for(const key of ['economicSector','chartTemplate','specializedChartTemplate'])requireValue(restoreService||equal(previous?.cfg?.[key],next.cfg?.[key]),'Usa la configuración de sector y plantilla contable.');
+  requireValue(equal(previous?.cfg?.bankControls,next.cfg?.bankControls),'Configura los cierres bancarios mediante su operación específica.');
   requireValue(equal(previous?.cfg?.pos || {}, next.cfg?.pos || {}) && equal(previous?.cfg?.cash || {}, next.cfg?.cash || {}) && equal(previous?.cfg?.advance || {}, next.cfg?.advance || {}), 'Los parámetros operativos solo se modifican desde su configuración.');
   const before = new Map((previous?.entries || []).map(entry => [entry.id, entry]));
   const after = new Map(next.entries.map(entry => [entry.id, entry]));
@@ -211,6 +217,7 @@ export function guardLedgerMutation(previous, next, access, {restoreServiceConfi
     const updated = next.taxes?.find(record => record.id === tax.id);
     requireValue(updated && ['source', 'period', 'base', 'rate', 'withholdings', 'amount', 'entryId'].every(name => equal(tax[name], updated[name])), 'Conserva la obligación y el cálculo del anticipo generado.');
   }
+  for(const module of ['suscripciones','bancos'])requireValue(equal((previous?.businessRecords||[]).filter(r=>r.module===module),(next.businessRecords||[]).filter(r=>r.module===module)),'Conserva las fichas gestionadas de suscripciones y bancos; usa sus operaciones específicas.');
   validateBusinessRecords(next,requireValue);
   validateConfiguredServices(next,serviceEmployees(access.company?.data,previous,next));
   validateEconomicSector(next);
@@ -467,8 +474,33 @@ export async function runOperation(companyId, session, body) {
     await audit(client,companyId,access.member?{...session,member:access.member}:session,'Descarga de factura PDF',[{area:'ventas',event:'Descarga PDF solicitada',invoiceId:entry.id,reference:entry.reference,at:new Date().toISOString()}]);
     return {ok:true};
   });
+  if(body.operation==='recurringReport')return db.transaction(async client=>{
+    const access=await companyAccess(client,companyId,session,true);requireModule(access,'suscripciones');
+    requireValue(['VIEW','PDF','CSV'].includes(body.format),'Formato de descarga inválido.');
+    const data=scopeBranch(access.company.data,access),report=recurringReport(data,dateValue(body.from),dateValue(body.to));
+    if(body.format!=='VIEW')await audit(client,companyId,access.member?{...session,member:access.member}:session,'Descarga recurrentes '+body.format,[{area:'suscripciones',from:body.from,to:body.to,branchId:access.branchId,version:1}]);
+    return {...report,company:access.company.name,currency:data.cfg?.cur||'NIO',branchId:access.branchId,generatedAt:new Date().toISOString(),generatedBy:actorName(session),revision:access.company.revision};
+  });
+  if(body.operation==='fullDataPdf')return db.transaction(async client=>{
+    const access=await companyAccess(client,companyId,session,true);requireModule(access,'ajustes');
+    requireValue(allData(access),'El respaldo PDF completo requiere lectura de todos los módulos y sucursales.');
+    await audit(client,companyId,access.member?{...session,member:access.member}:session,'Descarga de respaldo PDF completo',[{area:'ajustes',version:1,branchId:access.branchId}]);
+    return {data:projectData(access.company.data,access),company:access.company.name,branchId:access.branchId,version:1,revision:access.company.revision,generatedAt:new Date().toISOString(),generatedBy:actorName(session)};
+  });
+  if(body.operation==='bankReport')return db.transaction(async client=>{
+    const access=await companyAccess(client,companyId,session,true);requireModule(access,'bancos');
+    if(!BANKS_READY)accessError('La ampliación de tesorería no está habilitada.',503);
+    requireValue(['VIEW','PDF','CSV'].includes(body.format),'Formato inválido.');
+    const data=scopeBranch(access.company.data,access),report=body.id?bankReport(data,body.bankId,body.id):{version:1,banks:(data.businessRecords||[]).filter(r=>r.module==='bancos'&&r.kind==='bank')};
+    if(body.format!=='VIEW')await audit(client,companyId,access.member?{...session,member:access.member}:session,'Descarga conciliación '+body.format,[{area:'bancos',statementId:body.id,branchId:access.branchId,version:1}]);
+    return {...report,company:access.company.name,currency:data.cfg?.cur||'NIO',branchId:access.branchId,generatedAt:new Date().toISOString(),generatedBy:actorName(session),revision:access.company.revision};
+  });
+  if(BANK_OPS.includes(body.operation)&&!BANKS_READY)return db.transaction(async client=>{
+    const access=await companyAccess(client,companyId,session,true);requirePermission(access,'bancos');
+    accessError('La ampliación de tesorería no está habilitada.',503);
+  });
   const addedKeys = [];
-  if((BUSINESS_OPS.includes(body.operation)||['serviceDefinition','economicSector'].includes(body.operation))&&!body.operationId)accessError('La operación requiere un identificador único.',400);
+  if((BANK_OPS.includes(body.operation)||RECURRING_OPS.includes(body.operation)||BUSINESS_OPS.includes(body.operation)||['serviceDefinition','economicSector','specializedChart','serviceAccrueCommission'].includes(body.operation))&&!body.operationId)accessError('La operación requiere un identificador único.',400);
   let output = null;
   if(body.operationId && !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.operationId)) accessError('Identificador de operación inválido.',400);
   const receipt=body.operationId?{id:body.operationId,actor:session.email+':'+(session.memberId||''),hash:createHash('sha256').update(JSON.stringify(body)).digest('hex'),resultId:()=>typeof output==='string'?output:null}:null;
@@ -483,11 +515,15 @@ export async function runOperation(companyId, session, body) {
       const operation = body.operation, userId = operatorId(access, session);
       if (['printSettings','settings','creditNote'].includes(operation)) ensurePrintVersions(data, access.company, operationSession);
       if(operation==='sale') await consumeDiscount(client,companyId,access,operationSession,body);
-      if(BUSINESS_OPS.includes(operation)){
+      if(BANK_OPS.includes(operation))output=bankOperation(data,access,operationSession,body,{permit:requirePermission,entry:appendEntry});
+      else if(RECURRING_OPS.includes(operation))output=await recurringOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,amount,entry:appendEntry,financialCash,credit:b=>creditNote(data,access,operationSession,b),sale:(b,id)=>makeSale(data,access,operationSession,b,client,companyId,id)});
+      else if(BUSINESS_OPS.includes(operation)){
         output=await businessOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,amount,date:dateValue,entry:appendEntry,financialCash,registerCost,sale:(b,id)=>makeSale(data,access,operationSession,b,client,companyId,id)});
         if(operation==='businessOnboard'){businessPatch=output;output=null;}
       }
       else if(operation==='serviceDefinition')output=configureService(data,access,body,{permit:requirePermission});
+      else if(operation==='serviceAccrueCommission')output=serviceCommissionAccrual(data,access,operationSession,body,{check:requireValue,permit:requirePermission,date:dateValue,entry:appendEntry});
+      else if(operation==='specializedChart')output=applySpecializedChart(data,access,body,{permit:requirePermission});
       else if(operation==='economicSector')output=configureEconomicSector(data,access,body,{permit:requirePermission});
       else if(operation==='countryTemplate'){requirePermission(access,'fiscal');let template;try{template=countryTemplate(body)}catch(error){accessError(error.message,400)}data.cfg.countryTemplate=template;data.cfg.fiscal={...data.cfg.fiscal,...template.fiscal};for(const [code,name,tipo,nat]of [['6109','Aportes patronales','gasto','D'],['2112','Aportes patronales por pagar','pasivo','C']])if(!data.accounts.some(a=>a.code===code))data.accounts.push({code,name,tipo,nat,sub:''});}
       else if(crossBranch){output=transferOperation(data,access,operationSession,body,{requireValue,requirePermission,appendEntry,dateValue,amount,ledgerBalance,guardCash});}
@@ -615,7 +651,13 @@ export async function runOperation(companyId, session, body) {
         if (opening) { const record = movement(data, operationSession, { ...body, concept: 'Fondo inicial de turno', method: 'efectivo', exchangeRate: 1, currency: data.cfg.cur }, '1104', body.source, opening, { shiftId: shift.id, operatorId: userId }); shift.entryId = record.entryId; }
         data.shifts.push(shift); output = shift.id;
       } else if (operation === 'sale') output = (await makeSale(data, access, operationSession, body, client, companyId)).id;
-      else if (operation === 'creditNote') output = creditNote(data, access, operationSession, body).id;
+      else if (operation === 'creditNote') {
+        if(body.restockConsumables===true||data.businessRecords?.some(r=>r.module==='suscripciones'&&r.billed?.some(b=>b.entryId===body.id)))requireValue(body.operationId,'La corrección requiere un identificador único.');
+        const note=creditNote(data,access,operationSession,body);
+        restoreServiceConsumables(data,access,operationSession,note,body,{check:requireValue,permit:requirePermission,entry:appendEntry});
+        recurringCredit(data,access,operationSession,note,{check:requireValue,permit:requirePermission,entry:appendEntry});
+        output=note.id;
+      }
       else if (operation === 'closeShift') {
         requirePermission(access, 'facturacion');
         const shift = currentShift(data, access, operationSession, body.id), date = dateValue(body.date);

@@ -1,0 +1,74 @@
+# Cierre de implementación de la Fase 1
+
+Esta ampliación agregó Q sobre las entregas existentes, sin sustituir Contratos, el catálogo de servicios ni las sugerencias mínimas por sector. Su implementación y sus pruebas quedaron escritas; el funcionamiento en Netlify, las pruebas automatizadas y la presentación visual están **no verificados**. No se ejecutaron pruebas locales, compilaciones, servidores, pagos, correos ni despliegues.
+
+## Suscripciones de clientes, capacidad Q
+
+El dueño puede crear explícitamente una suscripción para un cliente activo identificado. Se conservan precio por período, periodicidad mensual/trimestral/semestral/anual, fecha de alta, anclaje, IVA y pasivo para anticipos/diferimientos. Precio y periodicidad no se editan después del alta; para otras condiciones se cancela y se crea otra suscripción expresamente. Los precios se expresan en la moneda base de la empresa. No hay cargos a tarjetas ni tareas automáticas.
+
+Los intervalos son fechas civiles, con fin exclusivo. El anclaje conserva el día original al pasar por febrero o meses cortos. El prorrateo usa días activos y centavos enteros, con redondeo a la mitad hacia arriba. Dos servicios exclusivos por suscripción, sin stock y con precio de catálogo cero, permiten distribuir el precio en dos tarifas diarias que difieren un centavo. La factura conserva días, tarifas y total; no se usan descuentos para representar prorrateos. Los servicios anteriores no se convierten ni se modifican.
+
+Vista previa de emisión calcula base, IVA y total con el módulo matemático compartido. El servidor vuelve a calcularlos y exige coincidencia del importe confirmado. Cada período se emite a crédito una sola vez, después de su inicio; los cobros posteriores usan Cuentas por cobrar. Se conservan los requisitos existentes del emisor, incluidas serie/sucursal, cliente, permisos, límites y autorización del operador. Un período sin días activos no genera factura. El siguiente número del formulario propone el primer período aún no emitido, sin emitirlo automáticamente.
+
+Pausar y cancelar requieren dueño, confirmación y motivo. Si el período ya fue facturado, se exige una confirmación adicional de su nota de crédito por los días sin servicio. La corrección utiliza el emisor actual de notas con cantidades diarias enteras y exige verificar la coincidencia exacta de centavos. Si existe dinero que devolver, siguen vigentes los requisitos de turno y medio de devolución de la nota ordinaria. Todo se confirma o se rechaza junto dentro de la transacción. Un período con notas anteriores requiere revisión y cambio de estado desde el próximo período: no se infiere cómo combinar correcciones comerciales previas. La reanudación comienza desde el siguiente período facturado, para no reeditar ni refacturar un período corregido. Cancelada es definitiva. Estas decisiones conservadoras evitan cambios de significado histórico.
+
+Los anticipos debitan Caja general/Banco y acreditan un pasivo elegido expresamente. Las devoluciones no exceden el anticipo disponible. Al facturar se aplica como máximo el importe de la factura contra Clientes, conservando cualquier remanente del anticipo. Deben existir permisos adicionales de Tesorería y Contabilidad cuando se utilizan. Si se activó diferimiento, un asiento separado vinculado traslada la base facturada de ingresos a pasivo; el IVA conserva el tratamiento del emisor. Reconocer ingreso es otra acción confirmada por fecha de corte exclusiva: solo reconoce la diferencia aún no reconocida por días activos. Nunca reconoce más que la base neta de notas de crédito. Las notas compensan el diferimiento pendiente con un asiento adicional; no reescriben la factura, la nota ni asientos anteriores. Verifica con tu contador el tratamiento aplicable.
+
+MRR normaliza el precio sin IVA de suscripciones activas al cierre a un mes; ARR es doce veces ese MRR. El churn es cancelaciones de la cohorte activa al inicio del período dividido por esa cohorte, en puntos básicos. Las altas posteriores no entran en el denominador y las pausas no cuentan como cancelación. La antigüedad reutiliza el cálculo existente para las facturas de Q y sus movimientos vinculados. Estos indicadores describen contratos, no ingresos cobrados ni un estado financiero certificado.
+
+El informe muestra el período y la fecha de corte; las renovaciones e historial se filtran por fecha de operación. Estado, anticipo, créditos y reconocimiento se proyectan a la fecha de corte. PDF y CSV incluyen empresa, sucursal o consolidado autorizado, período, fecha/hora, generador, versión y revisión; la solicitud de descarga queda auditada. La consulta VIEW no registra una descarga ficticia. No hay sondeos. El CSV neutraliza fórmulas y el PDF usa las bibliotecas locales existentes.
+
+Q usa la ruta y permiso `suscripciones`; conserva `recurrentes` para las plantillas históricas de asientos. Q tiene permiso propio de lectura/escritura y bloqueo individual por plan. Facturación lo excluye incluso con un plan guardado antes de Q. Básico, Estándar y Pro pueden bloquearlo individualmente. Software y Suscripciones lo recomiendan; los demás lo ofrecen de forma opcional. Ocultarlo no autoriza ni deniega operaciones. Los colaboradores no reciben el permiso automáticamente. Soporte y empresas limitadas continúan sin escritura; el consolidado solo admite informes.
+
+## Plantillas especializadas
+
+Ajustes y respaldo agregó una vista previa adicional para las combinaciones de los 32 perfiles y siete sectores. Cada plantilla agrega al menos doce cuentas, incluidas anticipos, diferidos, comisiones y cuentas propias del sector/perfil. Software, suscripciones, inmobiliaria, seguros, hotel y educación tienen sugerencias específicas adicionales; los demás distinguen ingresos y costos directos de su actividad. Son sugerencias editables mediante los textos de interfaz, no un catálogo oficial.
+
+Aplicar requiere dueño, Ajustes y Contabilidad con escritura, sucursal, versión/perfil actual, confirmación y motivo. El servidor revisa todas las sucursales: no admite asientos, existencias, nóminas ni documentos extranjeros. Conserva íntegramente las cuentas existentes; rechaza naturalezas incompatibles antes de agregar alguna. No selecciona sector automáticamente ni reemplaza las sugerencias mínimas anteriores. La tabla es una vista previa de configuración, no un nuevo informe contable; las cuentas y la referencia resultantes entran en los respaldos y PDF completo existentes.
+
+## Consumibles y comisiones
+
+La nota de crédito conserva por defecto el consumo. La reposición es opcional y exige una segunda confirmación de recuperación física, motivo y permisos de Inventario y Contabilidad. El consumo histórico solo conserva totales agregados: la reposición automática se admite cuando se devolvieron todos los servicios de esa factura, incluso mediante varias notas. No se atribuyen insumos a devoluciones parciales sin una asignación histórica que los identifique. Se impide reponer dos veces la misma prestación y se bloquean artículos con lotes, series o producción. El servidor rechaza también su consumo con un mensaje explícito; no hay asignaciones implícitas.
+
+La reposición crea un asiento y movimiento independientes vinculados a consumo, factura y nota. Mantiene el costo vigente del catálogo; revierte el costo consumido original y contabiliza cualquier diferencia de valoración en una cuenta de gasto seleccionada. No recalcula costos de otras sucursales ni cambia costos históricos. El stock conserva su precisión anterior. Una solicitud inválida rechaza la nota y reposición juntas, sin escrituras parciales.
+
+Comisiones agregó una acción optativa para devengar las referencias conservadas en la factura, con empleado, cuentas de gasto/pasivo, fecha, confirmación y motivo. Resta devoluciones previas siguiendo el orden de las líneas del emisor, también cuando hay un servicio repetido a precios distintos. No infiere tasas históricas ni permite repetir una venta/empleado ya devengada por la ruta ordinaria o la nueva. Genera una ficha y asiento vinculados; la liquidación reutiliza el módulo existente.
+
+Para impedir duplicación conservadoramente, una nómina con comisión manual en el período de la venta impide el nuevo devengo. Tras devengar por catálogo, agregar o modificar una nómina con comisión manual del mismo empleado/período se rechaza. Las nóminas históricas intactas no se reinterpretan. Otras comisiones de ese período deben gestionarse por separado; no se intenta adivinar si una cifra manual corresponde al mismo concepto. Una devolución posterior al devengo requiere revisión y asiento compensatorio documentado con el contador; no hay reversas ni pagos automáticos.
+
+## Persistencia, migración y permisos
+
+No hubo cambios de esquema ni migraciones nuevas. Se reutilizaron `businessRecords`, productos, asientos y configuración, sus claves por empresa, índices, dimensión de sucursal y RLS existentes. El precio principal de Q usa la columna BIGINT de centavos de `price`; los importes anidados nuevos ya expresados en centavos se declararon en el codec. No se agregaron dependencias, secretos, proveedores externos ni tareas programadas.
+
+Las operaciones nuevas pasan por `runOperation/updateCompany` con identificador idempotente, revisión, bloqueo, permisos/plan, sucursal del servidor, bitácora, versiones y sincronización relacional. Los informes se autorizan en servidor y aplican la sucursal de sesión. Las operaciones genéricas de negocio no admiten editar Q. El guardado genérico conserva sus fichas protegidas y las referencias de plantilla. JSON y ZIP incluyen los nuevos registros mediante los recorridos existentes. Se añadió descarga de respaldo PDF completo en Ajustes, con autorización de lectura de todos los módulos y sucursales, proyección del servidor y auditoría; recorre todos los campos, incluidos los nuevos registros. La restauración mantiene las protecciones previas y rechaza alterar las fichas gestionadas de Q o bancos, incluidas sus renovaciones; para recuperar una versión se conservan esas fichas vigentes, sin retroceder asientos ya emitidos. No se habilita editar facturas ni documentos gestionados restaurando un archivo.
+
+## Revisión de compatibilidad por archivo existente
+
+- `netlify/lib/operations.mjs` agregó despacho de operaciones, informe autorizado y complementos optativos de notas; las funciones `makeSale` y `creditNote` permanecieron idénticas mediante comparación estática con la versión inicial. Una nota ajena a Q y sin reposición no agrega asientos nuevos.
+- `netlify/lib/access.mjs` agregó una guarda condicional contra duplicar las comisiones de catálogo nuevas en nómina. Sin esas fichas, devuelve sin efecto; no revisa de nuevo nóminas intactas.
+- `netlify/lib/business.mjs` reconoció Q y bloqueó su edición por operaciones genéricas. Los estados de las otras capacidades no cambiaron.
+- `netlify/lib/accounting-codec.mjs` declaró centavos nativos nuevos sin cambiar conversiones históricas.
+- `netlify/lib/service-catalog.mjs` aclaró el mensaje del bloqueo de trazabilidad existente; mantuvo la regla anterior.
+- `public/accounting-math.mjs` agregó funciones puras sin modificar las existentes.
+- `public/profiles.js` agregó Q y sus recomendaciones/opciones, conservando las capacidades y perfiles anteriores.
+- `public/business.js` incorporó textos editables de Q sin cambiar la autorización ni visibilidad anteriores.
+- `public/index.html` cargó los scripts aditivos y actualizó huellas; conservó nombres y orden previo.
+- `public/ui-texts.js` y `public/ui-text-catalog.mjs` incorporaron los textos editables y aclararon la reposición optativa.
+- `public/assistant.js` y `netlify/lib/assistant-guide.mjs` actualizaron ayuda estática, sin enviar registros del módulo a IA.
+- `public/service-catalog.js` aclaró que una nota no repone automáticamente los insumos.
+- `scripts/version-assets.mjs` incluyó el nuevo script en las huellas de dependencias. `public/analytics.js` y `public/operations.js` solo cambiaron la huella del módulo matemático.
+- Los tests existentes de perfiles/visibilidad/catálogo se ampliaron para Q y el nuevo mensaje. Se escribieron cuatro archivos de pruebas de recurrentes, plantillas, reposición y comisiones.
+
+No se modificaron `style.css`, colores/variables existentes, motor de costeo, numeraciones, migraciones aplicadas, Identity, Pagadito o SMTP. Las pantallas reutilizan clases existentes y escapan datos. El comportamiento visual real y el espacio ante `.bnav` no se verificaron en dispositivos.
+
+## Verificación de vista previa y reversión
+
+La sintaxis y el diff se comprobaron estáticamente. Las pruebas escritas no se ejecutaron. En vista previa, la plataforma debe ejecutar la suite y comprobar Database/RLS con el rol real de Functions, transacciones y concurrencia. Para cada uno de los cuatro planes, probar dueño, contador y colaboradores sin acceso/lectura/escritura, restricciones de soporte y de empresas excedidas, URL/API directa y consolidado. Verificar que la personalización nunca supera el permiso o plan.
+
+Probar altas a mitad de mes, febrero bisiesto, anclaje 31, todos los intervalos, precios no divisibles entre días, pausas/cancelaciones antes y después de facturar, notas previas y devolución con/sin turno. Comparar base, IVA, saldo de Clientes, pasivo y reconocimiento; comprobar un solo resultado ante reintentos y dos pestañas. Contrastar MRR/ARR/churn y antigüedad con una muestra independiente.
+
+Probar plantilla vacía, cuenta existente compatible/incompatible y movimientos ocultos en otra sucursal. Reponer consumibles solo tras recuperación física y devolución completa de servicios; intentar dos reposiciones, trazabilidad, diferencia de costo y un error que obligue a rollback. Devengar comisión con devoluciones y líneas repetidas; intentar duplicarla por la ruta ordinaria, por otra pestaña y por nómina. Exportar PDF, CSV, JSON, ZIP y PDF completo; comprobar metadatos, centavos, proyección por sucursal, bitácora y neutralización de fórmulas.
+
+Revisar teléfono, tableta, laptop y PC en claro/oscuro: teclado, foco, tabla extensa, texto editable largo, contenido malicioso y último control por encima de `.bnav`. Comparar ventas y notas ajenas a Q con la versión anterior, sin habilitar las nuevas opciones.
+
+No se crearon commits manuales: los identificadores corresponden a la plataforma. No hay migraciones nuevas que revertir. Para retirar interfaz, conservar fichas, productos, asientos, metadatos de centavos y protecciones de nómina/nota para empresas que ya los usaron. Revocar escritura y detener nuevas emisiones primero; no volver a una versión que descarte los campos nuevos al guardar. Los asientos existentes se compensan de forma documentada, nunca se eliminan. PEPS permaneció sin implementar y sin interruptor operativo, por decisión expresa de mantener el motor de costeo sin cambios.

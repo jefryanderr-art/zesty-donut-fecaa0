@@ -1,5 +1,8 @@
 # Servicios y modelos de negocio: primera entrega de la ampliación
 
+> Actualización 2026-11-04: este documento describe la entrega inicial. La implementación posterior de Q, plantillas especializadas, reposición y devengo opcionales está en [Cierre de Fase 1](fase-1-cierre-mejoras.md). Su verificación funcional no se ha ejecutado; el estado de la solicitud completa está en [avance-mejoras.md](avance-mejoras.md).
+
+
 Se implementó la separación inicial de presentación para negocios de servicios y la ampliación del catálogo de perfiles. Esta entrega cubre parte de la Fase 1. No representa la implementación completa de las nueve fases solicitadas.
 
 ## Comportamiento

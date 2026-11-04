@@ -1,0 +1,13 @@
+'use strict';
+// Catálogo aditivo compartido. No altera tasas, saldos ni catálogos guardados.
+(() => {
+ const accounts=[['1291','Anticipos a proveedores','activo','D'],['1292','Servicios ejecutados por facturar','activo','D'],['1491','Pagos anticipados de operación','activo','D'],['2198','Anticipos de clientes','pasivo','C'],['2199','Ingresos diferidos de suscripciones','pasivo','C'],['2197','Comisiones devengadas por pagar','pasivo','C'],['6197','Gastos por comisiones de servicios','gasto','D'],['6198','Servicios contratados a terceros','gasto','D']];
+ const sectorRows={comercio:[['1391','Mercadería en tránsito','activo','D'],['5191','Fletes de comercialización','costo','D']],servicios:[['4191','Ingresos por mantenimiento','ingreso','C'],['5191','Costos de prestación de servicios','costo','D']],industria:[['1391','Producción en proceso','activo','D'],['5191','Costos indirectos de fabricación','costo','D']],agro:[['1391','Cultivos en proceso','activo','D'],['5191','Costos de cosecha','costo','D']],construccion:[['1391','Obras en ejecución','activo','D'],['5191','Costos de subcontratos de obra','costo','D']],financiero:[['1293','Intereses devengados por cobrar','activo','D'],['4191','Ingresos por intermediación','ingreso','C']],sin_fines_de_lucro:[['2196','Fondos restringidos por ejecutar','pasivo','C'],['5191','Costos de programas y proyectos','costo','D']]};
+ const special={software:[['1591','Licencias adquiridas e intangibles','activo','D'],['4192','Ingresos por licencias y soporte','ingreso','C']],recurrentes:[['1294','Suscripciones por cobrar','activo','D'],['4192','Ingresos reconocidos de membresías','ingreso','C']],inmobiliaria:[['1294','Honorarios de intermediación por cobrar','activo','D'],['4192','Ingresos por corretaje inmobiliario','ingreso','C']],seguros:[['1294','Comisiones de corretaje por cobrar','activo','D'],['4192','Ingresos de intermediación de seguros','ingreso','C']],hotel:[['2195','Reservas de hospedaje anticipadas','pasivo','C'],['4192','Ingresos de alojamiento','ingreso','C']],educacion:[['2195','Matrículas anticipadas','pasivo','C'],['4192','Ingresos por enseñanza','ingreso','C']]};
+ const get=(profile,sector)=>{
+  const p=globalThis.AcontecProfiles.profiles.find(p=>p.id===profile);if(!p||!sectorRows[sector])return null;
+  const extra=special[profile]||[['4192','Ingresos de '+p.name,'ingreso','C'],['5192','Costos directos de '+p.name,'costo','D']];
+  return {version:1,profile,sector,accounts:[...accounts,...sectorRows[sector],...extra].map(([code,name,tipo,nat])=>({code,name,tipo,nat,sub:''}))};
+ };
+ globalThis.AcontecChartTemplates=Object.freeze({version:1,get});
+})();
