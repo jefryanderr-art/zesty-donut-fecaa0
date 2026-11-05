@@ -50,3 +50,26 @@ export const snake = name => name.replace(/[A-Z]/g, char => '_' + char.toLowerCa
 
 // Metadatos de declaraciones y paquetes: valores monetarios nativos, nunca flotantes.
 export const workflowCentFields=[...new Set([...Object.values(collections),...Object.values(children)].flatMap(d=>(d.money||[]).map(k=>k+'Cents'))),'employerSocialCents','inatecCents','revaluationCents','debitCents','creditCents','closingCents','incomeCents','expenseCents','equityCents','assetsCents','liabilitiesCents','outputCents','inputCents','creditCents','advanceCents','adjustmentCents','taxableCents','penaltyCents','interestCents','paidCents','amountCents','differenceCents'];
+
+// Defaults are additive: never replace an existing value or historical catalog.
+export const initialAccounts=[['1101','Caja general','activo','D','ef'],['1102','Bancos','activo','D','ef'],['1201','Cuentas por cobrar','activo','D',''],['1301','Inventario de mercadería','activo','D',''],['1401','Mobiliario y equipo','activo','D','fijo'],['1402','Vehículos','activo','D','fijo'],['1403','Depreciación acumulada','activo','C','fijo'],
+['2101','Cuentas por pagar','pasivo','C',''],['2102','Impuestos por pagar','pasivo','C',''],['2103','Sueldos por pagar','pasivo','C',''],['2201','Préstamos bancarios largo plazo','pasivo','C','fin'],
+['3101','Capital social','patrimonio','C','fin'],['3102','Utilidades acumuladas','patrimonio','C',''],['3103','Retiros del propietario','patrimonio','D','fin'],
+['4101','Ventas','ingreso','C',''],['4102','Otros ingresos','ingreso','C',''],['5101','Costo de ventas','costo','D',''],
+['6101','Sueldos y salarios','gasto','D',''],['6102','Alquiler','gasto','D',''],['6103','Servicios básicos','gasto','D',''],['6104','Transporte','gasto','D',''],['6105','Publicidad','gasto','D',''],['6106','Depreciación','gasto','D',''],['6107','Otros gastos y mermas','gasto','D','']];
+export const initialFiscal={vatRate:0,incomeRate:0,salaryTax:0,socialRate:0,daysPerMonth:30,overtimeFactor:1,workingHours:8,bonusDays:0,premiumDays:0,vacationDays:0,dismissalDays:0,resignationDays:0,delimiter:';',decimal:'.',exportColumns:'concepto,periodo,vencimiento,base,tasa,iva_cobrado,iva_acreditable,monto,pagado,saldo,estado'};
+export function completeCompanyDocument(input,{name='',country='Nicaragua',cur='C$',ruc=''}={}) {
+ const data=structuredClone(input||{});
+ data.cfg ||= {};
+ for(const [key,value] of Object.entries({name,invoiceCountry:country,cur,ruc,addr:''}))if(!Object.hasOwn(data.cfg,key))data.cfg[key]=value;
+ data.cfg.fiscal={...initialFiscal,...data.cfg.fiscal};
+ data.cfg.pos={useDimensions:(data.entries||[]).some(e=>e.costCenter||e.project),...data.cfg.pos};
+ for(const key of [...Object.keys(collections),'moneyTransfers'])if(!Object.hasOwn(data,key))data[key]=[];
+ if(!Object.hasOwn(data,'invoiceSequences'))data.invoiceSequences={};
+ if(!input||!Object.hasOwn(input,'accounts'))data.accounts=initialAccounts.map(([code,name,tipo,nat,sub])=>({code,name,tipo,nat,sub}));
+ if(!data.branches.length)data.branches=[{id:'principal',name:'Principal',code:'P',active:true,main:true,address:'',phone:''}];
+ return data;
+}
+
+// Server-owned profile lifecycle metadata survives the residual codec and backups.
+export const companyProfileFields=['profilePending','profileCompletedAt','profileChartPreserved'];

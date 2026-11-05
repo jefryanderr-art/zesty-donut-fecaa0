@@ -21,7 +21,6 @@ const ACC=[['1101','Caja general','activo','D','ef'],['1102','Bancos','activo','
 const PROT=['1101','1102','1201','1301','2101','3101','4101','4102','5101','6107'];
 const NAT={activo:'D',gasto:'D',costo:'D',pasivo:'C',patrimonio:'C',ingreso:'C'};
 const PAY={'1101':'Contado (caja)','1102':'Contado (banco)','1201':'Crédito','2101':'Crédito'};
-const seed=()=>({cfg:{cur:'C$',ruc:'',addr:''},accounts:ACC.map(([code,name,tipo,nat,sub])=>({code,name,tipo,nat,sub})),entries:[],products:[],customers:[]});
 let U=null,COS=[],CO=null,S=null,SITE={...DEF},GID='',R='panel',AM='login',MAY='1101',REV=0,googleScript=null,HOME=false;
 localStorage.removeItem('tk');
 const isAcontecCompany=()=>!!CO?.owner&&CO.name.trim().toLowerCase()==='acontec';
@@ -201,7 +200,7 @@ async function boot(){
   try{const config=await api('config');SITE={...DEF,...config.site};SITE_REV=config.siteRevision;UI_CONTENT=config.editor||{texts:{}};window.PUBLIC_PLANS=config.publicPlans||[];GID=config.googleClientId}catch(error){configError='No se pudo conectar con el servicio. Recarga la página para volver a intentar.'}
   applyTheme();
   if(confirmedEmail){U=null;authView();ACT.tab({m:'login'});$('#af [name=em]').value=confirmedEmail;authStatus('Correo confirmado. Ya puedes ingresar','success');return}
-  try{const result=await api('me');U=result.user;COS=result.companies;return await openCompany(localStorage.getItem('co')||COS[0]?.id)}catch(error){U=null}
+  try{const result=await api('me');U=result.user;COS=result.companies;return await openCompany(localStorage.getItem('co')||COS[0]?.id)}catch(error){if(U&&error.status!==401){$('#app').innerHTML=`<main class="auth"><section class="card"><h2>No se pudo abrir tu empresa</h2><p>${esc(error.message)}</p><button class="btn" id="retry-company-open">Reintentar</button></section></main>`;$('#retry-company-open').onclick=()=>boot();return}U=null}
   authView();
   if(configError)authStatus(configError);
   if(recovery)setTimeout(()=>promptResetPassword(recovery),50);
@@ -216,12 +215,12 @@ async function session(result){if(result.confirmationRequired){ACT.tab({m:'login
 async function openCompany(id){
   if(CO&&!await flush())throw new Error(uiT("app.extra.10","Guarda los cambios pendientes antes de cambiar de empresa."));
   const company=COS.find(item=>item.id==id)||COS[0];
-  if(!company)throw new Error(uiT("app.extra.11","No se encontró tu empresa."));
-  const r=await api('data?c='+company.id);CO=r.company||company;REV=r.revision;saveVersion=0;savedVersion=0;retryCount=0;saveStatus='Guardado en la nube';localStorage.setItem('co',CO.id);
-  cloudBase=copyCloud(r.data);pendingSave=null;cloudConflict=null;sessionExpired=false;S=r.data||seed();S.cfg=S.cfg||{cur:'C$'};if(!r.data&&CO.businessCustomization?.invoiceCountry){S.cfg.invoiceCountry=CO.businessCustomization.invoiceCountry;}S.entries=S.entries||[];S.products=S.products||[];S.customers=S.customers||[];
-  if(!r.data&&!CO.readOnlyLimit&&!CO.support)save();
+  if(!company){CO=null;S=null;return companyOnboarding();}
+  const r=await api('data?c='+company.id);if(!r.data)throw new Error('La empresa no tiene información inicial disponible. El dueño debe abrirla para completar su preparación; después puedes reintentar.');CO=r.company||company;REV=r.revision;saveVersion=0;savedVersion=0;retryCount=0;saveStatus='Guardado en la nube';localStorage.setItem('co',CO.id);
+  cloudBase=copyCloud(r.data);pendingSave=null;cloudConflict=null;sessionExpired=false;S=r.data;S.cfg=S.cfg||{cur:'C$'};S.entries=S.entries||[];S.products=S.products||[];S.customers=S.customers||[];
+  if(CO.owner&&S.cfg.profilePending)return companyOnboarding(true);
   HOME=false;R=typeof firstAllowedRoute==='function'?firstAllowedRoute():'panel';shell();view();
-  if(CO.owner&&CO.name=='Mi empresa'&&!S.cfg.asked){S.cfg.asked=1;save();setTimeout(ACT.cfg,400)}
+
 }
 function loadGoogle(){
   if(window.google?.accounts?.id)return Promise.resolve();
@@ -244,7 +243,7 @@ async function renderGoogle(){
       if(!document.contains(form))return;
       const error=form.querySelector('.err'),button=form.querySelector('#submit-auth');
       error.textContent=uiT("app.extra.13","Conectando con Google…");button.disabled=true;
-      try{await session(await api('google','POST',{credential:result.credential,company:form.elements.co.value,country:form.elements.country?.value||'Nicaragua',businessType:form.elements.businessType?.value||'comercio'}))}
+      try{await session(await api('google','POST',{credential:result.credential}))}
       catch(problem){error.textContent=problem.message}
       finally{if(document.contains(button))button.disabled=false}
     }});
@@ -262,7 +261,7 @@ function authView(){
   <label>${esc(uiT("app.32","Correo electrónico"))}<input type="email" name="em" required autocomplete="email" placeholder="tu@empresa.com"></label>
   <label>${esc(uiT("app.33","Contraseña"))}<input type="password" name="pw" required minlength="1" maxlength="256" autocomplete="current-password" placeholder="Tu contraseña"></label>
   <div id="auth-forgot" class="auth-forgot"><button type="button" class="lk" data-a="forgotPassword">${esc(uiT("app.34","¿Olvidaste tu contraseña?"))}</button></div>
-  <div class="reg" hidden><label>${esc(uiT("app.35","Nombre de tu empresa"))}<input name="co" maxlength="80" autocomplete="organization" placeholder="Mi empresa S.A." aria-describedby="company-name-help"><small id="company-name-help">${esc(uiT("app.36","Mi empresa S.A."))}</small></label><label>${esc(uiT("app.37","País de la empresa"))}<input name="country" value="Nicaragua" maxlength="80" list="invoice-countries"><datalist id="invoice-countries"><option value="Nicaragua"></datalist><small>${esc(uiT("app.38","Otros países usan un perfil genérico configurable."))}</small></label></div>
+  <div class="reg" hidden>${companyFields()}</div>
   <div id="auth-status" class="err" role="status" aria-live="polite" aria-atomic="true"></div><button type="button" class="lk auth-resend" id="resend-confirmation" data-a="resendConfirmation" hidden>${esc(uiT("app.39","Reenviar correo de confirmación"))}</button><button type="submit" class="btn full" id="submit-auth" aria-describedby="auth-status">${esc(uiT("app.40","Ingresar"))} <span aria-hidden="true">→</span></button><div class="or">${esc(uiT("app.41","o continúa con"))}</div><div id="gbtn"><button type="button" class="btn ghost full" data-a="google" ${GID?'':'disabled aria-describedby="google-help"'}><b class="google-letter">${esc(uiT("app.42","G"))}</b> ${esc(uiT("app.43","Continuar con Google"))}</button></div>${GID?'':`<p id="google-help" class="mut">${esc(uiT("app.21","Google requiere autorizar este sitio una sola vez."))} <a href="/configurar-google.html">${esc(uiT("app.22","Guía paso a paso para activarlo"))}</a>${esc(uiT("app.23",". Mientras tanto, puedes crear tu cuenta con correo y contraseña."))}</p>`}</form><p class="access-note"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.5"/></svg> ${esc(uiT("app.44","Tu información es privada. Solo tú accedes a tu empresa."))}</p></section>`}</main>${contactSection()}<footer class="auth-footer"><span>${esc(SITE.brand)} · ${esc(SITE.tagline)}</span><span>${esc(SITE.footer)}</span>${U?.editor?`<button type="button" class="footer-settings" data-a="gear" aria-label="Editar página principal de Acontec" title="Editar textos, información, imágenes y logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-.7 2.1-2.1 1.2-2.2-.4-2 3.4 1.5 1.7v2L2 14.7l2 3.4 2.2-.4 2.1 1.2L9 21h4l.7-2.1 2.1-1.2 2.2.4 2-3.4-1.5-1.7v-2L20 9.3l-2-3.4-2.2.4-2.1-1.2L13 3Z"/><circle cx="11" cy="12" r="3"/></svg></button>`:''}</footer></div>`;
   if(U)return;
   clearAuthStatus();
@@ -276,7 +275,7 @@ function authView(){
     const controls=[...form.querySelectorAll('[data-a="tab"]')];controls.forEach(control=>control.disabled=true);
     button.textContent=mode==='reg'?'Creando cuenta…':'Ingresando…';
     try{
-      const result=await api(mode==='login'?'login':'register','POST',{email:fields.em.value,password:fields.pw.value,company:fields.co.value,description:fields.description?.value||'',country:fields.country?.value||'Nicaragua',businessType:fields.businessType?.value||'comercio'});
+      const result=await api(mode==='login'?'login':'register','POST',{email:fields.em.value,password:fields.pw.value,company:fields.co.value,cur:fields.cur.value,ruc:fields.ruc.value,description:fields.description?.value||'',country:fields.country?.value||'Nicaragua',businessType:fields.businessType?.value||'comercio'});
       form.removeAttribute('aria-busy');
       if(result.confirmationRequired&&noticeVersion!==authNoticeVersion)return;
       await session(result);
@@ -290,6 +289,21 @@ function authView(){
     }
   };
   if(GID)renderGoogle();
+}
+
+function companyFields(existing={}){
+ return `<label>Nombre de tu empresa<input name="co" value="${esc(existing.name||'')}" maxlength="80" autocomplete="organization"></label><label>Modelo de negocio<select name="businessType">${AcontecProfiles.profiles.map(p=>`<option value="${esc(p.id)}" ${p.id===existing.businessType?'selected':''}>${esc(p.name)}</option>`).join('')}</select></label><label>País<input name="country" value="${esc(existing.country||'')}" maxlength="80"></label><label>Moneda<input name="cur" value="${esc(existing.cur||'C$')}" maxlength="20"></label><label>RUC / identificación<input name="ruc" value="${esc(existing.ruc||'')}" maxlength="100"></label>`;
+}
+function companyOnboarding(pending=false){
+ HOME=false;const current=pending?{name:CO.name,businessType:CO.businessType,country:S.cfg.invoiceCountry,cur:S.cfg.cur,ruc:S.cfg.ruc}:{};
+ $('#app').innerHTML=`<main class="auth"><section class="access"><h2>Completa tu empresa</h2><p>${esc(U.name||U.email)}</p><p>Confirma los datos para empezar. ${pending?'Los datos existentes se conservan.':'Tu empresa se crea al confirmar.'}</p><form id="company-onboarding" class="card">${companyFields(current)}<p class="err" role="alert"></p><button class="btn" type="submit">Confirmar empresa</button></form></section></main>`;
+ const form=$('#company-onboarding');for(const key of ['co','businessType','country','cur'])form.elements[key].required=true;
+ form.onsubmit=async event=>{event.preventDefault();const button=form.querySelector('button');if(button.disabled)return;button.disabled=true;
+ const body={name:v(form,'co'),businessType:v(form,'businessType'),country:v(form,'country'),cur:v(form,'cur'),ruc:v(form,'ruc')};
+ try{if(pending){await operate('completeProfile',{...body,confirmed:true});if(S.cfg.profileChartPreserved)alert('El modelo se guardó. Se conservó el plan de cuentas porque hay movimientos o registros. Verifica con tu contador.');}
+ else{const result=await api('first-company','POST',body);COS=result.companies;}
+ await openCompany(CO?.id||COS[0]?.id);
+ }catch(error){form.querySelector('.err').textContent=error.message+' Puedes reintentar de forma segura.';button.disabled=false;}};
 }
 
 // ---------- estructura ----------
@@ -413,7 +427,7 @@ V.pagina=()=>{main(`<div class="ph"><h2>${esc(uiT("app.170","Página principal d
 const ACT={
  nav:(d)=>{R=d.r;menu(false);view();scrollTo(0,0)},menu:()=>menu(!$('#drawer').classList.contains('open')),close:()=>{$('#modal').innerHTML=''},
  google:()=>{if(GID)renderGoogle();else location.href='/configurar-google.html'},
- tab:(data)=>{if($('#af')?.getAttribute('aria-busy')==='true')return;AM=data.m;$$('.tabs button').forEach(button=>button.classList.toggle('on',button.dataset.m==AM));$('.reg').hidden=AM=='login';const forgot=$('#auth-forgot');if(forgot)forgot.hidden=AM!='login';$('#af [name=co]').required=AM!='login';$('#af [name=pw]').minLength=AM=='login'?1:8;$('#af [name=pw]').autocomplete=AM=='login'?'current-password':'new-password';$('#auth-help').innerHTML=AM=='login'?`¿Es tu primer acceso? <button type="button" class="lk" data-a="tab" data-m="reg">${esc(uiT("app.174","Crea tu cuenta de cliente"))}</button> antes de ingresar.`:'Escribe tu correo, una contraseña de al menos 8 caracteres y el nombre de tu empresa. Después, confirma el correo que recibas para acceder.';$('#submit-auth').innerHTML=(AM=='login'?'Ingresar':'Crear cuenta')+' <span aria-hidden="true">→</span>';clearAuthStatus()},
+ tab:(data)=>{if($('#af')?.getAttribute('aria-busy')==='true')return;AM=data.m;$$('.tabs button').forEach(button=>button.classList.toggle('on',button.dataset.m==AM));$('.reg').hidden=AM=='login';const forgot=$('#auth-forgot');if(forgot)forgot.hidden=AM!='login';for(const key of ['co','country','cur','businessType'])$('#af').elements[key].required=AM!='login';$('#af [name=pw]').minLength=AM=='login'?1:8;$('#af [name=pw]').autocomplete=AM=='login'?'current-password':'new-password';$('#auth-help').innerHTML=AM=='login'?`¿Es tu primer acceso? <button type="button" class="lk" data-a="tab" data-m="reg">${esc(uiT("app.174","Crea tu cuenta de cliente"))}</button> antes de ingresar.`:'Escribe tu correo, una contraseña de al menos 8 caracteres y el nombre de tu empresa. Después, confirma el correo que recibas para acceder.';$('#submit-auth').innerHTML=(AM=='login'?'Ingresar':'Crear cuenta')+' <span aria-hidden="true">→</span>';clearAuthStatus()},
  resendConfirmation:async(data,button)=>{
    const form=$('#af'),pending=confirmationResend;if(!pending||button.disabled||form.getAttribute('aria-busy')==='true')return;
    const email=form.elements.em.value,password=form.elements.pw.value;

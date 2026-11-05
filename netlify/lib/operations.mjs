@@ -1,3 +1,6 @@
+import {companyProfileFields} from '../../db/accounting-model.mjs';
+import {finishCompanyProfile} from './business-profile.mjs';
+import '../../public/chart-templates.js';
 import '../../public/fiscal-calculations.js';
 import {WORKFLOW_OPS,workflowOperation,workflowReport,workflowModule,permitPackage} from './fiscal-workflows.mjs';
 import {workflowEnabled,WORKFLOW_MODULES} from './declaration-rules.mjs';
@@ -192,6 +195,7 @@ export function guardCash(previous, next) {
 export function guardLedgerMutation(previous, next, access, {restoreServiceConfiguration=false}={}) {
   requireValue(equal(previous?.cfg?.costing,next.cfg?.costing)&&equal(previous?.cfg?.costingHistory,next.cfg?.costingHistory),'Cambia el método de costeo desde su operación específica.');
   const restoreService=restoreServiceConfiguration===true&&access.owner;
+  if(!restoreService)for(const key of companyProfileFields)requireValue(equal(previous?.cfg?.[key],next.cfg?.[key]),'Completa el perfil desde su formulario protegido.');
   requireValue(typeof next.cfg?.cur === 'string' && next.cfg.cur.length > 0 && next.cfg.cur.length <= 20 && !/[<>&"'`]/.test(next.cfg.cur), 'Usa un símbolo o código de moneda, sin contenido HTML.');
   for(const record of next.payrolls||[]){const old=previous?.payrolls?.find(p=>p.id===record.id);if(!equal(old,record)){const calculated=payrollTotals(record);requireValue(calculated.gross===record.gross&&calculated.net===record.net,'Los importes de la nómina no coinciden.');}}
   const productIds = new Set();
@@ -623,14 +627,14 @@ export async function runOperation(companyId, session, body) {
     accessError('La ampliación de tesorería no está habilitada.',503);
   });
   const addedKeys = [];
-  if((WORKFLOW_OPS.includes(body.operation)||PERSONNEL_OPS.includes(body.operation)||CERTIFICATE_OPS.includes(body.operation)||CLIENT_OPS.includes(body.operation)||FISCAL_OPS.includes(body.operation)||INVENTORY_OPS.includes(body.operation)||ANALYSIS_OPS.includes(body.operation)||BUDGET_OPS.includes(body.operation)||TREASURY_OPS.includes(body.operation)||BANK_OPS.includes(body.operation)||RECURRING_OPS.includes(body.operation)||BUSINESS_OPS.includes(body.operation)||['serviceDefinition','economicSector','specializedChart','serviceAccrueCommission'].includes(body.operation))&&!body.operationId)accessError('La operación requiere un identificador único.',400);
+  if((body.operation==='completeProfile'||WORKFLOW_OPS.includes(body.operation)||PERSONNEL_OPS.includes(body.operation)||CERTIFICATE_OPS.includes(body.operation)||CLIENT_OPS.includes(body.operation)||FISCAL_OPS.includes(body.operation)||INVENTORY_OPS.includes(body.operation)||ANALYSIS_OPS.includes(body.operation)||BUDGET_OPS.includes(body.operation)||TREASURY_OPS.includes(body.operation)||BANK_OPS.includes(body.operation)||RECURRING_OPS.includes(body.operation)||BUSINESS_OPS.includes(body.operation)||['serviceDefinition','economicSector','specializedChart','serviceAccrueCommission'].includes(body.operation))&&!body.operationId)accessError('La operación requiere un identificador único.',400);
   let output = null;
   if(body.operationId && !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.operationId)) accessError('Identificador de operación inválido.',400);
   const receipt=body.operationId?{id:body.operationId,actor:session.email+':'+(session.memberId||''),hash:createHash('sha256').update(JSON.stringify(body)).digest('hex'),resultId:()=>typeof output==='string'?output:null}:null;
   try {
     const result = await updateCompany(companyId, session, body.revision, async (company, access, client) => {
       const crossBranch=CROSS_BRANCH_OPS.includes(body.operation)||body.operation==='costingMethod';
-      const data = initializeOperations(structuredClone(crossBranch?access.company.data:company.data));
+      const data = body.operation==='completeProfile'?structuredClone(company.data):initializeOperations(structuredClone(crossBranch?access.company.data:company.data));
       guardFifoOperation(data,body);
       const fifoBefore=structuredClone(data);
       const operationSession = access.member ? { ...session, member: access.member } : session;
@@ -640,7 +644,14 @@ export async function runOperation(companyId, session, body) {
       const operation = body.operation, userId = operatorId(access, session);
       if (['printSettings','settings','creditNote'].includes(operation)) ensurePrintVersions(data, access.company, operationSession);
       if(operation==='sale') await consumeDiscount(client,companyId,access,operationSession,body);
-      if(operation==='costingMethod'){requireValue(body.operationId,'El cambio requiere un identificador único.');output=configureCosting(data,access,operationSession,body,requirePermission);}
+      if(operation==='completeProfile'){
+        requireValue(access.owner,'Solo el dueño completa el perfil.');requirePermission(access,'ajustes');
+        const completed=finishCompanyProfile({...company,data:access.company.data},body);
+        // Only profile/config/catalog fields change; branch-scoped accounting stays intact.
+        businessPatch={name:completed.name,businessType:completed.businessType,businessCustomization:completed.businessCustomization};
+        data.cfg=completed.data.cfg;data.accounts=completed.data.accounts;
+      }
+      else if(operation==='costingMethod'){requireValue(body.operationId,'El cambio requiere un identificador único.');output=configureCosting(data,access,operationSession,body,requirePermission);}
       else if(operation==='fifoPurchase'){
         requireValue(fifoEnabled(data)&&body.operationId,'La compra PEPS requiere activación e identificador único.');requirePermission(access,'compras');requirePermission(access,'inventario');
         const date=dateValue(body.date);requireValue(text(body.reference)&&['1101','1102','2101'].includes(body.pay),'Indica factura y forma de pago.');

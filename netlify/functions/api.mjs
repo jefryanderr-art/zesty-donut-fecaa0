@@ -1,3 +1,4 @@
+import {completeCompanyDocument} from '../../db/accounting-model.mjs';
 import {downloadWorkflowFile} from '../lib/package-jobs.mjs';
 import {systemHealth} from '../lib/system-health.mjs';
 import {paymentHistory,paymentForReceipt,paymentPDF} from '../lib/payment-receipts.mjs';
@@ -5,7 +6,7 @@ import {backupRoute,storageStats,downloadPrivateExport} from '../lib/private-bac
 import {publishedEditor,editorRoute,publicPlans,trialSettings} from '../lib/platform-editor.mjs';
 import {transferMe,requestTransfer,transferAdmin,guardPagaditoChannel,transferStatusSummary} from '../lib/transfer-billing.mjs';
 import { UNCONFIRMED_MESSAGE, RESEND_MESSAGE, identityStatus, loginFailure, resendConfirmation, RECOVERY_ERROR, RESET_ERROR, missingIdentityUser, accessMailError, attemptScopes } from '../lib/email-auth.mjs';
-import { validateProfile, fixedBusinessProfile, restoredBusinessProfile } from '../lib/business-profile.mjs';
+import { validateCompanyDetails, validateProfile, fixedBusinessProfile, restoredBusinessProfile } from '../lib/business-profile.mjs';
 import { assistantAnswer, assistantSettings, assistantOn, assistantAvailable } from '../lib/assistant.mjs';
 import { discountRoute } from '../lib/discounts.mjs';
 import '../../public/cloud-sync.js';
@@ -122,14 +123,14 @@ async function authenticateIdentity(operation) {
   };
   try { return await operation(); } finally { cookies.set = originalSet; }
 }
-async function ensureAccount(email, name, description = '', personName = '', businessType = 'comercio', country = 'Nicaragua') {
+async function ensureAccount(email, name, description = '', personName = '', businessType = 'comercio', country = 'Nicaragua', initial = {}) {
   await db.insert(users).values({ email, profile: { state: 'sin_plan' } }).onConflictDoNothing();
   if (personName) await db.update(users).set({ name: String(personName).trim().slice(0, 200) }).where(eq(users.email, email));
   const owned = await db.select({ id: companies.id }).from(companies).where(eq(companies.ownerEmail, email)).limit(1);
   if (!owned.length) {
     const hash = createHash('sha256').update('acontec:' + email).digest('hex');
     const id = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
-    await db.insert(companies).values({ id, ownerEmail: email, name: companyName(name) || 'Mi empresa', ...validateProfile(businessType,{invoiceCountry:country}), onboardingDone:false, description: String(description || '').trim().slice(0, 2000) }).onConflictDoNothing();
+    if(name)await db.transaction(client=>createOwnedCompany(client,{email},{id,name,description,businessType,country,cur:initial.cur||'C$',ruc:initial.ruc||'',firstOnly:true}));
   }
 }
 async function limitAttempts(request, context, action = 'google', body = {}) {
@@ -257,7 +258,7 @@ const handleRequest = async (request, context, metrics) => {
       const email = cleanEmail(identityUser?.email);
       if (!email) return fail('No se pudo restablecer la contraseña', 400);
       if (adminEmail && email === adminEmail) return json({ok:true, passwordUpdated:true});
-      await ensureAccount(email, identityUser.userMetadata?.company,'','',identityUser.userMetadata?.businessType||'comercio',identityUser.userMetadata?.country||'Nicaragua');
+      await ensureAccount(email, identityUser.userMetadata?.company,'','',identityUser.userMetadata?.businessType||'comercio',identityUser.userMetadata?.country||'Nicaragua',identityUser.userMetadata||{});
       return await issueSession(email, false, request);
     }
     if (path === 'confirm' && method === 'POST') {
@@ -288,9 +289,11 @@ const handleRequest = async (request, context, metrics) => {
         if (adminEmail && email === adminEmail) return fail('No se puede registrar esta cuenta. Usa Ingresar.', 403);
         if (password.length < 8) return fail('La contraseña debe tener al menos 8 caracteres');
         if (!companyName(body.company)) return fail('Escribe el nombre de tu empresa');
+        const initialDetails=validateCompanyDetails({...body,name:body.company});
+        Object.assign(body,initialDetails,{company:initialDetails.name});
         let identityUser;
         try {
-          identityUser = await authenticateIdentity(() => signup(email, password, { company: companyName(body.company), description: String(body.description || '').trim().slice(0, 2000),country:globalThis.AcontecInvoiceDesign.country(body.country||'Nicaragua'),businessType:validateProfile(body.businessType||'comercio').businessType }));
+          identityUser = await authenticateIdentity(() => signup(email, password, { company: companyName(body.company), description: String(body.description || '').trim().slice(0, 2000),country:globalThis.AcontecInvoiceDesign.country(body.country||'Nicaragua'),businessType:validateProfile(body.businessType||'comercio').businessType,cur:String(body.cur||'C$').slice(0,20),ruc:String(body.ruc||'').slice(0,100) }));
         } catch (error) {
           await recordAccessMailError(path, error);
           // Translate known Identity failures without exposing provider internals.
@@ -303,7 +306,7 @@ const handleRequest = async (request, context, metrics) => {
           }
           return fail('No se pudo crear la cuenta. Revisa tu conexión e inténtalo de nuevo.', 503);
         }
-        await ensureAccount(email, body.company, body.description, '', body.businessType||'comercio',body.country||'Nicaragua');
+        await ensureAccount(email, body.company, body.description, '', body.businessType||'comercio',body.country||'Nicaragua',body);
         if (!identityUser?.confirmedAt) return json({ confirmationRequired: true });
         return await issueSession(email, false, request);
       }
@@ -342,7 +345,7 @@ const handleRequest = async (request, context, metrics) => {
           return json({ error: failure.error }, failure.status);
         }
         if (!identityUser.confirmedAt) return await unconfirmedLogin(email);
-        await ensureAccount(email, identityUser.userMetadata?.company,'','',identityUser.userMetadata?.businessType||'comercio',identityUser.userMetadata?.country||'Nicaragua');
+        await ensureAccount(email, identityUser.userMetadata?.company,'','',identityUser.userMetadata?.businessType||'comercio',identityUser.userMetadata?.country||'Nicaragua',identityUser.userMetadata||{});
         return await issueSession(email, false, request);
       }
       if (!googleClientId) return fail('Falta autorizar este sitio en Google. Consulta la guía de activación de Google.', 503);
@@ -354,7 +357,7 @@ const handleRequest = async (request, context, metrics) => {
       if (!googleUser?.email_verified || !googleUser.email) return fail('Google no confirmó tu correo', 401);
       const googleEmail = cleanEmail(googleUser.email);
       const isOwnerAdmin = !!adminEmail && googleEmail === adminEmail;
-      await ensureAccount(googleEmail, isOwnerAdmin ? 'Acontec' : body.company, '', googleUser.name,body.businessType||'comercio',body.country||'Nicaragua');
+      await ensureAccount(googleEmail, isOwnerAdmin ? 'Acontec' : '', '', googleUser.name,body.businessType||'comercio',body.country||'Nicaragua',body);
       if (isOwnerAdmin) {
         await db.update(users).set({ platformAdmin: true }).where(eq(users.email, googleEmail));
         await ensureAcontecCompany(googleEmail);
@@ -638,13 +641,19 @@ const handleRequest = async (request, context, metrics) => {
       },'Perfil de negocio actualizado');
       return json(result);
     }
+    if(path==='first-company'&&method==='POST'){
+      if(session.member)return fail('Solo el dueño crea su empresa.',403);
+      if(!companyName(body.name)||!body.businessType||!body.country)return fail('Completa los datos de empresa.');
+      const company=await db.transaction(client=>createOwnedCompany(client,session,{name:body.name,description:body.description,businessType:body.businessType,country:body.country,cur:body.cur,ruc:body.ruc,firstOnly:true}));
+      return json({id:company.id,companies:await accessibleCompanies(session)});
+    }
     if (path === 'company' && method === 'POST') {
       if (session.member) return fail('Los colaboradores no pueden crear empresas.', 403);
       const billing=await requireBilling(session.email,isAdmin);
       const companyLimit=billing.plan?.limits?.companies;
       if(companyLimit!=null&&owned.filter(c=>c.owner).length>=companyLimit)return fail('Se alcanzó el límite de empresas del plan.',403);
       if (!companyName(body.name)) return fail('Escribe un nombre de empresa');
-      const company = await db.transaction(client => createOwnedCompany(client,session,{name:body.name,description:body.description,businessType:body.businessType||'comercio',country:body.country||'Nicaragua',companyLimit}));
+      const company = await db.transaction(client => createOwnedCompany(client,session,{name:body.name,description:body.description,businessType:body.businessType||'comercio',country:body.country||'Nicaragua',cur:body.cur||'C$',ruc:body.ruc||'',companyLimit}));
       return json({ id: company.id, companies: await accessibleCompanies(session) });
     }
     if (path === 'company' && method === 'DELETE') {
@@ -691,6 +700,18 @@ const handleRequest = async (request, context, metrics) => {
     if (path === 'data') {
       const companyId = url.searchParams.get('c');
       if (method === 'GET') {
+        const [repair]=await db.select().from(siteContent).where(eq(siteContent.id,'company-default-repair:'+companyId));
+        const [candidate]=session.member?[]:await db.select({id:companies.id,revision:companies.revision,empty:sql`${companies.data} IS NULL`}).from(companies).where(and(eq(companies.id,companyId),eq(companies.ownerEmail,session.email),isNull(companies.archivedAt)));
+        if(candidate&&(repair||candidate.empty===true)){
+          await updateCompany(companyId,session,candidate.revision,async(current,access,client)=>{
+            const [task]=await client.select().from(siteContent).where(eq(siteContent.id,'company-default-repair:'+companyId)).for('update');
+            if(!task&&current.data!==null)return {};
+            const data=completeCompanyDocument(current.data,{name:current.name,country:current.businessCustomization?.invoiceCountry});
+            if(task?.content.profilePending===true)data.cfg.profilePending=true;
+            if(task)await client.delete(siteContent).where(eq(siteContent.id,task.id));
+            return {data};
+          },'Reparación de campos iniciales');
+        }
         try{return await db.transaction(async client => {
           const access = await companyAccess(client, companyId, session, true);
           const { id, name, description } = access.company;
@@ -787,7 +808,8 @@ const handleRequest = async (request, context, metrics) => {
       if (path === 'confirm' && [400, 401, 403, 404, 422].includes(identityStatus(error))) return fail('El enlace de confirmación no es válido o ha caducado. Intenta ingresar para solicitar otro correo de confirmación.', 400);
       return fail('El servicio de acceso no está disponible en este momento. Intenta de nuevo más tarde.', 503);
     }
-    console.error('Acontec API:', error.code || error.name || 'Error');
+    metrics.failureKind = error instanceof TypeError ? 'type_error' : 'internal_error';
+    console.error('Acontec API:', metrics.failureKind, error.code || error.name || 'Error');
     return fail('No se pudo completar la operación. Intenta de nuevo.', 500);
   } finally {
     if (method === 'POST' && ['register', 'login', 'confirm', 'google', 'resend-confirmation'].includes(path)) {
@@ -810,7 +832,7 @@ export default async (request, context) => {
     // Fixed categories only: never persist document content, tokens or raw exceptions.
     const reason = ({400:'invalid_request',401:'session_expired',403:'access_denied',409:'revision_conflict',413:'payload_limit',422:'operation_reused',429:'rate_limit'})[response.status] || 'server_error';
     try {
-      await db.insert(saveFailures).values({code, companyId: /^[a-f0-9-]{36}$/i.test(companyId || '') ? companyId : null, status: response.status, reason, bytes: metrics.bytes, durationMs});
+      await db.insert(saveFailures).values({code, companyId: /^[a-f0-9-]{36}$/i.test(companyId || '') ? companyId : null, status: response.status, reason:metrics.failureKind||reason, bytes: metrics.bytes, durationMs});
     } catch { console.error('Cloud save diagnostic unavailable', code, response.status, durationMs); }
     const payload = await response.json();
     return json({...payload, supportCode: code}, response.status, {'Server-Timing': `save;dur=${durationMs}`});

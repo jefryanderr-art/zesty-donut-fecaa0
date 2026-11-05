@@ -91,5 +91,9 @@ export const EXPECTED_MIGRATIONS=[
   {
     "name": "20261104172553_add_declarations_annual_close",
     "hash": "716c70085b19873a4564147294d7045f0360556be2deeb22e461e7187add1e67"
+  },
+  {
+    "name": "20261105163711_repair_company_initial_defaults",
+    "hash": "3ca75d024926e6e1cffd79803b8d622ff0d0d98983e452897dc89ca41255d043"
   }
 ];
