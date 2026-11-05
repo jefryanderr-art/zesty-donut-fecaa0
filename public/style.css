@@ -490,3 +490,18 @@ body{font-family:var(--ui-font,'DM Sans',sans-serif)}
 .quick-catalog-grid,.quick-ready{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}.quick-catalog-grid .btn{min-height:76px;display:flex;flex-direction:column;justify-content:center;white-space:normal}.quick-ready .card{display:grid;gap:12px;text-align:center}.quick-ready strong{font-size:2.6rem}.quick-catalog summary{padding:12px 0;font-weight:700}
 
 .food-form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px;padding:12px 0;border-bottom:1px solid var(--border,#ccc)}.food-form-row label{min-width:0}.food-order-context dl{display:grid;grid-template-columns:auto 1fr;gap:8px 18px}.food-order-context dd{margin:0;overflow-wrap:anywhere}@media(max-width:540px){.food-form-row{grid-template-columns:1fr}.food-order-context dl{grid-template-columns:1fr}}
+
+/* Operación de habitaciones y unidades, integrada con las tarjetas contables. */
+.lodging-board { border-inline-start: 4px solid var(--accent, #668273); }
+.lodging-board table { min-width: 840px; }
+.lodging-board td { vertical-align: top; }
+.lodging-board td .btn { white-space: normal; text-align: left; margin: 2px; }
+.lodging-available { color: var(--muted, #68776e); font-size: .85em; }
+.lodging-contract { white-space: pre-wrap; line-height: 1.65; }
+.lodging-board textarea { width: 100%; }
+@media (max-width: 680px) { .lodging-board .accounting-actions { display: grid; grid-template-columns: 1fr; } }
+.tenant-portal { max-width: 900px; margin: 3rem auto; padding: 1rem; }
+.tenant-portal .card { margin-block: 1rem; }
+.tenant-portal textarea { display: block; width: 100%; box-sizing: border-box; }
+.tenant-portal label { display: block; margin-block: 1rem; }
+@media print { .tenant-portal button, .tenant-portal form, .tenant-portal header { display: none; } }

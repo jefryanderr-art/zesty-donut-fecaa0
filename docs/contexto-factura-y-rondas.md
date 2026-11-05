@@ -1,3 +1,13 @@
+# Continuación: hotel y alquileres
+
+Se amplió exclusivamente hotel y alquiler vacacional, seguido de alquiler de propiedades, equipos y vehículos. El detalle, las condiciones y la verificación pendiente quedaron en `docs/hotel-y-alquileres.md`. Se reutilizaron reservas, contratos, mora, anticipos y contexto de habitación/unidad en factura. Se añadieron unidades y calendario, grupos, reglas de tarifa confirmadas por noche, registro e historial de huésped, consumos, limpieza y mantenimiento, garantía separada, inspecciones y fotos, contrato con conformidad escrita, ajuste periódico, renovación y avisos internos, prospectos, cierres e informes y enlace iCal revocable de salida.
+
+El enlace del inquilino exigió sesión con correo expresamente autorizado por el dueño y limitó lectura y solicitudes al alquiler indicado. Mostró contrato, facturas y movimientos registrados y permitió solicitudes con fotos privadas autorizadas, revisión, idempotencia, respaldo, sincronización y auditoría. No concedió membresía general ni acceso contable. El estado del propietario conservó ingresos/gastos reconocidos y comisión propuesta, sin liquidación automática.
+
+El alcance mantuvo límites expresos: firma escrita sin certificado, avisos internos, confirmación de cada factura/cobro, iCal sin importación externa y portal sin pasarela de pago. ADR/RevPAR relacionaron facturación del período con noches reservadas; no distribuyeron devengo diario ni reconstruyeron capacidad histórica. Se conservaron tablas y migraciones aplicadas. Se actualizaron guía, respuestas rápidas y huellas de recursos. Solo se revisó estáticamente y se prepararon casos; no se ejecutaron pruebas, servidores ni compilaciones locales. Quedaron pendientes las comprobaciones funcionales, contables, de permisos, concurrencia y presentación después del despliegue.
+
+---
+
 # Continuación: suscripciones, organizaciones y personalizado
 
 Se amplió exclusivamente este alcance en el orden solicitado. El detalle, los límites y las verificaciones pendientes quedaron en `docs/suscripciones-organizaciones-personalizado.md`. Se añadieron catálogo de planes, pruebas, uso y escalones, cambio proporcional en períodos aún no facturados, intervalos mensual/anual al límite, cupones con autorización normal, gestiones manuales de cobranza, estado de cuenta y retención. Organizaciones incorporó padrón, fondos, eventos, cuotas parciales, recibos, constancias anuales y equipos. Personalizado conservó todas las capacidades y añadió selección de modelo operativo para acceder a herramientas especializadas sin cambiar el perfil.
