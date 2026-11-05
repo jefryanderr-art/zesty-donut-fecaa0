@@ -33,7 +33,7 @@ function actionAllowed(action,data={}){
   if(['backup','backupAll','companyPdf','downloadSnapshot'].includes(action))return permission('ajustes')&&completeAccess();
   if(['restore','restoreSnapshot'].includes(action))return permission('ajustes',true)&&completeAccess(true);
   if(action==='nav')return routeAllowed(data.r);
-  if(action==='editCustomer')return permission('ventas');
+  if(['editCustomer','customerHistory','customerStatementPrint','customerStatementExport'].includes(action))return permission('ventas');
   if(READ_ACTIONS.has(action))return true;
   if(action==='delentry'){const entry=S.entries.find(record=>record.id===data.id);return !!entry&&permission(clientEntryModule(entry),true)}
   return permission(ACTION_MODULE[action]||ROUTE_MODULE[R],true);

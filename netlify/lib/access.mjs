@@ -260,6 +260,7 @@ function validateCustomers(data) {
     for (const [name, maximum] of Object.entries(fields)) if (typeof customer[name] !== 'string' || customer[name].length > maximum) accessError('Ficha de cliente inválida.', 400);
     if (!customer.name.trim() || !customer.currency.trim() || !['contado', 'credito'].includes(customer.paymentType) || !['activo', 'suspendido', 'inactivo'].includes(customer.status) || ![15, 30, 45].includes(customer.creditDays) || !Number.isFinite(customer.creditLimit) || customer.creditLimit < 0 || customer.creditLimit > 999999999999) accessError('Condiciones del cliente inválidas.', 400);
     if (customer.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email)) accessError('Correo del cliente inválido.', 400);
+    if (customer.birthday !== undefined && (typeof customer.birthday !== 'string' || (customer.birthday !== '' && (!/^\d{4}-\d{2}-\d{2}$/.test(customer.birthday) || !Number.isFinite(Date.parse(customer.birthday)) || new Date(customer.birthday).toISOString().slice(0,10) !== customer.birthday || customer.birthday > new Date().toISOString().slice(0,10))))) accessError('Fecha de cumpleaños inválida.', 400);
     const taxId = customer.taxId.trim().toLowerCase();
     if (taxId && taxIds.has(taxId)) accessError('Ya existe un cliente con ese RUC o cédula.', 400);
     if (taxId) taxIds.add(taxId);
@@ -297,6 +298,16 @@ function restoreServiceEntryProjections(current,entries,access){
 }
 export function mergeData(current, incoming, access, {restoreServiceConfiguration=false}={}) {
   if (!incoming || !['accounts', 'entries', 'products'].every(name => Array.isArray(incoming[name]))) accessError('Datos contables inválidos.', 400);
+  const goals=incoming.cfg?.operatingDailyGoals;
+  if(goals!==undefined){
+    if(!Array.isArray(goals)||goals.length>500)accessError('Metas diarias inválidas.',400);
+    const branches=new Set();
+    for(const goal of goals){
+      if(!goal||typeof goal.branchId!=='string'||!/^[a-z0-9-]{1,80}$/.test(goal.branchId)||branches.has(goal.branchId)||!Number.isSafeInteger(goal.targetCents)||goal.targetCents<0)accessError('Meta diaria inválida.',400);
+      branches.add(goal.branchId);
+    }
+  }
+  if(!access.owner&&!equal(goals,current?.cfg?.operatingDailyGoals))accessError('Solo el dueño configura metas diarias.');
   delete incoming.fiscalSummary;delete incoming.fiscalCreditReservations;
   if (incoming.customers === undefined) incoming.customers = allowed(access, 'ventas') ? structuredClone(current?.customers || []) : [];
   for (const name of ['employees', 'payrolls', 'taxes', 'properties', 'settlements']) if (incoming[name] !== undefined && !Array.isArray(incoming[name])) accessError('Datos contables inválidos.', 400);

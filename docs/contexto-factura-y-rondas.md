@@ -1,5 +1,37 @@
 # Contexto de factura y rondas de alimentos
 
+## Ampliación del 5 de noviembre: base común, avance parcial
+
+Se completó una unidad de trabajo de la base común: ficha de cliente e historial consultable, tablero diario y alertas. **La base común todavía no está completa; alimentos y panadería no recibieron nuevas ampliaciones en esta continuación.** El siguiente trabajo comienza por tarjetas de regalo, vales y lealtad antes de pasar a alimentos y, finalmente, panadería. Las listas históricas siguientes describen la entrega anterior; este apartado actualiza su estado.
+
+### Implementado
+
+La ficha conserva crédito, notas y condiciones anteriores y añade cumpleaños opcional, validado en navegador y servidor. Editar conserva otros campos opcionales de la ficha. Historial y estado de cuenta reúne compras del cliente y servicios facturados, notas de crédito y cobros enlazados por identificador, incluidas las asignaciones de anticipos registradas en el libro. No se infieren vínculos por nombre. El saldo reutiliza la selección compartida del cálculo de crédito existente; requiere permiso de Contabilidad o Finanzas. Los usuarios con acceso a Ventas pueden consultar el historial autorizado. La sucursal y la moneda se indican expresamente; el consolidado conserva el alcance del servidor. No se convierten límites de crédito entre monedas.
+
+El estado de cuenta se imprime o guarda como PDF con el flujo existente y se descarga como Excel. Notas internas y cumpleaños quedan fuera de ambos documentos. No se reemiten facturas ni se registran cobros al abrir o exportar la ficha. Los saldos iniciales y documentos históricos sin identificador del cliente continúan sin asignación automática.
+
+El Panel ofrece Abrir tablero del día con el nombre del perfil existente, ventas con impuestos netas de notas de crédito, comparación con ayer y con los mismos días transcurridos del mes anterior, diferencias monetarias, cantidad de facturas y ticket promedio neto. El dueño puede guardar una meta diaria opcional por sucursal concreta, quitarla con cero y consultar el importe faltante. La meta se conserva en Netlify Database mediante la configuración existente, en centavos enteros seguros y con las revisiones y auditoría del guardado habitual. El servidor impide a colaboradores cambiar metas. No se conceden permisos o módulos al abrir el tablero.
+
+Las alertas reúnen inventario al mínimo o por debajo, excluyendo servicios; lotes disponibles con cantidad positiva vencidos o próximos a vencer en treinta días; citas pendientes de hoy según el calendario del dispositivo; y facturas vinculadas con saldo vencido. Cada fuente exige su permiso y conserva el filtrado del servidor. Los cobros pendientes requieren Contabilidad o Finanzas. PDF y Excel incluyen el alcance, fecha, moneda y criterios. No se añadieron notificaciones externas ni automatismos de cobro, compra o descuento.
+
+Se revisó estáticamente el cierre de turno existente: ya calcula efectivo esperado y contado, diferencia, autorización de supervisor para diferencias y entrega a Caja general o Banco, con referencias y movimientos. Se conservó sin crear un segundo cierre o asiento. Esto no sustituye su comprobación funcional posterior al despliegue.
+
+No se cambiaron identificadores de perfiles, planes, datos históricos ni migraciones. Cumpleaños y metas utilizan el residual y la configuración existentes, sin nuevas columnas ni tablas. Se actualizó la guía local del asistente y se renovaron las URL de los recursos estáticos.
+
+### Pendiente, en el orden solicitado
+
+1. **Base común:** venta, saldo, canje y reversión de tarjetas de regalo y vales; lealtad opcional por puntos o frecuencia integrada con la política de descuentos. Requiere completar la operación transaccional, permisos, pasivo/saldos, canjes parciales y notas de crédito; todavía no se ofrece como forma de pago. No se declaró terminada la base.
+2. **Alimentos:** catálogo y tablero de mesas con zona/capacidad/estados, reservas y llegada, modificadores y extras, división por persona, propinas y reparto, domicilio/retiro completo, costos y disponibilidad por receta, combos, menú diario, mermas, consumo y conteo por zona, informes especializados, caja rápida/pantalla de listos y catering por evento con producción, compras, pagos y facturación por etapas. Se conservan contexto, rondas, pre-cuenta y operaciones anteriores; no equivalen a completar estos requisitos.
+3. **Panadería:** hornadas y sugerencia semanal, conversiones de presentaciones y porciones, mostrador, descuento de sobrantes, encargos con foto y anticipos, mayoristas programados, vida útil y ampliación FEFO, combos/cajas, temporada, etiquetas e informes especializados. El perfil `panaderia` se conserva intacto.
+
+Las pasarelas, canales de reservas y burós continúan como conexiones opcionales futuras; esta continuación no añadió adaptadores ni reglas fiscales o legales.
+
+### Comprobaciones pendientes después del despliegue
+
+Solo se realizó revisión estática; no se ejecutaron pruebas, servidores ni compilaciones locales. Verificar guardado y recarga de cumpleaños en fichas antiguas/nuevas, fechas imposibles y futuras, conservación de campos opcionales y conflictos entre pestañas. Comparar el estado con ventas al contado/crédito mixto, cobros parciales, devoluciones, anticipos aplicados y saldos sin vínculo; revisar usuarios de solo lectura, cajeros, colaboradores con/sin permisos contables, planes limitados, sucursales y consolidado. Confirmar que notas y cumpleaños no salgan en PDF/Excel y que todo texto se escape.
+
+Verificar comparación diaria/mensual en cambio de año, febrero y meses de distinta duración; citas cerca de medianoche en la zona del dispositivo; lotes vencidos, vacíos o cancelados; productos sin mínimo, servicios y existencias por sucursal; metas del dueño y rechazo por API de cambios de colaboradores, importes fraccionarios y fuera de rango. Confirmar guardado concurrente, PDF/Excel en móvil/oscuro y ausencia de facturas/asientos/descuentos de stock nuevos al consultar. El cierre original requiere revisar arqueo, diferencias, autorización y transferencia una sola vez. La plataforma realiza la validación y el despliegue.
+
 Esta entrega cubre el contexto opcional de facturación, el informe por atención, las rondas de despacho vinculadas a cuentas, la anulación de consumos antes de facturar, la presentación de los perfiles de alimentos y el escalado visible de recetas. **No completa la solicitud de sistema empresarial de once secciones.** No debe presentarse el catálogo existente como implementación de todas las ampliaciones solicitadas.
 
 ## Compatibilidad y persistencia
