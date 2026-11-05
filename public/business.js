@@ -191,7 +191,7 @@ function businessActions(r){
  if(r.module==='cartera'){
   if(r.status==='Borrador')html+=' '+bAction('businessDisburse',r,'Desembolsar');
   if(r.status==='Vigente')html+=' '+bAction('businessCollect',r,'Cobrar cuota')+' '+bAction('businessAccrue',r,'Devengar vencidas');
-  if(r.collateral&&r.status==='Liquidada'&&!r.collateralReleased)html+=' '+bAction('businessRelease',r,'Liberar garantía');
+  if(r.collateral&&r.status==='Liquidada'&&!r.writtenOff&&!r.collateralReleased)html+=' '+bAction('businessRelease',r,'Liberar garantía');
  }
  if(r.module==='contratos'&&r.status==='Activo')html+=' '+bAction('businessGenerate',r,'Generar cobro');
  if(r.module==='reservas'){if(r.status==='Reservada')html+=' '+bAction('businessCheckin',r,'Registrar entrada');if(r.status==='Ocupada')html+=' '+bAction('businessCheckout',r,'Registrar salida');}
@@ -217,7 +217,7 @@ ACT.businessDetails=d=>{const r=businessRecord(d.id);modal(esc(businessModuleNam
 ACT.businessPrint=d=>{const r=businessRecord(d.id);$('#rcpt')?.remove();document.body.insertAdjacentHTML('beforeend',`<article id="rcpt" class="business-receipt"><h1>${esc(CO.name)}</h1><h2>${esc(r.module==='cuentas_abiertas'?'Pre-cuenta · no es factura':businessModuleName(r.module))}</h2><h3>${esc(r.name)}</h3><p>Referencia: ${esc(r.id)} · Sucursal: ${esc((CO.branches||[]).find(b=>b.id===r.branchId)?.name||'Principal')}</p>${businessDetailsMarkup(r)}<p>Documento operativo. Solo los asientos y facturas confirmados tienen efecto contable. ${['cartera','contratos','comisiones'].includes(r.module)?'verifica con tu contador':''}</p></article>`);return printReceiptDocument()};
 function businessKpis(module,rows){
  const now=today();let items=[['Registros',rows.length],['Pendientes',rows.filter(r=>!r.entryId&&!['Cancelada','Cancelado','Cerrada','Finalizada'].includes(r.status)).length]];
- if(module==='cartera'){const schedule=rows.filter(r=>r.status!=='Borrador').flatMap(r=>r.schedule||[]);items=[['Capital pendiente',bDisplayMoney(rows.filter(r=>r.status!=='Borrador').reduce((s,r)=>s+r.principal-(r.events||[]).reduce((s,e)=>s+(e.principal||0),0),0))],['Cuotas vencidas',schedule.filter(r=>r.due<now&&r.total+r.penalty>r.paid).length],['Saldo vencido',bDisplayMoney(schedule.filter(r=>r.due<now).reduce((s,r)=>s+Math.max(0,r.total+r.penalty-r.paid),0))]];}
+ if(module==='cartera'){const schedule=rows.filter(r=>r.status!=='Borrador'&&!r.writtenOff).flatMap(r=>r.schedule||[]);items=[['Capital pendiente',bDisplayMoney(rows.filter(r=>r.status!=='Borrador'&&!r.writtenOff).reduce((s,r)=>s+r.principal-(r.events||[]).reduce((s,e)=>s+(e.principal||0),0),0))],['Cuotas vencidas',schedule.filter(r=>r.due<now&&r.total+r.penalty>r.paid).length],['Saldo vencido',bDisplayMoney(schedule.filter(r=>r.due<now).reduce((s,r)=>s+Math.max(0,r.total+r.penalty-r.paid),0))]];}
  if(module==='lotes')items=[['Lotes vencidos',rows.filter(r=>r.due<now&&r.q>0).length],['Por vencer en 30 días',rows.filter(r=>r.due>=now&&r.due<=new Date(Date.now()+30*86400000).toISOString().slice(0,10)&&r.q>0).length]];
  if(module==='reservas')items.push(['Ocupadas',rows.filter(r=>r.status==='Ocupada').length]);
  if(module==='aportes')items.push(['Aportes confirmados',bDisplayMoney(rows.filter(r=>r.entryId).reduce((s,r)=>s+r.total,0))]);

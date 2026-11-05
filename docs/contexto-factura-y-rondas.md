@@ -1,3 +1,11 @@
+# Continuación: préstamos, microfinanzas y empeño
+
+Se amplió exclusivamente cartera, reutilizando amortización, desembolso, devengo, cobros y garantías. El alcance y sus límites quedaron en `docs/prestamos-microfinanzas-empeno.md`. Se añadieron evaluación y aprobación del dueño para nuevos créditos, simulador, recibos por cobro, avisos internos, gestor, llamadas/visitas/promesas, escalamiento y provisión sugerida por cuenta, antigüedad de mora e informe de recuperación por gestor. Se incorporaron grupos con calendario compartido y aportes identificados, ficha del deudor, reprogramación con historial, liquidación anticipada y castigo documentado aprobado por el dueño, avalúos y constancias de liberación/remate.
+
+La reprogramación abarcó capital pendiente sin nuevo desembolso ni capitalización de intereses. La provisión fue informativa sin asiento automático. El remate exigió liquidación previa mediante cobros y no incluyó subasta ni cálculo de excedentes. Los avisos fueron internos, los gestores se identificaron por texto y los saldos del informe no reconstruyeron posiciones históricas. Se conservaron migraciones, permisos, revisión, transacción, idempotencia y auditoría. Se prepararon casos sin ejecutarlos; las verificaciones funcionales, contables, de permisos, concurrencia e impresión quedaron pendientes tras el despliegue.
+
+---
+
 # Continuación: hotel y alquileres
 
 Se amplió exclusivamente hotel y alquiler vacacional, seguido de alquiler de propiedades, equipos y vehículos. El detalle, las condiciones y la verificación pendiente quedaron en `docs/hotel-y-alquileres.md`. Se reutilizaron reservas, contratos, mora, anticipos y contexto de habitación/unidad en factura. Se añadieron unidades y calendario, grupos, reglas de tarifa confirmadas por noche, registro e historial de huésped, consumos, limpieza y mantenimiento, garantía separada, inspecciones y fotos, contrato con conformidad escrita, ajuste periódico, renovación y avisos internos, prospectos, cierres e informes y enlace iCal revocable de salida.
