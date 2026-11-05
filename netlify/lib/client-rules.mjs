@@ -37,7 +37,7 @@ export function nextClientIssues(data,from,to,canRead=()=>true){
  for(const link of clientRows(data,'emision_recurrente').filter(r=>r.kind==='link')){
   if(!canRead(link.sourceModule))continue;
   const r=(data.businessRecords||[]).find(r=>r.id===link.sourceId&&r.module===link.sourceModule);if(!r)continue;
-  if(r.module==='suscripciones'&&r.status==='Activa')for(let period=0;period<1200;period++){
+  if(r.module==='suscripciones'&&r.kind==='subscription'&&r.status==='Activa')for(let period=0;period<1200;period++){
    const p=recurringPeriod(r,period);if(p.from>to)break;
    if(p.from>=from&&p.baseCents>0&&!r.billed.some(b=>b.period===period))result.push({sourceId:r.id,sourceModule:r.module,name:r.name,date:p.from,period,baseCents:p.baseCents});
   }

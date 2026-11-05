@@ -1,3 +1,11 @@
+# Continuación: suscripciones, organizaciones y personalizado
+
+Se amplió exclusivamente este alcance en el orden solicitado. El detalle, los límites y las verificaciones pendientes quedaron en `docs/suscripciones-organizaciones-personalizado.md`. Se añadieron catálogo de planes, pruebas, uso y escalones, cambio proporcional en períodos aún no facturados, intervalos mensual/anual al límite, cupones con autorización normal, gestiones manuales de cobranza, estado de cuenta y retención. Organizaciones incorporó padrón, fondos, eventos, cuotas parciales, recibos, constancias anuales y equipos. Personalizado conservó todas las capacidades y añadió selección de modelo operativo para acceder a herramientas especializadas sin cambiar el perfil.
+
+**La entrega fue parcial respecto de la solicitud completa.** Quedaron pendientes ajustes automáticos de planes ya facturados y cambio mensual/anual a mitad de período; reintentos de cobro y avisos externos automáticos; recargos de mora; baja efectiva de cuotas y reversa específica de aportes; activación simultánea independiente de formularios de múltiples sectores en Personalizado. Se documentaron las restricciones de métricas, pruebas y uso. No se repitieron las funciones históricas ni se modificaron migraciones aplicadas. Las pruebas, la validación funcional y los permisos desplegados quedan pendientes de la plataforma; solo se revisó estáticamente.
+
+---
+
 # Continuación: servicios
 
 La ampliación de servicios se documentó en `docs/servicios-operacion.md`, comenzando por funciones comunes y siguiendo profesionales/software/freelance/inmobiliaria/seguros, belleza, salud, educación, gimnasio, taller, lavado y transporte. Se reutilizaron facturación, anticipos, comisiones, consumibles, estados de cuenta e impresión. Se añadieron seguimiento, bonos por sesiones, tiempo facturable, conversión a proyecto, renovaciones, asistencia/cupos, responsable de pago, planes de pago, órdenes especializadas y margen por viaje/unidad. No se repitieron comercio ni alimentos.

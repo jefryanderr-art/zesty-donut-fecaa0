@@ -1,3 +1,5 @@
+import {operationalType} from './business-profile.mjs';
+import {ORGANIZATION_OPS,organizationOperation,organizationRecord,validateOrganization} from './organizations.mjs';
 import {SERVICE_OPS,serviceWorkflow,checkServiceBilling,serviceTimeBilling,checkServiceSchedule,validateServiceRecord} from './service-workflows.mjs';
 import {commerceRecord,commerceReserve} from './commerce.mjs';
 import {FOOD_WORKFLOW_OPS,foodWorkflow,foodAvailability} from './food-workflows.mjs';
@@ -25,7 +27,7 @@ const qty=v=>Number(v)===0?0:normalizeItemQuantity(v);
 const sameDay=(day,delta)=>new Date(Date.parse(day+'T12:00:00Z')+delta*86400000).toISOString().slice(0,10);
 function nextDate(day,frequency,n){if(frequency==='mensual'){const d=new Date(day+'T12:00:00Z'),last=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+n+1,0)).getUTCDate();d.setUTCDate(1);d.setUTCMonth(d.getUTCMonth()+n);d.setUTCDate(Math.min(+day.slice(8),last));return d.toISOString().slice(0,10)}return sameDay(day,n*({diaria:1,semanal:7,quincenal:15}[frequency]||0))}
 const flows={...Object.fromEntries(PERSONNEL_MODULES.map(m=>[m,['Activa','Inactiva','Pendiente','Aprobada','Rechazada','Pagada','Liquidada','Cancelada']])),...Object.fromEntries(ANALYSIS_MODULES.map(m=>[m,['Activa','Inactiva']])),constancias_laborales:['Activa','Inactiva'],presupuestos:['Activa','Inactiva','Archivada'],...Object.fromEntries(INVENTORY_MODULES.map(m=>[m,['Activa','Inactiva','Aplicado','Abierto','Abierta','Cerrada']])),...Object.fromEntries(CLIENT_MODULES.map(m=>[m,['Activa','Inactiva']])),...Object.fromEntries(FISCAL_MODULES.map(m=>[m,['Activa','Inactiva','Borrador','Emitido','Aceptado','Rechazado','Anulado','Abierta','Cerrada']])),...Object.fromEntries(TREASURY_MODULES.map(m=>[m,['Abierta','Cerrada','Aprobada','Rechazada','Pagada','Revertida']])),bancos:['Abierta','Cerrada'],suscripciones:['Activa','Pausada','Cancelada'],cuentas_abiertas:['Abierta','Cerrada'],agenda:['Pendiente','Confirmada','Atendida','Cancelada'],proyectos:['Recibida','Diagnóstico','Presupuestada','En proceso','Entregada','Cancelada'],lotes:['Disponible','Agotado'],variantes:['Disponible','Vendida','Baja'],produccion:['Activa','Inactiva'],medidas:['Pendiente','Facturada'],cartera:['Borrador','Vigente','Liquidada'],contratos:['Activo','Suspendido','Finalizado'],reservas:['Reservada','Ocupada','Finalizada','Cancelada'],rutas:['Preventa','Preparada','Entregada','Cancelada'],despacho:['Recibido','Preparando','Listo','Entregado','Cancelado','En camino','No entregado'],comisiones:['Pendiente','Liquidada'],aportes:['Pendiente','Registrado'],documentos_venta:['Pendiente','Convertido','Cancelado'],comprobantes:['Pendiente']};
-export const BUSINESS_OPS=[...SERVICE_OPS,...FOOD_WORKFLOW_OPS,'businessVoidLine','businessDispatch','businessProduct','businessCost','businessPurchase','businessConsume','businessSave','businessState','businessBill','businessAdvance','businessRefund','businessMove','businessMerge','businessSplit','businessProduce','businessDisburse','businessCollect','businessAccrue','businessGenerate','businessCheckin','businessCheckout','businessCommission','businessLiquidate','businessDonate','businessRelease','businessOnboard'];
+export const BUSINESS_OPS=[...ORGANIZATION_OPS,...SERVICE_OPS,...FOOD_WORKFLOW_OPS,'businessVoidLine','businessDispatch','businessProduct','businessCost','businessPurchase','businessConsume','businessSave','businessState','businessBill','businessAdvance','businessRefund','businessMove','businessMerge','businessSplit','businessProduce','businessDisburse','businessCollect','businessAccrue','businessGenerate','businessCheckin','businessCheckout','businessCommission','businessLiquidate','businessDonate','businessRelease','businessOnboard'];
 export function validateBusinessRecords(data,check){
  if(data.businessRecords===undefined)return;
  check(Array.isArray(data.businessRecords)&&data.businessRecords.length<=20000,'Registros de negocio inválidos.');const ids=new Set();
@@ -34,6 +36,7 @@ export function validateBusinessRecords(data,check){
   check(typeof r.name==='string'&&r.name.trim()&&r.name.length<=200&&(r.module==='auditoria_revision'?r.status==='Conservado':benefitRecord(r)?['Activa','Agotada','Devuelta'].includes(r.status):flows[r.module].includes(r.status)),'Nombre o estado de negocio inválido.');
   check(/^\d{4}-\d{2}-\d{2}$/.test(r.date||'')&&Number.isFinite(Date.parse(r.date)),'Fecha de negocio inválida.');
   for(const k of ['total','principal','interest','penalty','paid','deposit','valuation','cost','price'])if(r[k]!==undefined)check(moneyCents(r[k])>=0,'Importe de negocio negativo.');
+  validateOrganization(r,check);
   if(benefitRecord(r))validateBenefit(r,check);
   validateServiceRecord(r,check);
   if(r.q!==undefined)check(Number.isFinite(r.q)&&r.q>=0&&r.q<=1e9,'Cantidad de negocio inválida.');
@@ -54,7 +57,7 @@ export function validateBusinessRecords(data,check){
 }
 function makeItems(data,items,ctx){ctx.check(Array.isArray(items)&&items.length<=200,'Lista de consumos inválida.');return items.map(i=>{const p=data.products.find(p=>p.id===i.p),q=qty(i.q);ctx.check(p&&q>0&&q<=1e6,'Producto o cantidad inválida.');return {lineId:randomUUID(),note:txt(i.note,500),p:p.id,q,u:ctx.amount(i.u??p.price,true),vatRate:p.vatRate||0,unit:p.unit||'unidad',name:p.name}})}
 function ensureResource(data,r,ctx){
- checkServiceSchedule(r,data.businessRecords||[],ctx.check,ctx.access?.company.businessType);
+ checkServiceSchedule(r,data.businessRecords||[],ctx.check,r.operationalProfile||operationalType(ctx.access?.company));
  if(!['agenda','reservas'].includes(r.module))return;
  ctx.check(r.resource&&r.start&&r.end&&Date.parse(r.end)>Date.parse(r.start),'Revisa recurso, inicio y fin.');
  ctx.check(!data.businessRecords.some(o=>o.id!==r.id&&o.module===r.module&&(o.resource||'').toLowerCase()===r.resource.toLowerCase()&&!['Cancelada','Finalizada'].includes(o.status)&&o.start<r.end&&o.end>r.start),'El recurso ya tiene una reserva o cita en ese horario.');
@@ -87,13 +90,14 @@ export function prepareBusinessSale(data,access,session,body,ctx){
 export async function businessOperation(data,access,session,body,context){
  const ctx={...context,body,access},op=body.operation,check=ctx.check,permit=m=>ctx.permit(access,m,true),records=data.businessRecords||=[];
  if(SERVICE_OPS.includes(op))return serviceWorkflow(data,access,session,body,ctx);
+ if(ORGANIZATION_OPS.includes(op))return organizationOperation(data,access,session,body,ctx);
  if(FOOD_WORKFLOW_OPS.includes(op))return foodWorkflow(data,access,session,body,ctx);
  if(op==='businessProduct'){
   { ctx.permit(access,'inventario',true);check(access.branchId&&txt(body.name),'Selecciona sucursal y nombre.');data.products.push({id:randomUUID(),code:txt(body.code,80),name:txt(body.name),unit:txt(body.unit,40)||'servicio',kind:'service',category:txt(body.category,100),stock:0,min:0,cost:0,price:ctx.amount(body.price||0,true),vatRate:Number(body.vatRate||0)});const p=data.products.at(-1);check(Number.isFinite(p.vatRate)&&p.vatRate>=0&&p.vatRate<=100,'IVA inválido.');return p.id;}
  }
  if(op==='businessOnboard'){
   check(access.owner&&!access.company.onboardingDone&&(!body.seed||(!data.entries.length&&!data.products.length)),'El arranque solo se aplica a empresas nuevas sin catálogo ni movimientos.');permit('ajustes');
-  if(body.seed){permit('inventario');const p=catalog.get(access.company.businessType);for(const example of p.startup.examples)data.products.push({id:randomUUID(),code:'EJ-'+String(data.products.length+1),name:example.name,unit:example.unit,category:example.category,kind:example.kind,cost:0,price:0,stock:0,min:0,vatRate:0});data.cfg.businessCategories=p.startup.categories;data.cfg.businessUnits=p.startup.units;}
+  if(body.seed){permit('inventario');const p=catalog.get(operationalType(access.company));for(const example of p.startup.examples)data.products.push({id:randomUUID(),code:'EJ-'+String(data.products.length+1),name:example.name,unit:example.unit,category:example.category,kind:example.kind,cost:0,price:0,stock:0,min:0,vatRate:0});data.cfg.businessCategories=p.startup.categories;data.cfg.businessUnits=p.startup.units;}
   return {onboardingDone:true};
  }
  const module=body.module,existing=body.id?records.find(r=>r.id===body.id):null;
@@ -101,6 +105,7 @@ export async function businessOperation(data,access,session,body,context){
  check(catalog.all.includes(module)&&(!body.id||existing?.module===module),'Registro no encontrado.');permit(module);
  if(op!=='businessSave')check(existing,'Registro no encontrado.');
  if(body.date&&op!=='businessSave')check(ctx.date(body.date)>=existing.date,'La operación no puede ser anterior al registro.');
+ check(!organizationRecord(existing||{})&&!String(body.kind||'').startsWith('organization-'),'Usa las operaciones de organizaciones.');
  check(!deliveryZoneRecord(existing||{})&&body.kind!=='delivery-zone','Usa la configuración de zonas.');
  check(existing?.kind!=='bakery-counter'&&body.kind!=='bakery-counter','Usa las operaciones de mostrador.');
  check(!diningRecord(existing||{})&&!['dining-table','table-reservation'].includes(body.kind),'Usa el tablero de mesas y reservas.');
@@ -115,7 +120,7 @@ export async function businessOperation(data,access,session,body,context){
   check(!existing?.deliveryDetails,'Conserva la entrega desde su operación específica.');
   check(!existing?.sourceAccountId,'Un despacho vinculado conserva sus consumos y cuenta de origen.');
   check(!existing||(!existing.entryId&&!existing.billed?.length&&!existing.events?.length&&!['Vigente','Liquidada','Cerrada','Convertido','Registrado','Vendida','Agotado','Finalizada'].includes(existing.status)),'Este registro ya tiene operaciones; conserva su historial.');
-  const rec={id:existing?.id||randomUUID(),module,name:txt(body.name),date:ctx.date(body.date),kind:txt(body.kind||module,40),status:existing?.status||flows[module][0],branchId:access.branchId,customerId:txt(body.customerId,80),productId:txt(body.productId,80),resource:txt(body.resource),responsible:txt(body.responsible),project:txt(body.project),fund:txt(body.fund),note:txt(body.note,3000),due:body.due?ctx.date(body.due):'',events:existing?.events||[],paid:existing?.paid||0};
+  const rec={operationalProfile:existing?.operationalProfile||operationalType(access.company),id:existing?.id||randomUUID(),module,name:txt(body.name),date:ctx.date(body.date),kind:txt(body.kind||module,40),status:existing?.status||flows[module][0],branchId:access.branchId,customerId:txt(body.customerId,80),productId:txt(body.productId,80),resource:txt(body.resource),responsible:txt(body.responsible),project:txt(body.project),fund:txt(body.fund),note:txt(body.note,3000),due:body.due?ctx.date(body.due):'',events:existing?.events||[],paid:existing?.paid||0};
   check(rec.name&&access.branchId,'Escribe el nombre y selecciona una sucursal.');
   if(rec.customerId)check(data.customers.some(c=>c.id===rec.customerId),'Cliente inexistente.');
   if(rec.productId)check(data.products.some(p=>p.id===rec.productId),'Producto inexistente.');
@@ -258,10 +263,10 @@ export async function businessOperation(data,access,session,body,context){
   check(!(r.billed||[]).some(b=>b.key===key),'Este período o etapa ya fue facturado.');
   const timeRecords=serviceTimeBilling(r,items,body,check);
   if(timeRecords.length)check(items.every(i=>data.products.find(p=>p.id===i.p)?.kind==='service'),'El tiempo solo se factura como servicio.');
-  checkServiceBilling(r,items,data,check,access.company.businessType);
+  checkServiceBilling(r,items,data,check,r.operationalProfile||operationalType(access.company));
   items=businessBillItems(r,data.products,module==='proyectos'?items:undefined);
   const late=businessContractLateItems(r,data.entries,data.products,body.date),lateUpdates=late.updates;items.push(...late.items);
-  const bill=await ctx.sale({...body,discount:body.loyalty===true?Number(body.discount):0,sourceQuotation:undefined,saleContext:saleContext({person:r.person||'',resource:r.resource||'',resourceLabel:catalog.resourceLabel(access.company.businessType),responsible:r.responsible||r.seller||'',modality:r.modality||(['local','llevar','domicilio'].includes(r.kind)?r.kind:''),ticket:r.ticket?String(r.ticket):String(records.find(o=>o.sourceAccountId===r.id)?.ticket||''),sourceId:r.id,sourceModule:r.module,sourceName:r.name,project:r.project||''},check),items,serialIds:module==='variantes'&&r.serial?[r.id]:(Array.isArray(body.serialIds)?body.serialIds:r.serialIds||[]),date:ctx.date(body.date),due:module==='contratos'?nextDate(r.date,r.frequency,period):body.due||body.date,customerId:access.company.businessType==='educacion'&&r.service?.guardianId?r.service.guardianId:r.customerId,party:r.name,commercePresentations:items.filter(i=>i.commercePresentation).map(i=>({p:i.p,code:i.commercePresentation}))},r.id);
+  const bill=await ctx.sale({...body,discount:body.loyalty===true?Number(body.discount):0,sourceQuotation:undefined,saleContext:saleContext({person:r.person||'',resource:r.resource||'',resourceLabel:catalog.resourceLabel(operationalType(access.company)),responsible:r.responsible||r.seller||'',modality:r.modality||(['local','llevar','domicilio'].includes(r.kind)?r.kind:''),ticket:r.ticket?String(r.ticket):String(records.find(o=>o.sourceAccountId===r.id)?.ticket||''),sourceId:r.id,sourceModule:r.module,sourceName:r.name,project:r.project||''},check),items,serialIds:module==='variantes'&&r.serial?[r.id]:(Array.isArray(body.serialIds)?body.serialIds:r.serialIds||[]),date:ctx.date(body.date),due:module==='contratos'?nextDate(r.date,r.frequency,period):body.due||body.date,customerId:(r.operationalProfile||operationalType(access.company))==='educacion'&&r.service?.guardianId?r.service.guardianId:r.customerId,party:r.name,commercePresentations:items.filter(i=>i.commercePresentation).map(i=>({p:i.p,code:i.commercePresentation}))},r.id);
   for(const t of timeRecords)t.entryId=bill.id;
   if(r.tipShares?.length&&r.serviceRate){const tipItem=bill.items.at(-1),tip=invoiceTotals([tipItem]);bill.tipAllocation={productId:r.serviceProductId,amountCents:moneyCents(tip.subtotal),shares:structuredClone(r.tipShares)};}
   for(const billed of lateUpdates)billed.lateThrough=body.date;
