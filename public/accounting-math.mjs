@@ -1,6 +1,16 @@
 export class AccountingValidationError extends Error { constructor(message){super(message);this.publicMessage=message;this.status=422;} }
 // Validar antes de redondear: 0.0009 no se acepta como 0.001.
 export function normalizeItemQuantity(value){const q=Number(value);if(!Number.isFinite(q)||q<0.001)throw new AccountingValidationError('La cantidad mínima es 0.001.');return Math.round(q*1000)/1000}
+export function businessRecipePlan(recipe,units,products){
+ const output=normalizeItemQuantity(units),yieldUnits=Number(recipe.yield),waste=Number(recipe.waste||0);
+ if(!(yieldUnits>0)||!Number.isFinite(waste)||waste<0||waste>100)throw new AccountingValidationError('Rendimiento o merma inválidos.');
+ return (recipe.ingredients||[]).map(i=>{
+  const p=products.find(p=>p.id===i.p);
+  if(!p||p.kind==='service')throw new AccountingValidationError('Insumo inexistente o sin inventario.');
+  const q=normalizeItemQuantity(i.q*output/yieldUnits*(1+waste/100));
+  return {p:p.id,name:p.name,unit:p.unit||'unidad',q,stock:p.stock,missing:Math.max(0,Math.round((q-p.stock)*1000)/1000)};
+ });
+}
 // Cálculos puros en centavos; usados por Functions y por las verificaciones de la plataforma.
 export function moneyCents(value){const n=Number(value),c=Math.round(n*100);if(!Number.isFinite(n)||!Number.isSafeInteger(c)||Math.abs(n*100-c)>0.000001)throw new AccountingValidationError('Usa importes seguros con un máximo de dos decimales.');return c}
 // Costos de consumibles y comisiones: aritmética entera, sin modificar el precio del servicio.

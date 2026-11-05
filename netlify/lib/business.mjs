@@ -1,3 +1,5 @@
+import {supervisor} from './policies.mjs';
+import {saleContext} from './sale-context.mjs';
 import {PERSONNEL_MODULES,validatePersonnelRecord} from './personnel.mjs';
 import {ANALYSIS_MODULES,validateAnalysisRecord} from './analysis.mjs';
 import {validateCertificateRecord} from './employment-certificates.mjs';
@@ -10,14 +12,14 @@ import {INVENTORY_MODULES,validateInventoryRecord} from './inventory-advanced.mj
 import {BUDGET_MODULES,validateBudgetRecord} from './budgets.mjs';
 import {randomUUID} from 'node:crypto';
 import {catalog} from './business-profile.mjs';
-import {invoiceTotals,normalizeItemQuantity,businessLoanSchedule,businessCommission,businessLateCharge,businessBillItems,businessContractLateItems,moneyCents} from './accounting-engine.mjs';
+import {invoiceTotals,businessRecipePlan,normalizeItemQuantity,businessLoanSchedule,businessCommission,businessLateCharge,businessBillItems,businessContractLateItems,moneyCents} from './accounting-engine.mjs';
 const txt=(v,n=200)=>String(v??'').trim().slice(0,n);
 const round=v=>Math.round(v*100)/100;
 const qty=v=>Number(v)===0?0:normalizeItemQuantity(v);
 const sameDay=(day,delta)=>new Date(Date.parse(day+'T12:00:00Z')+delta*86400000).toISOString().slice(0,10);
 function nextDate(day,frequency,n){if(frequency==='mensual'){const d=new Date(day+'T12:00:00Z'),last=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+n+1,0)).getUTCDate();d.setUTCDate(1);d.setUTCMonth(d.getUTCMonth()+n);d.setUTCDate(Math.min(+day.slice(8),last));return d.toISOString().slice(0,10)}return sameDay(day,n*({diaria:1,semanal:7,quincenal:15}[frequency]||0))}
 const flows={...Object.fromEntries(PERSONNEL_MODULES.map(m=>[m,['Activa','Inactiva','Pendiente','Aprobada','Rechazada','Pagada','Liquidada','Cancelada']])),...Object.fromEntries(ANALYSIS_MODULES.map(m=>[m,['Activa','Inactiva']])),constancias_laborales:['Activa','Inactiva'],presupuestos:['Activa','Inactiva','Archivada'],...Object.fromEntries(INVENTORY_MODULES.map(m=>[m,['Activa','Inactiva','Aplicado','Abierto','Abierta','Cerrada']])),...Object.fromEntries(CLIENT_MODULES.map(m=>[m,['Activa','Inactiva']])),...Object.fromEntries(FISCAL_MODULES.map(m=>[m,['Activa','Inactiva','Borrador','Emitido','Aceptado','Rechazado','Anulado','Abierta','Cerrada']])),...Object.fromEntries(TREASURY_MODULES.map(m=>[m,['Abierta','Cerrada','Aprobada','Rechazada','Pagada','Revertida']])),bancos:['Abierta','Cerrada'],suscripciones:['Activa','Pausada','Cancelada'],cuentas_abiertas:['Abierta','Cerrada'],agenda:['Pendiente','Confirmada','Atendida','Cancelada'],proyectos:['Recibida','Diagnóstico','Presupuestada','En proceso','Entregada','Cancelada'],lotes:['Disponible','Agotado'],variantes:['Disponible','Vendida'],produccion:['Activa','Inactiva'],medidas:['Pendiente','Facturada'],cartera:['Borrador','Vigente','Liquidada'],contratos:['Activo','Suspendido','Finalizado'],reservas:['Reservada','Ocupada','Finalizada','Cancelada'],rutas:['Preventa','Preparada','Entregada','Cancelada'],despacho:['Recibido','Preparando','Listo','Entregado','Cancelado'],comisiones:['Pendiente','Liquidada'],aportes:['Pendiente','Registrado'],documentos_venta:['Pendiente','Convertido','Cancelado'],comprobantes:['Pendiente']};
-export const BUSINESS_OPS=['businessProduct','businessCost','businessPurchase','businessConsume','businessSave','businessState','businessBill','businessAdvance','businessRefund','businessMove','businessMerge','businessSplit','businessProduce','businessDisburse','businessCollect','businessAccrue','businessGenerate','businessCheckin','businessCheckout','businessCommission','businessLiquidate','businessDonate','businessRelease','businessOnboard'];
+export const BUSINESS_OPS=['businessVoidLine','businessDispatch','businessProduct','businessCost','businessPurchase','businessConsume','businessSave','businessState','businessBill','businessAdvance','businessRefund','businessMove','businessMerge','businessSplit','businessProduce','businessDisburse','businessCollect','businessAccrue','businessGenerate','businessCheckin','businessCheckout','businessCommission','businessLiquidate','businessDonate','businessRelease','businessOnboard'];
 export function validateBusinessRecords(data,check){
  if(data.businessRecords===undefined)return;
  check(Array.isArray(data.businessRecords)&&data.businessRecords.length<=20000,'Registros de negocio inválidos.');const ids=new Set();
@@ -42,7 +44,7 @@ export function validateBusinessRecords(data,check){
   if(r.schedule)for(const row of r.schedule){for(const key of ['principal','interest','total','paid','penalty','balance','interestPaid'])if(row[key]!==undefined)check(moneyCents(row[key])>=0,'Cuota inválida.');check(moneyCents(row.total)===moneyCents(row.principal)+moneyCents(row.interest),'La cuota no coincide con capital e interés.');}
  }
 }
-function makeItems(data,items,ctx){ctx.check(Array.isArray(items)&&items.length<=200,'Lista de consumos inválida.');return items.map(i=>{const p=data.products.find(p=>p.id===i.p),q=qty(i.q);ctx.check(p&&q>0&&q<=1e6,'Producto o cantidad inválida.');return {p:p.id,q,u:ctx.amount(i.u??p.price,true),vatRate:p.vatRate||0,unit:p.unit||'unidad',name:p.name}})}
+function makeItems(data,items,ctx){ctx.check(Array.isArray(items)&&items.length<=200,'Lista de consumos inválida.');return items.map(i=>{const p=data.products.find(p=>p.id===i.p),q=qty(i.q);ctx.check(p&&q>0&&q<=1e6,'Producto o cantidad inválida.');return {lineId:randomUUID(),note:txt(i.note,500),p:p.id,q,u:ctx.amount(i.u??p.price,true),vatRate:p.vatRate||0,unit:p.unit||'unidad',name:p.name}})}
 function ensureResource(data,r,ctx){
  if(!['agenda','reservas'].includes(r.module))return;
  ctx.check(r.resource&&r.start&&r.end&&Date.parse(r.end)>Date.parse(r.start),'Revisa recurso, inicio y fin.');
@@ -51,7 +53,7 @@ function ensureResource(data,r,ctx){
 function produce(data,access,session,recipe,n,ctx){
  ctx.permit(access,'produccion',true);ctx.permit(access,'inventario',true);ctx.check(recipe.status==='Activa'&&n>0,'Receta o cantidad inválida.');
  const output=data.products.find(p=>p.id===recipe.productId);ctx.check(output&&output.kind!=='service','Selecciona un producto inventariable.');
- const stock=[],amounts=[];for(const i of recipe.ingredients){const p=data.products.find(p=>p.id===i.p),q=qty(i.q*n/recipe.yield*(1+recipe.waste/100));ctx.check(p&&p.id!==output.id&&p.kind!=='service'&&p.stock>=q,'Insumo inexistente o insuficiente.');const lots=data.businessRecords.filter(r=>r.module==='lotes'&&r.productId===p.id);if(lots.length){ctx.permit(access,'lotes',true);let remaining=q;for(const lot of lots.filter(r=>r.status==='Disponible'&&r.due>=ctx.body.date).sort((a,b)=>a.due.localeCompare(b.due))){const used=Math.min(lot.q,remaining);if(used>0){lot.q=qty(lot.q-used);remaining=qty(remaining-used);if(!lot.q)lot.status='Agotado';recipe.events.push({date:ctx.body.date,action:'Insumo de lote',lotId:lot.id,q:used});}}ctx.check(remaining===0,'No hay lotes vigentes suficientes para producir.');}ctx.check(!data.businessRecords.some(r=>r.module==='variantes'&&r.serial&&r.productId===p.id),'Los insumos con serie requieren selección individual y no se consumen automáticamente.');p.stock=qty(p.stock-q);stock.push({pid:p.id,q:-q,unit:p.unit||'unidad',unitCost:p.cost});amounts.push(round(q*p.cost))}
+ const stock=[],amounts=[];for(const i of businessRecipePlan(recipe,n,data.products)){const p=data.products.find(p=>p.id===i.p),q=i.q;ctx.check(p&&p.id!==output.id&&p.kind!=='service'&&p.stock>=q,'Insumo inexistente o insuficiente.');const lots=data.businessRecords.filter(r=>r.module==='lotes'&&r.productId===p.id);if(lots.length){ctx.permit(access,'lotes',true);let remaining=q;for(const lot of lots.filter(r=>r.status==='Disponible'&&r.due>=ctx.body.date).sort((a,b)=>a.due.localeCompare(b.due))){const used=Math.min(lot.q,remaining);if(used>0){lot.q=qty(lot.q-used);remaining=qty(remaining-used);if(!lot.q)lot.status='Agotado';recipe.events.push({date:ctx.body.date,action:'Insumo de lote',lotId:lot.id,q:used});}}ctx.check(remaining===0,'No hay lotes vigentes suficientes para producir.');}ctx.check(!data.businessRecords.some(r=>r.module==='variantes'&&r.serial&&r.productId===p.id),'Los insumos con serie requieren selección individual y no se consumen automáticamente.');p.stock=qty(p.stock-q);stock.push({pid:p.id,q:-q,unit:p.unit||'unidad',unitCost:p.cost});amounts.push(round(q*p.cost))}
  const cost=round(amounts.reduce((s,v)=>s+v,0));const oldValue=round(output.stock*output.cost),newStock=qty(output.stock+n);ctx.check(newStock>0,'Producción inválida.');const newCost=round((oldValue+cost)/newStock);ctx.check(newCost===output.cost||(access.company.data.products.find(p=>p.id===output.id)?.stock??output.stock)===output.stock,'El costo del terminado también afecta otras sucursales; revisa la producción con el contador.');const valuation=round(newStock*newCost-oldValue),difference=round(cost-valuation);
  output.stock=newStock;output.cost=newCost;stock.push({pid:output.id,q:n,unit:output.unit||'unidad',unitCost:newCost,productionAdjustment:{amountCents:moneyCents(round(valuation-round(n*newCost))),reason:'Diferencia de valoración del saldo anterior'}});
  const lines=[{a:'1301',d:valuation,c:0},{a:'1301',d:0,c:cost}];
@@ -93,12 +95,14 @@ export async function businessOperation(data,access,session,body,context){
  const cash=()=>{check(['1101','1102'].includes(body.pay),'Selecciona Caja general o Banco.');return acct(body.pay,'activo')};
  if(op==='businessSave'){
   check(module!=='comprobantes','Usa este módulo para imprimir registros existentes.');
+  check(!existing?.sourceAccountId,'Un despacho vinculado conserva sus consumos y cuenta de origen.');
   check(!existing||(!existing.entryId&&!existing.billed?.length&&!existing.events?.length&&!['Vigente','Liquidada','Cerrada','Convertido','Registrado','Vendida','Agotado','Finalizada'].includes(existing.status)),'Este registro ya tiene operaciones; conserva su historial.');
   const rec={id:existing?.id||randomUUID(),module,name:txt(body.name),date:ctx.date(body.date),kind:txt(body.kind||module,40),status:existing?.status||flows[module][0],branchId:access.branchId,customerId:txt(body.customerId,80),productId:txt(body.productId,80),resource:txt(body.resource),responsible:txt(body.responsible),project:txt(body.project),fund:txt(body.fund),note:txt(body.note,3000),due:body.due?ctx.date(body.due):'',events:existing?.events||[],paid:existing?.paid||0};
   check(rec.name&&access.branchId,'Escribe el nombre y selecciona una sucursal.');
   if(rec.customerId)check(data.customers.some(c=>c.id===rec.customerId),'Cliente inexistente.');
   if(rec.productId)check(data.products.some(p=>p.id===rec.productId),'Producto inexistente.');
   if(['cuentas_abiertas','agenda','proyectos','contratos','reservas','rutas','despacho','documentos_venta','medidas'].includes(module)){
+   rec.modality=['local','llevar','domicilio'].includes(body.modality)?body.modality:(existing?.modality||'');
    rec.items=makeItems(data,body.items||[],ctx);rec.total=invoiceTotals(rec.items).total;
    rec.serviceRate=Number(body.serviceRate||0);rec.serviceProductId=txt(body.serviceProductId,80);check(Number.isFinite(rec.serviceRate)&&rec.serviceRate>=0&&rec.serviceRate<=100,'Porcentaje de servicio inválido.');
    if(rec.serviceRate)check(data.products.some(p=>p.id===rec.serviceProductId&&p.kind==='service'),'Configura un producto de servicio para el cargo.');
@@ -123,6 +127,7 @@ export async function businessOperation(data,access,session,body,context){
   }
   if(module==='contratos'){rec.frequency=txt(body.frequency);check(['diaria','semanal','quincenal','mensual'].includes(rec.frequency),'Frecuencia inválida.');rec.periods=Number(body.periods);check(Number.isInteger(rec.periods)&&rec.periods>0&&rec.periods<=600,'Plazo inválido.');check(rec.items.length,'Agrega el concepto de cobro.');rec.lateRate=Number(body.lateRate||0);check(Number.isFinite(rec.lateRate)&&rec.lateRate>=0&&rec.lateRate<=100,'Mora inválida.');rec.reminder=txt(body.reminder,500);rec.lateProductId=txt(body.lateProductId,80);rec.suspendAfter=Number(body.suspendAfter||0);check(Number.isInteger(rec.suspendAfter)&&rec.suspendAfter>=0&&rec.suspendAfter<=3650,'Días para suspensión inválidos.');}
   if(module==='rutas'){rec.employeeId=txt(body.employeeId,80);rec.route=txt(body.route);rec.seller=txt(body.seller);rec.consignment=body.consignment===true;rec.commissionRate=Number(body.commissionRate||0);check(Number.isFinite(rec.commissionRate)&&rec.commissionRate>=0&&rec.commissionRate<=100,'Comisión inválida.');}
+  if(module==='cuentas_abiertas'&&rec.resource)check(body.sharedResourceConfirmed===true||!records.some(o=>o.id!==rec.id&&o.module===module&&o.status==='Abierta'&&o.resource?.toLowerCase()===rec.resource.toLowerCase()),'Ya hay una cuenta abierta en este recurso. Confirma que deseas compartirlo.');
   if(module==='despacho'){rec.delivery=txt(body.delivery,1000);rec.kind=['llevar','domicilio','local'].includes(body.kind)?body.kind:'llevar';rec.ticket=existing?.ticket||Math.max(0,...records.filter(o=>o.module===module).map(o=>o.ticket||0))+1;}
   if(module==='comisiones'){rec.employeeId=txt(body.employeeId,80);check(data.employees.some(e=>e.id===rec.employeeId&&e.active!==false),'Selecciona un empleado activo.');rec.rate=Number(body.rate);rec.saleId=txt(body.saleId,80);check(Number.isFinite(rec.rate)&&rec.rate>=0&&rec.rate<=100,'Comisión inválida.');}
   if(module==='aportes'){rec.total=ctx.amount(body.total);rec.donor=txt(body.donor);check(rec.donor&&rec.fund,'Indica donante o socio y fondo/proyecto.');rec.incomeAccount=acct(body.incomeAccount,'ingreso');}
@@ -130,11 +135,13 @@ export async function businessOperation(data,access,session,body,context){
  }
  if(op==='businessState'){
   const next=txt(body.status);check(flows[module].includes(next),'Estado inválido.');
+  if(module==='despacho'&&r.sourceAccountId){const current=['Recibido','Preparando','Listo','Entregado'];check(next==='Cancelado'||current.indexOf(next)===current.indexOf(r.status)+1,'El despacho vinculado avanza una etapa a la vez.');check(r.status!=='Entregado','El despacho ya fue entregado.');}
   const states=({agenda:['Pendiente','Confirmada','Atendida','Cancelada'],proyectos:['Recibida','Diagnóstico','Presupuestada','En proceso','Entregada','Cancelada'],produccion:['Activa','Inactiva'],contratos:['Activo','Suspendido','Finalizado'],rutas:['Preventa','Preparada','Entregada','Cancelada'],despacho:['Recibido','Preparando','Listo','Entregado','Cancelado'],documentos_venta:['Pendiente','Cancelado']})[module];check(states&&states.includes(next),'Usa la acción específica para este estado.');check(!r.deposit||!['Cancelada','Cancelado','Finalizado'].includes(next),'Devuelve o aplica el depósito antes de cerrar.');check(!r.entryId||!['Cancelada','Cancelado'].includes(next),'Corrige primero el documento contable con su operación de anulación o devolución.');
   if(module==='rutas'&&next==='Entregada')check(r.entryId,'Factura la entrega antes de marcarla entregada.');
   if(['Finalizado','Cancelada','Cancelado'].includes(r.status))check(false,'El registro está finalizado.');
   if(module==='contratos'&&next==='Activo'&&r.status==='Finalizado')check(false,'Contrato finalizado.');
   if(module==='rutas'&&next==='Preparada'&&r.consignment){const allItems=records.filter(o=>o.module==='rutas'&&o.consignment&&(o.id===r.id||o.status==='Preparada')&&!o.entryId).flatMap(o=>o.items||[]);for(const p of data.products.filter(p=>p.kind!=='service'))check(allItems.filter(i=>i.p===p.id).reduce((s,i)=>s+i.q,0)<=p.stock,'La consignación excede la existencia disponible.');}
+  if(module==='despacho'&&r.sourceAccountId&&next==='Cancelado'){check(supervisor(access)&&txt(body.reason,500),'Anular un pedido enviado exige supervisor y motivo.');r.events.push({date:new Date().toISOString(),action:'Anulación de envío',note:txt(body.reason,500),actor:session.email});}
   r.status=next;if(module==='agenda'&&next!=='Cancelada')ensureResource(data,r,ctx);r.events.push({date:new Date().toISOString(),action:next,actor:session.email});return r.id;
  }
  if(op==='businessProduce'){confirmed();check(module==='produccion','Receta inválida.');const n=qty(body.q);check(n>0&&n<=1e6,'Cantidad inválida.');const e=produce(data,access,session,r,n,ctx);r.events.push({date:e.date,action:'Producción',entryId:e.id,q:n});return e.id;}
@@ -144,17 +151,44 @@ export async function businessOperation(data,access,session,body,context){
  if(op==='businessCost'){
   check(['proyectos','lotes','produccion','reservas','contratos','rutas','aportes'].includes(module),'Este registro no admite costos asociados.');confirmed();permit('costos');check(['1101','1102','2101'].includes(body.pay),'Usa Caja general, Banco o Crédito.');const cost=ctx.registerCost(data,access,session,body),entry=data.entries.find(e=>e.id===cost.entryId);entry.businessId=r.id;entry.project=r.project||r.fund||r.id;cost.businessId=r.id;r.events.push({date:entry.date,action:'Costo asociado',entryId:entry.id,total:cost.total});return entry.id;
  }
+ if(op==='businessDispatch'){
+  check(module==='cuentas_abiertas'&&r.status==='Abierta'&&!r.entryId,'Cuenta cerrada.');
+  permit('despacho');check(body.operationId,'El envío requiere un identificador único.');confirmed();
+  const station=txt(body.station,40);check(['cocina','barra','postres'].includes(station),'Selecciona una estación.');
+  const chosen=Array.isArray(body.lineIds)?new Set(body.lineIds):new Set();
+  check(chosen.size>0&&chosen.size<=200,'Selecciona consumos pendientes.');
+  const pending=r.items.filter((i,index)=>chosen.has(i.lineId||String(index))&&i.q>(i.dispatchedQ||0));
+  check(pending.length===chosen.size,'Una línea ya fue enviada o no pertenece a esta cuenta.');
+  for(const i of pending)i.lineId||=randomUUID();
+  const items=pending.map(i=>({...structuredClone(i),lineId:i.dispatchLineId||i.lineId,q:qty(i.q-(i.dispatchedQ||0))}));
+  const round=1+Math.max(0,...records.filter(o=>o.sourceAccountId===r.id).map(o=>o.round||0));
+  const dispatch={id:randomUUID(),module:'despacho',kind:r.modality||'local',name:r.name,date:ctx.date(body.date),status:'Recibido',branchId:access.branchId,sourceAccountId:r.id,resource:r.resource||'',responsible:r.responsible||'',station,round,ticket:1+Math.max(0,...records.filter(o=>o.module==='despacho').map(o=>o.ticket||0)),items,total:invoiceTotals(items).total,events:[],paid:0};
+  records.push(dispatch);r.ticket||=dispatch.ticket;for(const i of pending){i.dispatchedQ=i.q;i.dispatchLineId||=i.lineId;}
+  r.events.push({date:new Date().toISOString(),action:'Envío a '+station,targetId:dispatch.id,actor:session.email});return dispatch.id;
+ }
+ if(op==='businessVoidLine'){
+  check(module==='cuentas_abiertas'&&r.status==='Abierta'&&!r.entryId,'Cuenta cerrada.');
+  check(supervisor(access)&&txt(body.reason,500),'Anular un consumo exige supervisor y motivo.');confirmed();
+  const index=body.index;check(Number.isInteger(index)&&index>=0&&index<r.items.length,'Selecciona un consumo.');
+  const item=r.items[index];let remaining=item.dispatchedQ||0;
+  if(remaining){permit('despacho');for(const order of records.filter(o=>o.module==='despacho')){let changed=false;
+   for(const line of order.items||[]){if(line.lineId!==(item.dispatchLineId||item.lineId)||remaining<=0)continue;const q=Math.min(remaining,line.q-(line.voidedQ||0));if(q<=0)continue;changed=true;line.voidedQ=qty((line.voidedQ||0)+q);remaining=qty(remaining-q);order.events.push({date:new Date().toISOString(),action:'Consumo anulado',note:txt(body.reason,500),actor:session.email});}
+   if(changed)order.total=invoiceTotals((order.items||[]).map(i=>({...i,q:qty(i.q-(i.voidedQ||0))})).filter(i=>i.q>0)).total;
+  }}
+  r.items.splice(index,1);r.total=invoiceTotals(r.items).total;
+  r.events.push({date:new Date().toISOString(),action:'Consumo anulado',note:txt(body.reason,500),actor:session.email,items:[structuredClone(item)]});return r.id;
+ }
  if(op==='businessConsume'){
   check(module==='cuentas_abiertas'&&r.status==='Abierta'&&!r.entryId,'Cuenta cerrada.');const added=makeItems(data,body.items||[],ctx);check(added.length&&r.items.length+added.length<=200,'Agrega consumos (máximo 200 líneas por cuenta).');r.items.push(...added);r.total=invoiceTotals(r.items).total;r.events.push({date:new Date().toISOString(),action:'Consumo agregado'});return r.id;
  }
- if(op==='businessMove'){check(module==='cuentas_abiertas'&&r.status==='Abierta','Cuenta no disponible.');r.resource=txt(body.resource);r.responsible=txt(body.responsible);check(r.resource,'Indica destino.');r.events.push({date:new Date().toISOString(),action:'Traslado',resource:r.resource,responsible:r.responsible});return r.id;}
+ if(op==='businessMove'){check(module==='cuentas_abiertas'&&r.status==='Abierta','Cuenta no disponible.');check(body.sharedResourceConfirmed===true||!records.some(o=>o.id!==r.id&&o.module===module&&o.status==='Abierta'&&o.resource?.toLowerCase()===txt(body.resource).toLowerCase()),'Ya hay una cuenta abierta en el destino. Confirma que deseas compartirlo.');r.resource=txt(body.resource);r.responsible=txt(body.responsible);check(r.resource,'Indica destino.');r.events.push({date:new Date().toISOString(),action:'Traslado',resource:r.resource,responsible:r.responsible});return r.id;}
  if(op==='businessMerge'){
   check(module==='cuentas_abiertas'&&r.status==='Abierta'&&!r.entryId&&!r.deposit,'Cuenta no disponible para unir.');const other=records.find(o=>o.id===body.targetId&&o.module===module&&o.id!==r.id);check(other&&other.status==='Abierta'&&!other.entryId&&!other.deposit&&other.serviceRate===r.serviceRate&&other.serviceProductId===r.serviceProductId,'Selecciona otra cuenta abierta sin anticipos y con el mismo cargo por servicio.');other.items.push(...r.items);other.total=invoiceTotals(other.items).total;r.items=[];r.total=0;r.status='Cerrada';r.mergedInto=other.id;r.events.push({date:new Date().toISOString(),action:'Unión',targetId:other.id});return other.id;
  }
  if(op==='businessSplit'){
   check(module==='cuentas_abiertas'&&r.status==='Abierta'&&!r.entryId&&!r.deposit,'Cuenta no disponible para dividir.');
   const requested=Array.isArray(body.splitItems)?body.splitItems:(Array.isArray(body.indices)?body.indices.map(index=>({index,q:r.items[index]?.q})):[]),seen=new Set(),moved=[];
-  for(const request of requested){const index=request.index,q=qty(request.q);check(Number.isInteger(index)&&index>=0&&index<r.items.length&&!seen.has(index),'Línea de división inválida.');seen.add(index);if(!q)continue;const item=r.items[index];check(q<=item.q,'La cantidad supera el consumo.');moved.push({...item,q});item.q=qty(item.q-q);}
+  for(const request of requested){const index=request.index,q=qty(request.q);check(Number.isInteger(index)&&index>=0&&index<r.items.length&&!seen.has(index),'Línea de división inválida.');seen.add(index);if(!q)continue;const item=r.items[index];check(q<=item.q,'La cantidad supera el consumo.');const sent=Math.min(q,item.dispatchedQ||0);moved.push({...item,dispatchLineId:item.dispatchLineId||item.lineId||'',lineId:randomUUID(),q,...(item.dispatchedQ!==undefined?{dispatchedQ:sent}:{})});if(item.dispatchedQ!==undefined)item.dispatchedQ=qty(item.dispatchedQ-sent);item.q=qty(item.q-q);}
   check(moved.length&&r.items.some(i=>i.q>0),'Conserva consumos en ambas cuentas.');r.items=r.items.filter(i=>i.q>0);const target={...structuredClone(r),id:randomUUID(),name:txt(body.name)||r.name+' · separada',items:moved,events:[]};r.total=invoiceTotals(r.items).total;target.total=invoiceTotals(target.items).total;records.push(target);r.events.push({date:new Date().toISOString(),action:'División',targetId:target.id});return target.id;
  }
  if(op==='businessRefund'){
@@ -166,6 +200,7 @@ export async function businessOperation(data,access,session,body,context){
  if(op==='businessBill'||op==='businessGenerate'){
   check(['cuentas_abiertas','agenda','proyectos','contratos','reservas','rutas','despacho','documentos_venta','medidas','variantes'].includes(module),'Registro no facturable.');confirmed();
   check(!['Cancelada','Cancelado','Cerrada','Finalizada','Finalizado','Suspendido'].includes(r.status),'Registro cerrado, suspendido o cancelado.');
+  check(!r.sourceAccountId,'Este despacho se cobra exclusivamente desde la cuenta de origen.');
   check(module==='proyectos'||module==='contratos'||!r.entryId,'Este registro ya está facturado.');
   let items=structuredClone(r.items||[]),key='final',period;if(module==='variantes')check(r.status==='Disponible','Serie no disponible.');
   if(module==='contratos'){
@@ -176,7 +211,7 @@ export async function businessOperation(data,access,session,body,context){
   check(!(r.billed||[]).some(b=>b.key===key),'Este período o etapa ya fue facturado.');
   items=businessBillItems(r,data.products,module==='proyectos'?items:undefined);
   const late=businessContractLateItems(r,data.entries,data.products,body.date),lateUpdates=late.updates;items.push(...late.items);
-  const bill=await ctx.sale({...body,discount:0,sourceQuotation:undefined,items,serialIds:module==='variantes'&&r.serial?[r.id]:(Array.isArray(body.serialIds)?body.serialIds:r.serialIds||[]),date:ctx.date(body.date),due:module==='contratos'?nextDate(r.date,r.frequency,period):body.due||body.date,customerId:r.customerId,party:r.name},r.id);
+  const bill=await ctx.sale({...body,discount:0,sourceQuotation:undefined,saleContext:saleContext({resource:r.resource||'',resourceLabel:catalog.resourceLabel(access.company.businessType),responsible:r.responsible||r.seller||'',modality:r.modality||(['local','llevar','domicilio'].includes(r.kind)?r.kind:''),ticket:r.ticket?String(r.ticket):String(records.find(o=>o.sourceAccountId===r.id)?.ticket||''),sourceId:r.id,sourceModule:r.module,sourceName:r.name,project:r.project||''},check),items,serialIds:module==='variantes'&&r.serial?[r.id]:(Array.isArray(body.serialIds)?body.serialIds:r.serialIds||[]),date:ctx.date(body.date),due:module==='contratos'?nextDate(r.date,r.frequency,period):body.due||body.date,customerId:r.customerId,party:r.name},r.id);
   for(const billed of lateUpdates)billed.lateThrough=body.date;
   r.billed||=[];r.billed.push({key,entryId:bill.id,total:bill.total,due:bill.due});r.entryId=bill.id;
   if(r.deposit){check(bill.pay==='1201'&&moneyCents(r.deposit)<=moneyCents(bill.creditAmount),'Para aplicar el anticipo factura a crédito; el anticipo no puede superar el crédito de esta factura.');const e=post([{a:r.depositAccount,d:r.deposit,c:0},{a:'1201',d:0,c:r.deposit}],r.deposit,'Aplicación de anticipo · '+r.name,{invoiceId:bill.id});r.events.push({date:e.date,action:'Aplicación de anticipo',entryId:e.id,total:r.deposit});r.deposit=0;}

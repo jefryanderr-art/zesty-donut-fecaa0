@@ -477,3 +477,10 @@ body{font-family:var(--ui-font,'DM Sans',sans-serif)}
 [data-dw-template] textarea{width:100%;min-height:15rem;font:inherit;overflow-wrap:anywhere}.dw-job{display:grid;gap:.6rem;margin:1rem 0}.dw-job progress{width:100%;accent-color:var(--green,#315e49)}
 .dw-declaration td{overflow-wrap:anywhere;max-width:32rem}.dw-error{white-space:pre-wrap}
 @media(max-width:640px){.dw-declaration header{align-items:flex-start}.dw-declaration .btn{width:100%}.dw-declaration td{max-width:16rem}}
+
+/* Contexto operativo y despacho: conservar espacio de navegación en móviles. */
+.invoice-operation-context{font-size:.9em;line-height:1.5;overflow-wrap:anywhere}
+.business-item>label:has([name=bn]){grid-column:1/-1}
+.sale-context-fields{margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px}
+.sale-context-fields summary{cursor:pointer;min-height:44px}
+@media(max-width:640px){#main:has(#operating-filter){padding-bottom:calc(110px + env(safe-area-inset-bottom,0px))}.business-board button,.business-panel-modules button{min-height:44px}.md:has(.sale-context-fields) .mb{padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}}
