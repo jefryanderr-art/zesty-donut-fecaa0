@@ -1,3 +1,5 @@
+import {rentalPortal} from '../lib/rental-portal.mjs';
+import {sharedCalendar} from '../lib/lodging-calendar.mjs';
 import {completeCompanyDocument} from '../../db/accounting-model.mjs';
 import {downloadWorkflowFile} from '../lib/package-jobs.mjs';
 import {systemHealth} from '../lib/system-health.mjs';
@@ -370,9 +372,18 @@ const handleRequest = async (request, context, metrics) => {
       context.cookies.delete('nf_refresh');
       return json({ ok: true }, 200, { 'set-cookie': `${SESSION}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0` });
     }
+    if(path==='lodging-calendar'&&method==='GET'){
+      const companyId=url.searchParams.get('c');
+      if(!/^[a-f0-9-]{36}$/.test(companyId||''))return fail('Calendario no encontrado.',404);
+      const [company]=await db.select({data:companies.data,archivedAt:companies.archivedAt}).from(companies).where(eq(companies.id,companyId));
+      const calendar=sharedCalendar(company,url.searchParams.get('unit'),url.searchParams.get('key'));
+      if(!calendar)return fail('Calendario no encontrado.',404);
+      return new Response(calendar,{headers:{'content-type':'text/calendar; charset=utf-8','cache-control':'private, no-store','referrer-policy':'no-referrer','x-content-type-options':'nosniff'}});
+    }
     // Chat only validates expiry; normal app requests retain hourly renewal.
     const session = await readSession(request, path !== 'assistant');
     if (!session) return fail('Sesión vencida. Ingresa de nuevo.', 401);
+    if(path==='rental-portal'&&method==='POST'){const result=await rentalPortal(db,session,body);return result instanceof Response?result:json(result);}
     if (path === 'session' && method === 'POST') return json({ok:true});
     if (path === 'me' && method === 'GET' && !session.member && (adminEmail && session.email === adminEmail)) await ensureAcontecCompany(session.email);
     if(path==='me'&&method==='GET')await ensurePlanTestCompany(session);
@@ -458,7 +469,7 @@ const handleRequest = async (request, context, metrics) => {
     }
     if(path==='order-reference'&&method==='GET'){
       const companyId=url.searchParams.get('c'),access=await companyAccess(db,companyId,session);
-      const record=scopeBranch(access.company.data,access).businessRecords?.find(r=>r.id===url.searchParams.get('id')&&(['bakery-order','bakery-wholesale'].includes(r.kind)||r.module==='proyectos'&&r.referencePhoto));
+      const record=scopeBranch(access.company.data,access).businessRecords?.find(r=>r.id===url.searchParams.get('id')&&(['bakery-order','bakery-wholesale'].includes(r.kind)||['proyectos','reservas','contratos'].includes(r.module)&&r.referencePhoto));
       const photoId=url.searchParams.get('photo'),photo=photoId?record?.receptionPhotos?.find(p=>p.id===photoId):record?.referencePhoto;
       if(!photo?.key?.startsWith(companyId+'/'))return fail('Referencia no encontrada.',404);
       requireModule(access,record.module);
