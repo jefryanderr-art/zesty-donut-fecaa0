@@ -1,4 +1,6 @@
 export class AccountingValidationError extends Error { constructor(message){super(message);this.publicMessage=message;this.status=422;} }
+// Compartido por la vista previa y Functions; coincide con el emisor de facturas.
+export const round = value => Math.round((value + Number.EPSILON) * 100) / 100;
 // Validar antes de redondear: 0.0009 no se acepta como 0.001.
 export function normalizeItemQuantity(value){const q=Number(value);if(!Number.isFinite(q)||q<0.001)throw new AccountingValidationError('La cantidad mínima es 0.001.');return Math.round(q*1000)/1000}
 export function businessRecipePlan(recipe,units,products){
@@ -167,22 +169,40 @@ export function recurringActiveDays(record,from,to){
  for(let i=0;i<changes.length;i++){const e=changes[i],start=[from,e.date].sort().at(-1),end=[to,changes[i+1]?.date||to].sort()[0];if(e.status==='Activa'&&start<end)activeDays+=(Date.parse(end)-Date.parse(start))/86400000;}return activeDays;
 }
 export function recurringPeriod(record,index){
- const from=recurringBoundary(record.anchor,record.months,index),to=recurringBoundary(record.anchor,record.months,index+1),days=(Date.parse(to)-Date.parse(from))/86400000;
+ const cycle=(record.cycles||[]).filter(c=>c.index<=index).at(-1)||{index:0,anchor:record.anchor,months:record.months};
+ const from=recurringBoundary(cycle.anchor,cycle.months,index-cycle.index),to=recurringBoundary(cycle.anchor,cycle.months,index-cycle.index+1),days=(Date.parse(to)-Date.parse(from))/86400000;
  const activeDays=recurringActiveDays(record,from,to);
- return {from,to,days,activeDays,baseCents:recurringRatio(record.amountCents,activeDays,days)};
+ if(!record.planHistory?.length)return {from,to,days,activeDays,baseCents:recurringRatio(record.amountCents,activeDays,days)};
+ const history=record.planHistory,segments=history.filter(h=>h.date<to),cuts=[...new Set([from,to,...segments.map(h=>h.date).filter(d=>d>from),...(record.trialEnd&&record.trialEnd>from&&record.trialEnd<to?[record.trialEnd]:[])])].sort();
+ let baseCents=0;
+ for(let i=0;i<cuts.length-1;i++){
+  const start=cuts[i],end=cuts[i+1],h=segments.filter(h=>h.date<=start).at(-1);
+  if(!h||record.trialEnd&&start<record.trialEnd)continue;
+  const units=(record.usage||[]).filter(u=>u.period===index).reduce((n,u)=>n+u.units,0),price=recurringPlanPrice(h.plan,units);
+  baseCents+=recurringRatio(price,recurringActiveDays(record,start,end),days);
+ }
+ if(!Number.isSafeInteger(baseCents))throw new AccountingValidationError('Importe recurrente fuera de rango.');
+ return {from,to,days,activeDays,baseCents};
+}
+export function recurringPlanPrice(plan,units=0){
+ if(!Number.isSafeInteger(units)||units<0)throw new AccountingValidationError('Uso inválido.');
+ let value=plan.amountCents;
+ if(plan.mode==='usage')value+=units*plan.unitCents;
+ if(plan.mode==='tiered'){let previous=0;for(const t of plan.tiers||[]){value+=Math.max(0,Math.min(units,t.upTo)-previous)*t.unitCents;previous=t.upTo;}if(units>previous)throw new AccountingValidationError('El uso supera el último escalón.');}
+ if(!Number.isSafeInteger(value)||value<0||value>99999999900)throw new AccountingValidationError('Precio fuera de rango.');return value;
 }
 export function recurringMetrics(records,entries,from,to){
  recurringDay(from);recurringDay(to);if(from>to)throw new AccountingValidationError('Período inválido.');
  const active=(r,day)=>r.date<=day&&([{date:r.date,status:'Activa'},...(r.events||[]).filter(e=>e.status)].filter(e=>e.date<=day).at(-1)?.status==='Activa');
  const opening=records.filter(r=>active(r,from)),canceled=opening.filter(r=>(r.events||[]).some(e=>e.status==='Cancelada'&&e.date>=from&&e.date<=to));
- const mrrCents=records.filter(r=>active(r,to)).reduce((s,r)=>s+recurringRatio(r.amountCents,1,r.months),0),arrCents=mrrCents*12;
+ const mrrCents=records.filter(r=>active(r,to)).reduce((s,r)=>s+recurringRatio((r.planHistory||[]).filter(h=>h.date<=to).at(-1)?.plan.amountCents??r.amountCents,1,(r.cycles||[]).filter(c=>c.anchor<=to).at(-1)?.months||r.months),0),arrCents=mrrCents*12;
  if(!Number.isSafeInteger(arrCents))throw new AccountingValidationError('Métricas fuera de rango.');
  const ids=new Set(records.flatMap(r=>(r.billed||[]).map(b=>b.entryId))),portfolio=aging(entries.filter(e=>ids.has(e.id)||ids.has(e.invoiceId)),'1201',to);
  return {mrrCents,arrCents,opening:opening.length,canceled:canceled.length,churnBps:opening.length?recurringRatio(10000,canceled.length,opening.length):0,portfolio};
 }
 // Dos tarifas diarias enteras reparten exactamente el precio sin modificar el emisor.
 export function recurringInvoiceItems(record,period){
- const low=Math.floor(record.amountCents/period.days),highDays=period.baseCents-low*period.activeDays,lowDays=period.activeDays-highDays;
+ const low=record.planHistory?.length?(period.activeDays?Math.floor(period.baseCents/period.activeDays):0):Math.floor(record.amountCents/period.days),highDays=period.baseCents-low*period.activeDays,lowDays=period.activeDays-highDays;
  if(!Number.isSafeInteger(low)||!Number.isInteger(highDays)||highDays<0||lowDays<0)throw new AccountingValidationError('Distribución diaria inválida.');
  return [...(lowDays?[{p:record.productId,q:lowDays,u:low/100}]:[]),...(highDays?[{p:record.roundingProductId,q:highDays,u:(low+1)/100}]:[])];
 }

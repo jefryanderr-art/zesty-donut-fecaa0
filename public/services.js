@@ -1,26 +1,26 @@
 'use strict';
 // Amplía fichas existentes y sus operaciones protegidas. No crea otro libro contable.
 let SV_MODEL,SV_VIEW=0;
-const svReady=()=>SV_MODEL?Promise.resolve(SV_MODEL):import('./service-model.mjs?v=e331833f8a0005e8').then(m=>(SV_MODEL=m));
+const svReady=()=>SV_MODEL?Promise.resolve(SV_MODEL):import('./service-model.mjs?v=99694f16fc204de0').then(m=>(SV_MODEL=m));
 const svProfiles=['profesionales','software','freelance','inmobiliaria','seguros','recurrentes','belleza','salud','educacion','gimnasio','taller','lavanderia','transporte'];
-const svActive=()=>svProfiles.includes(CO?.businessType);
+const svActive=()=>svProfiles.includes(businessOperationalType());
 const svModules=['agenda','proyectos','contratos','cuentas_abiertas','documentos_venta','reservas','medidas','despacho'];
 const svButton=(a,r,label)=>bAction(a,r,label);
 const svForm=(d,op,html,read,label)=>businessOperationForm(d,op,html+bConfirm(),read,label);
 const svDate=()=>bField('date','Fecha de registro',today(),'date','required');
 const svSelect=(name,label,rows,value='')=>bSelect(name,label,rows,value);
-const svDayFields=m=>Object.fromEntries(m.serviceFields(CO.businessType).map(f=>[f.key,f.label]));
+const svDayFields=m=>Object.fromEntries(m.serviceFields(businessOperationalType()).map(f=>[f.key,f.label]));
 const svActionBase=businessActions;
 businessActions=function(r){let html=svActionBase(r);if(!svActive()||!svModules.includes(r.module)||!permission(r.module,true))return html;
  html+=' '+svButton('businessServicesDetails',r,'Atención y seguimiento');
  if(r.entryId&&permission('contabilidad',true))html+=' '+svButton('businessServicesPayments',r,'Plan de pago');
  if(r.module==='proyectos')html+=' '+svButton('businessServicesTime',r,'Registrar tiempo')+' '+svButton('businessServicesProgress',r,'Entregables y avance')+(!r.entryId&&!r.deposit&&!r.billed?.length? ' '+svButton('businessServicesPackage',r,'Configurar bono prepagado'):'');
- if(['agenda','reservas','contratos'].includes(r.module)&&['gimnasio','educacion'].includes(CO.businessType))html+=' '+svButton('businessServicesAttendance',r,'Reserva / asistencia');
+ if(['agenda','reservas','contratos'].includes(r.module)&&['gimnasio','educacion'].includes(businessOperationalType()))html+=' '+svButton('businessServicesAttendance',r,'Reserva / asistencia');
  if(r.module==='contratos'&&r.status==='Activo'&&!r.renewedTo)html+=' '+svButton('businessServicesRenew',r,'Renovar contrato');
  if(r.module==='documentos_venta'&&r.status==='Pendiente'&&!r.convertedProjectId&&permission('proyectos',true))html+=' '+svButton('businessServicesQuote',r,'Pasar a proyecto');
  if(r.service?.surveyEnabled)html+=' '+svButton('businessServicesFeedback',r,'Registrar satisfacción');
- if(CO.businessType==='lavanderia'&&['cuentas_abiertas','proyectos','despacho','medidas'].includes(r.module))html+=' '+svButton('businessServicesLaundry',r,'Avanzar lavado');
- if(CO.businessType==='taller'&&r.module==='proyectos'&&(r.receptionPhotos?.length||0)<5)html+=' '+svButton('businessServicesPhoto',r,'Foto de recepción');return html;
+ if(businessOperationalType()==='lavanderia'&&['cuentas_abiertas','proyectos','despacho','medidas'].includes(r.module))html+=' '+svButton('businessServicesLaundry',r,'Avanzar lavado');
+ if(businessOperationalType()==='taller'&&r.module==='proyectos'&&(r.receptionPhotos?.length||0)<5)html+=' '+svButton('businessServicesPhoto',r,'Foto de recepción');return html;
 };
 const svDetailsBase=businessDetailsMarkup;
 businessDetailsMarkup=function(r){let html=svDetailsBase(r);if(!svActive())return html;
@@ -30,7 +30,7 @@ businessDetailsMarkup=function(r){let html=svDetailsBase(r);if(!svActive())retur
  if(r.serviceTime?.length)html+='<h4>Tiempo por cliente y proyecto</h4>'+accountingTable(['Inicio','Fin','Horas','Estado'],r.serviceTime.map(t=>'<tr><td>'+esc(t.start)+'</td><td>'+esc(t.end)+'</td><td>'+esc((t.minutes/60).toFixed(3))+'</td><td>'+esc(t.entryId?'Facturado':'Pendiente')+'</td></tr>').join(''));
  if(r.servicePaymentPlans?.length&&SV_MODEL&&(permission('contabilidad')||permission('finanzas')))html+='<h4>Plan de pago: saldo por cuota</h4>'+r.servicePaymentPlans.map(p=>accountingTable(['Vence','Cuota','Pendiente'],SV_MODEL.servicePaymentBalances(p,S.entries).map(i=>'<tr><td>'+esc(i.due)+'</td><td>'+money(i.amountCents/100)+'</td><td>'+money(i.remainingCents/100)+'</td></tr>').join(''))).join('');
  if(r.serviceLaundryState)html+='<p>Lavado: '+esc(r.serviceLaundryState)+'</p>';
- if(CO.businessType==='taller'&&r.service?.plate){const history=businessRecords('proyectos').filter(o=>o.id!==r.id&&o.service?.plate===r.service.plate);if(history.length)html+='<h4>Historial de este vehículo / equipo</h4>'+history.map(o=>'<p>'+esc(o.date+' · '+o.name+' · '+o.status)+'</p>').join('');}
+ if(businessOperationalType()==='taller'&&r.service?.plate){const history=businessRecords('proyectos').filter(o=>o.id!==r.id&&o.service?.plate===r.service.plate);if(history.length)html+='<h4>Historial de este vehículo / equipo</h4>'+history.map(o=>'<p>'+esc(o.date+' · '+o.name+' · '+o.status)+'</p>').join('');}
  if(r.receptionPhotos?.length)html+='<h4>Fotos privadas de recepción</h4>'+r.receptionPhotos.map((p,i)=>'<p><a target="_blank" rel="noopener" href="/api/order-reference?c='+encodeURIComponent(CO.id)+'&amp;id='+encodeURIComponent(r.id)+'&amp;photo='+encodeURIComponent(p.id)+'">Descargar foto '+(i+1)+'</a></p>').join('');
  else if(r.referencePhoto)html+='<p><a target="_blank" rel="noopener" href="/api/order-reference?c='+encodeURIComponent(CO.id)+'&amp;id='+encodeURIComponent(r.id)+'">Descargar referencia privada</a></p>';
  if(r.serviceAttendance?.length)html+='<h4>Asistencia</h4>'+accountingTable(['Fecha','Cliente'],r.serviceAttendance.map(x=>'<tr><td>'+esc(x.date)+'</td><td>'+esc(S.customers.find(c=>c.id===x.customerId)?.name||x.customerId)+'</td></tr>').join(''));
@@ -38,11 +38,11 @@ businessDetailsMarkup=function(r){let html=svDetailsBase(r);if(!svActive())retur
  return html;
 };
 ACT.businessServicesDetails=async d=>{
- const model=await svReady(),r=businessRecord(d.id),fields=model.serviceFields(CO.businessType);
+ const model=await svReady(),r=businessRecord(d.id),fields=model.serviceFields(r.operationalProfile||businessOperationalType());
  let html=svDate()+notice('Ficha administrativa. Los avisos se consultan aquí; no se envían correos ni mensajes automáticamente. Las becas y condiciones de hermanos solo las autoriza el dueño. Los descuentos monetarios se autorizan al facturar.');
  for(const f of fields){const value=r.service?.[f.key];html+=f.type==='customer'?svSelect(f.key,f.label,[['','Cliente de la ficha'],...S.customers.filter(c=>c.status==='activo').map(c=>[c.id,c.name])],value):f.type==='boolean'?bCheck(f.key,f.label,value):bField(f.key,f.label,value??'',f.type==='integer'?'number':f.type==='date'?'date':'text',f.type==='integer'?'min="0" max="1000000" step="1"':'maxlength="1000"');}
  html+=bField('reason','Motivo de la actualización','','text','required minlength="3" maxlength="500"');
- if(CO.businessType==='salud')html+=bCheck('noSensitiveData','Confirmo que no incluyo diagnósticos, historias clínicas ni datos sensibles');
+ if(businessOperationalType()==='salud')html+=bCheck('noSensitiveData','Confirmo que no incluyo diagnósticos, historias clínicas ni datos sensibles');
  return svForm(d,'businessServicesDetails',html,f=>({details:Object.fromEntries(fields.map(x=>[x.key,x.type==='boolean'?f.elements[x.key].checked:x.type==='integer'?Number(v(f,x.key)):v(f,x.key)])),reason:v(f,'reason'),noSensitiveData:f.elements.noSensitiveData?.checked===true}),'Guardar ficha de atención');
 };
 ACT.businessServicesTime=d=>svForm(d,'businessServicesTime',bField('start','Inicio','','datetime-local','required')+bField('end','Fin','','datetime-local','required')+svSelect('employeeId','Empleado (opcional)',[['','Sin asignar'],...S.employees.filter(e=>e.active!==false).map(e=>[e.id,e.name])])+bField('note','Trabajo realizado','','text','maxlength="500"')+notice('El tiempo se vincula a este cliente y proyecto. Para facturarlo selecciona los registros desde Facturar etapa. Usa intervalos de tres minutos para horas con hasta tres decimales.'),f=>({start:new Date(v(f,'start')).toISOString(),end:new Date(v(f,'end')).toISOString(),employeeId:v(f,'employeeId'),note:v(f,'note')}),'Registrar tiempo');
@@ -72,7 +72,7 @@ for(const route of svModules){const original=V[route];if(!original)continue;V[ro
  if(alerts.length)html+='<h4>Avisos de seguimiento y vencimiento</h4>'+accountingTable(['Ficha','Aviso','Fecha'],alerts.map(a=>'<tr><td>'+svButton('businessDetails',a.r,a.r.name)+'</td><td>'+esc(labels[a.key]||a.key)+'</td><td>'+esc(a.date)+'</td></tr>').join(''));else html+='<p class="mut">Sin avisos de seguimiento para la fecha actual.</p>';
  if((permission('contabilidad')||permission('finanzas'))&&permission('ventas')){const overdue=rows.flatMap(r=>(r.billed||[]).filter(b=>b.due&&b.due<today()).map(b=>({r,b,balance:model.serviceInvoiceBalance(S.entries,b.entryId)/100}))).filter(x=>x.balance>0.005);if(overdue.length)html+='<h4>Cobros vencidos / morosos</h4>'+overdue.map(x=>'<p>'+esc(x.r.name+' · '+x.b.due)+' · '+money(x.balance)+'</p>').join('');}
  const waiting=rows.filter(r=>r.service?.waiting);if(waiting.length)html+='<h4>Lista de espera</h4>'+waiting.map(r=>'<p>'+svButton('businessDetails',r,r.name)+'</p>').join('');
- if(CO.businessType==='transporte'&&['proyectos','contratos'].includes(route)&&permission('costos')&&permission('ventas')){
+ if(businessOperationalType()==='transporte'&&['proyectos','contratos'].includes(route)&&permission('costos')&&permission('ventas')){
  const trips=model.serviceTripRows(rows,S.entries,S.costs||[]),units=new Map();
  for(const t of trips){const u=units.get(t.unit)||{name:t.unit,unit:t.unit,salesCents:0,costCents:0,profitCents:0};for(const k of ['salesCents','costCents','profitCents'])u[k]+=t[k];units.set(t.unit,u);}
  const table=list=>accountingTable(['Viaje / unidad','Unidad','Venta neta sin IVA','Costos registrados sin IVA','Margen'],list.map(t=>'<tr><td>'+esc(t.name)+'</td><td>'+esc(t.unit)+'</td><td>'+money(t.salesCents/100)+'</td><td>'+money(t.costCents/100)+'</td><td>'+money(t.profitCents/100)+'</td></tr>').join(''));

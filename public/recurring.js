@@ -6,7 +6,7 @@ const qField=(name,key,value='',type='text',attrs='')=>field(name,qT(key),value,
 const qSelect=(name,key,rows,value)=>selectField(name,qT(key),rows.map(([id,label])=>option(id,label,String(id)===String(value))).join(''));
 const qConfirm=()=>qField('reason','reason','','text','required minlength="3" maxlength="500"')+bCheck('confirmed',qT('confirm'))+notice(qT('help'));
 const qEventLabel=e=>qT(({recurringCreate:'create',recurringState:'state',recurringBill:'emit',recurringAdvance:'advance',recurringRefund:'refund',recurringRecognize:'recognize','Nota de crédito recurrente':'creditNote'})[e.action]||'events');
-const qRecords=()=>businessRecords('suscripciones');
+const qRecords=()=>businessRecords('suscripciones').filter(r=>r.kind==='subscription');
 let Q_FROM='',Q_TO='',Q_REPORT=null;
 const qAction=(name,r,label)=>`<button class="lk" data-a="${name}" data-id="${esc(r.id)}">${qE(label)}</button>`;
 const qBaseAllowed=actionAllowed;
@@ -35,7 +35,7 @@ function qForm(d,operation,extra,reader=()=>({}),label='save'){
  const r=qRecords().find(r=>r.id===d.id);if(!r)return;
  return modal(esc(qT(label)+' · '+r.name),qField('date','date',today(),'date','required')+extra+qConfirm(),async f=>{await operate(operation,{id:r.id,...qCommon(f),...reader(f)});view()},esc(qT('save')));
 }
-ACT.recurringState=d=>{const r=businessRecord(d.id);qForm(d,'recurringState',notice(qT('stateHelp'))+bCheck('creditConfirmed',uiT('recurring.confirmCredit','Confirmo las notas de crédito necesarias para los días sin servicio'))+qSelect('shiftId','shift',(S.shifts||[]).filter(s=>!s.closedAt).map(s=>[s.id,s.date+' · '+(s.operatorName||s.id)]))+qSelect('refundMethod','refundMethod',[['transferencia',qT('moneyBank')],['efectivo',qT('moneyCash')]],'transferencia')+qSelect('status','newStatus',['Activa','Pausada','Cancelada'].filter(s=>s!==r.status).map(s=>[s,qT('status.'+s)])),f=>({status:v(f,'status'),creditConfirmed:f.elements.creditConfirmed.checked,shiftId:v(f,'shiftId'),refundMethod:v(f,'refundMethod')}),'state')};
+ACT.recurringState=d=>{const r=businessRecord(d.id);return qForm(d,'recurringState',notice(qT('stateHelp'))+bCheck('creditConfirmed',uiT('recurring.confirmCredit','Confirmo las notas de crédito necesarias para los días sin servicio'))+qSelect('shiftId','shift',(S.shifts||[]).filter(s=>!s.closedAt).map(s=>[s.id,s.date+' · '+(s.operatorName||s.id)]))+qSelect('refundMethod','refundMethod',[['transferencia',qT('moneyBank')],['efectivo',qT('moneyCash')]],'transferencia')+qSelect('status','newStatus',['Activa','Pausada','Cancelada'].filter(s=>s!==r.status).map(s=>[s,qT('status.'+s)])),f=>({status:v(f,'status'),creditConfirmed:f.elements.creditConfirmed.checked,shiftId:v(f,'shiftId'),refundMethod:v(f,'refundMethod')}),'state')};
 for(const [operation,label]of [['recurringAdvance','advance'],['recurringRefund','refund']])ACT[operation]=d=>qForm(d,operation,qField('total','total',0,'number','required min="0.01" step="0.01"')+qSelect('pay','cash',[['1101',qT('moneyCash')],['1102',qT('moneyBank')]],'1102'),f=>({total:Number(v(f,'total')),pay:v(f,'pay')}),label);
 ACT.recurringRecognize=d=>qForm(d,'recurringRecognize',notice(qT('recognizeHelp'))+qField('period','period',0,'number','required min="0" max="1199" step="1"'),f=>({period:Number(v(f,'period'))}),'recognize');
 ACT.recurringBill=async d=>{
@@ -48,7 +48,7 @@ ACT.recurringBill=async d=>{
 };
 ACT.recurringDetails=d=>{
  const r=businessRecord(d.id);if(!r)return;
- modal(esc(qT('details')+' · '+r.name),`<h3>${qE('renewals')}</h3>`+accountingTable([qT('period'),qT('from'),qT('to'),qT('total')],r.billed.map(b=>`<tr><td>${esc(b.period)}</td><td>${esc(b.from)}</td><td>${esc(b.to)}</td><td>${money(b.total)}</td></tr>`).join(''))+`<h3>${qE('events')}</h3>`+accountingTable([qT('date'),qT('actor'),qT('reason')],r.events.map(e=>`<tr><td>${esc(e.date)}</td><td>${esc(qEventLabel(e))}</td><td>${esc(e.reason||'')}</td></tr>`).join('')),()=>{},esc(qT('close')));
+ return modal(esc(qT('details')+' · '+r.name),`<h3>${qE('renewals')}</h3>`+accountingTable([qT('period'),qT('from'),qT('to'),qT('total')],r.billed.map(b=>`<tr><td>${esc(b.period)}</td><td>${esc(b.from)}</td><td>${esc(b.to)}</td><td>${money(b.total)}</td></tr>`).join(''))+`<h3>${qE('events')}</h3>`+accountingTable([qT('date'),qT('actor'),qT('reason')],r.events.map(e=>`<tr><td>${esc(e.date)}</td><td>${esc(qEventLabel(e))}</td><td>${esc(e.reason||'')}</td></tr>`).join('')),()=>{},esc(qT('close')));
 };
 ACT.recurringExport=async d=>{
  const report=await qFetch(d.format),m=report.metrics,meta=[[qT('company'),report.company],[qT('currency'),report.currency],[qT('branch'),report.branchId||qT('allBranches')],[qT('from'),report.from],[qT('to'),report.to],[qT('generated'),report.generatedAt],[qT('author'),report.generatedBy],[qT('version'),report.version],[qT('revision'),report.revision],[qT('mrr'),m.mrrCents/100],[qT('arr'),m.arrCents/100],[qT('churn'),m.churnBps/100]],rows=[...meta];

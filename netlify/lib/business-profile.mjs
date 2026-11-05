@@ -3,11 +3,13 @@ import '../../public/chart-templates.js';
 import '../../public/invoice-design.js';
 import '../../public/profiles.js';
 export const catalog=globalThis.AcontecProfiles;
+export const operationalType=company=>catalog.operationalType(company);
 const invalid=message=>{throw Object.assign(new Error(message),{status:400,publicMessage:message})};
 export function validateProfile(type='comercio',custom={}) {
  if(!catalog.profiles.some(p=>p.id===type))invalid('Selecciona un tipo de negocio válido.');
  if(!custom||typeof custom!=='object'||Array.isArray(custom))invalid('Personalización inválida.');
  const result={};
+ if(custom.operationalProfile!==undefined){if(type!=='personalizado'||!catalog.profiles.some(p=>p.id===custom.operationalProfile&&p.id!=='personalizado'))invalid('Selecciona un modelo operativo válido para Personalizado.');result.operationalProfile=custom.operationalProfile;}
  if(custom.invoiceCountry!==undefined){try{result.invoiceCountry=globalThis.AcontecInvoiceDesign.country(custom.invoiceCountry)}catch(error){invalid(error.message)}}
  if(custom.timeZone!==undefined){if(typeof custom.timeZone!=='string'||custom.timeZone.length>80)invalid('Zona horaria inválida.');try{new Intl.DateTimeFormat('es',{timeZone:custom.timeZone}).format()}catch{invalid('Zona horaria inválida.')}result.timeZone=custom.timeZone;}
  for(const key of ['shown','hidden'])if(custom[key]!==undefined){if(!Array.isArray(custom[key])||custom[key].length>150||custom[key].some(v=>typeof v!=='string'||!/^[a-z_]{1,50}$/.test(v)))invalid('Lista de módulos inválida.');result[key]=[...new Set(custom[key])];}

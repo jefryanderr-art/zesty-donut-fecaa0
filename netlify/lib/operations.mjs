@@ -1,3 +1,5 @@
+import {operationalType} from './business-profile.mjs';
+import {organizationReport} from './organizations.mjs';
 import {COMMERCE_PROFILES,COMMERCE_OPS,commerceRecord,commerceOperation,commerceReport,commercePrice,commerceSaleGuard,commerceSnapshot,commerceReservationsValid,commerceLoadSale} from './commerce.mjs';
 import {effectiveFoodPrice,workflowRecord} from './food-workflows.mjs';
 import {DELIVERY_OPS,deliveryZoneRecord,deliveryOperation} from './delivery.mjs';
@@ -491,7 +493,7 @@ function creditNote(data, access, session, body) {
   if (debtReduction) payments.push({ method: 'credito', amount: debtReduction });
   let exchangeVoucher=null;
   if(cashRefund&&body.refundMethod==='vale_cambio'){
-    requireValue(COMMERCE_PROFILES.includes(access.company.businessType||'comercio')&&body.operationId&&body.confirmed===true,'Confirma el vale de cambio en comercio.');requirePermission(access,'contabilidad');requirePermission(access,'cajas');
+    requireValue(COMMERCE_PROFILES.includes(operationalType(access.company)||'comercio')&&body.operationId&&body.confirmed===true,'Confirma el vale de cambio en comercio.');requirePermission(access,'contabilidad');requirePermission(access,'cajas');
     requireValue(data.accounts.some(a=>a.code===body.liability&&a.tipo==='pasivo'&&a.nat==='C'),'Selecciona un pasivo acreedor para el vale de cambio.');
     const code='CAM-'+String((data.invoiceSequences.NC||0)+1).padStart(8,'0');requireValue(!(data.businessRecords||[]).some(r=>['gift-card','gift-voucher'].includes(r.kind)&&r.name.toLowerCase()===code.toLowerCase()),'El código del vale de cambio ya existe.');
     exchangeVoucher={id:randomUUID(),module:'facturacion',kind:'gift-voucher',name:code,date,due:'',status:'Activa',branchId:access.branchId,customerId:original.customerId||'',liability:body.liability,originalCents:cents(cashRefund),balanceCents:cents(cashRefund),events:[]};payments.push({method:'vale',amount:cashRefund,exchangeVoucher:true});
@@ -586,7 +588,7 @@ export async function runOperation(companyId, session, body) {
     const report=analysisReport(data,access,body,m=>allowed(access,m));
     const actor=actorName(access.member?{...session,member:access.member}:session);
     if(body.format!=='VIEW')await audit(client,companyId,session,'Descarga análisis '+body.format,[{area:body.module,from:body.from,to:body.to,version:report.templateVersion}]);
-    return {...report,company:access.company.name,profile:access.company.businessType,sector:data.cfg?.economicSector?.id||'',currency:data.cfg?.cur||'NIO',branchId:access.branchId,from:body.from,to:body.to,generatedAt:new Date().toISOString(),generatedBy:actor,revision:access.company.revision,version:1};
+    return {...report,company:access.company.name,profile:operationalType(access.company),sector:data.cfg?.economicSector?.id||'',currency:data.cfg?.cur||'NIO',branchId:access.branchId,from:body.from,to:body.to,generatedAt:new Date().toISOString(),generatedBy:actor,revision:access.company.revision,version:1};
   });
   if(body.operation==='budgetReport')return db.transaction(async client=>{
     const access=await companyAccess(client,companyId,session,true);requireModule(access,'presupuestos');
@@ -652,6 +654,10 @@ export async function runOperation(companyId, session, body) {
     requireValue(entry,'Factura no encontrada o sin acceso.');
     await audit(client,companyId,access.member?{...session,member:access.member}:session,'Descarga de factura PDF',[{area:'ventas',event:'Descarga PDF solicitada',invoiceId:entry.id,reference:entry.reference,at:new Date().toISOString()}]);
     return {ok:true};
+  });
+  if(body.operation==='organizationReport')return db.transaction(async client=>{
+    const access=await companyAccess(client,companyId,session,true);requireModule(access,'aportes');requireModule(access,'contabilidad');
+    const data=scopeBranch(access.company.data,access);return {...organizationReport(data,dateValue(body.from),dateValue(body.to)),company:access.company.name,branchId:access.branchId,revision:access.company.revision};
   });
   if(body.operation==='recurringReport')return db.transaction(async client=>{
     const access=await companyAccess(client,companyId,session,true);requireModule(access,'suscripciones');

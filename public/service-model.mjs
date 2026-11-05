@@ -1,5 +1,5 @@
-import {moneyCents,invoiceLinkedEntries} from './accounting-math.mjs?v=85cbc732b6b20e19';
-export {commerceInstallmentBalances as servicePaymentBalances} from './commerce-math.mjs?v=c4ffc07778e4e912';
+import {moneyCents,invoiceLinkedEntries} from './accounting-math.mjs?v=abe8aaa94164ee9a';
+export {commerceInstallmentBalances as servicePaymentBalances} from './commerce-math.mjs?v=36a2629724075283';
 // Campos operativos opcionales; nunca expedientes clínicos ni reglas fiscales implícitas.
 export const SERVICE_PROFILES=['profesionales','software','freelance','inmobiliaria','seguros','recurrentes','belleza','salud','educacion','gimnasio','taller','lavanderia','transporte'];
 export const SERVICE_MODULES=['agenda','proyectos','contratos','cuentas_abiertas','documentos_venta','reservas','medidas','despacho'];

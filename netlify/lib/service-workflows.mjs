@@ -1,10 +1,11 @@
+import {operationalType} from './business-profile.mjs';
 import {randomUUID} from 'node:crypto';
 import {SERVICE_PROFILES,SERVICE_MODULES,serviceFields} from '../../public/service-model.mjs';
 import {invoiceTotals,moneyCents,normalizeItemQuantity} from './accounting-engine.mjs';
 export const SERVICE_OPS=['businessServicesDetails','businessServicesTime','businessServicesProgress','businessServicesAttendance','businessServicesRenew','businessServicesQuote','businessServicesPackage','businessServicesFeedback','businessServicesLaundry','businessServicesPhoto','businessServicesPayments'];
 const text=(v,n=500)=>String(v??'').trim().slice(0,n);
 export async function serviceWorkflow(data,access,session,b,ctx){
- const {check}=ctx,rows=data.businessRecords||=[],profile=access.company.businessType,permit=m=>ctx.permit(access,m,true);
+ const {check}=ctx,rows=data.businessRecords||=[],profile=rows.find(r=>r.id===b.id)?.operationalProfile||operationalType(access.company),permit=m=>ctx.permit(access,m,true);
  check(SERVICE_PROFILES.includes(profile)&&access.branchId&&b.confirmed===true,'Selecciona una sucursal de servicios y confirma.');
  const r=rows.find(r=>r.id===b.id&&r.module===b.module);
  check(r&&r.branchId===access.branchId&&SERVICE_MODULES.includes(r.module),'Ficha de servicios no encontrada.');permit(r.module);
