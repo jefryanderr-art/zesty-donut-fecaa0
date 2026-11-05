@@ -16,7 +16,7 @@ export async function storageStats(session,id,admin=false){
  if(!company||!admin&&(session.member||company.ownerEmail!==session.email))billingError('Solo el dueño consulta el uso de su empresa.',403);
  const versions=await db.select({data:companyBackups.data}).from(companyBackups).where(eq(companyBackups.companyId,id));
  const files=new Map();for(const data of [company.data,...versions.map(v=>v.data)])for(const tax of data?.taxes||[])if(tax.receipt?.key)files.set(tax.receipt.key,Number(tax.receipt.size||tax.receipt.bytes||0));
- for(const data of [company.data,...versions.map(v=>v.data)])for(const r of data?.businessRecords||[])if(r.referencePhoto?.key)files.set(r.referencePhoto.key,Number(r.referencePhoto.size||0));
+ for(const data of [company.data,...versions.map(v=>v.data)])for(const r of data?.businessRecords||[])for(const photo of [r.referencePhoto,...(r.receptionPhotos||[])])if(photo?.key)files.set(photo.key,Number(photo.size||0));
  const images=new Set();
  const findImages=value=>{if(typeof value==='string'){const match=value.match(/^\/api\/image\?key=([a-f0-9-]+\.webp)$/);if(match)images.add(match[1]);}else if(Array.isArray(value))value.forEach(findImages);else if(value&&typeof value==='object')Object.values(value).forEach(findImages)};
  findImages(company.data);versions.forEach(v=>findImages(v.data));

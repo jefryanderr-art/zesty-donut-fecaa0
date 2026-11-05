@@ -1,3 +1,11 @@
+# Continuación: servicios
+
+La ampliación de servicios se documentó en `docs/servicios-operacion.md`, comenzando por funciones comunes y siguiendo profesionales/software/freelance/inmobiliaria/seguros, belleza, salud, educación, gimnasio, taller, lavado y transporte. Se reutilizaron facturación, anticipos, comisiones, consumibles, estados de cuenta e impresión. Se añadieron seguimiento, bonos por sesiones, tiempo facturable, conversión a proyecto, renovaciones, asistencia/cupos, responsable de pago, planes de pago, órdenes especializadas y margen por viaje/unidad. No se repitieron comercio ni alimentos.
+
+El documento distingue funciones operativas de referencias administrativas, avisos internos y límites: hasta cinco fotos privadas por orden, sin mensajería automática, sin consumo automático por lote de consumibles, sin liquidaciones ni renovaciones automáticas. No se presenta como automatización completa de todos los puntos solicitados. Solo se revisó estáticamente; la validación funcional, permisos, concurrencia y presentación queda pendiente después del despliegue.
+
+---
+
 # Continuación: comercio
 
 La continuación de comercio se documentó en `docs/comercio-operacion.md`. No se repitieron ni ampliaron los circuitos de alimentos, catering o panadería. Se añadieron precios y reposición, proveedores, pérdidas, promociones, pedidos, vales de cambio y operaciones específicas de ropa, ferretería, farmacia, tecnología, distribuidora y tienda en línea. Se reutilizaron los documentos, inventario y motores contables existentes. El documento de comercio identifica las funciones incorporadas, sus límites y la verificación pendiente tras el despliegue; no sustituye los antecedentes de factura y rondas que siguen aquí.

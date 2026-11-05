@@ -208,6 +208,7 @@ export function projectData(data, access) {
   if(allowed(access,'fiscal'))projected.fiscalCreditReservations=globalThis.AcontecFiscalMath.effectiveDeclarations(data).flatMap(r=>r.frozen.credits||[]).filter(c=>c.source==='iva').map(c=>({period:c.period,amountCents:c.amountCents}));
   projected.fiscalWorkflows=(data.fiscalWorkflows||[]).filter(r=>allowed(access,r.module)&&(['template','configuration'].includes(r.kind)||[...accountingPermissionModules,...new Set((data.businessRecords||[]).filter(b=>['bancos','constancias_laborales','retenciones_fiscales'].includes(b.module)).map(b=>b.module))].every(m=>allowed(access,m))));
   projected.businessRecords=(data.businessRecords||[]).filter(row=>allowed(access,row.module)&&commerceCanRead(row,m=>allowed(access,m))&&(row.module!=='auditoria_revision'||row.kind==='settings'||(row.kind==='report'?row:(data.businessRecords||[]).find(r=>r.id===row.reportId))?.scope?.every(m=>allowed(access,m)))).map(row=>structuredClone(row));
+  for(const r of projected.businessRecords){if(!allowed(access,'contabilidad')&&!allowed(access,'finanzas'))delete r.servicePaymentPlans;if(!allowed(access,'personal'))for(const t of r.serviceTime||[])delete t.employeeId;}
   if(!allowed(access,'produccion')||!allowed(access,'inventario'))for(const r of projected.businessRecords){delete r.eventMenu;delete r.eventIngredients;}
   projected.stockTransfers=moduleIncluded(access.billingPlan||{blockedModules:[]},'sucursales')&&allowed(access,'inventario')?structuredClone(data.stockTransfers||[]):[];
   return projected;
