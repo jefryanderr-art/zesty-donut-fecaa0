@@ -1,3 +1,9 @@
+# Continuación: comercio
+
+La continuación de comercio se documentó en `docs/comercio-operacion.md`. No se repitieron ni ampliaron los circuitos de alimentos, catering o panadería. Se añadieron precios y reposición, proveedores, pérdidas, promociones, pedidos, vales de cambio y operaciones específicas de ropa, ferretería, farmacia, tecnología, distribuidora y tienda en línea. Se reutilizaron los documentos, inventario y motores contables existentes. El documento de comercio identifica las funciones incorporadas, sus límites y la verificación pendiente tras el despliegue; no sustituye los antecedentes de factura y rondas que siguen aquí.
+
+---
+
 # Cierre de pendientes solicitado: lealtad, alimentos, catering y panadería
 
 Esta continuación reemplaza el estado de los puntos solicitados en la entrega anterior. Se trabajó en ese orden y se conservaron las rondas, mesas, historial de clientes, tablero, caja rápida y hornadas existentes. Los apartados posteriores siguen como historia; sus listas de pendientes no describen esta continuación.
