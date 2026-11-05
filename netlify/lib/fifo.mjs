@@ -55,7 +55,7 @@ export function validateFifo(data){
 export function guardFifoOperation(data,body){
  if(!fifoEnabled(data))return;
  check(!['stockTransfer','stockReceive'].includes(body.operation),'PEPS bloquea traslados: el inventario en tránsito todavía no conserva asignaciones de capas de origen y destino.');
- check(body.operation!=='businessProduce','PEPS bloquea producción: el terminado requiere distribuir costos por capa de insumo.');
+ check(!['businessProduce','sectorStart','sectorFinish','sectorHarvest'].includes(body.operation),'PEPS bloquea producción: el terminado requiere distribuir costos por capa de insumo.');
  check(body.operation!=='product'||Number(body.cost)===data.products.find(p=>p.id===body.id)?.cost,'PEPS no admite revalorización manual de capas.');
 }
 export function configureCosting(data,access,session,body,permit){

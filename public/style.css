@@ -505,3 +505,9 @@ body{font-family:var(--ui-font,'DM Sans',sans-serif)}
 .tenant-portal textarea { display: block; width: 100%; box-sizing: border-box; }
 .tenant-portal label { display: block; margin-block: 1rem; }
 @media print { .tenant-portal button, .tenant-portal form, .tenant-portal header { display: none; } }
+
+/* Operación de campo, obra y fábrica: conserva la paleta y controles del sistema. */
+.sector-board{border-inline-start:4px solid var(--accent,var(--primary,#527b68));}
+.sector-board .accounting-actions{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;}
+.sector-board p{max-width:76ch;line-height:1.6;}
+@media(max-width:600px){.sector-board .accounting-actions>.btn{flex:1 1 100%;white-space:normal;}}

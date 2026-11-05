@@ -476,6 +476,8 @@ function creditNote(data, access, session, body) {
   const original = data.entries.find(entry => entry.id === body.id && entry.type === 'venta');
   requireValue(!original?.giftRedemption||body.operationId,'La devolución de vale requiere un identificador único.');
   requireValue(original && original.items?.length && text(body.reason), 'Selecciona una factura e indica el motivo.');
+  const retainedGuarantee=(data.businessRecords||[]).filter(r=>r.kind==='sector-work').flatMap(r=>r.retentionMoves||[]).filter(m=>m.invoiceId===body.id).reduce((n,m)=>n+(m.action==='Retener'?m.amountCents:-m.amountCents),0);
+  requireValue(retainedGuarantee===0,'Libera la retención de garantía de esta factura desde la obra antes de emitir una nota de crédito.');
   requireValue(original.items.every(item => Number.isFinite(item.cost)), 'La factura histórica no guarda costos por producto. Conserva el original y registra un ajuste contable documentado con el contador.');
   const reasonCategories = ['el cliente no la compró','error de precio','devolución','otro'];
   requireValue(reasonCategories.includes(body.reasonCategory),'Selecciona un motivo de anulación o devolución.');
