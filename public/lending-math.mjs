@@ -1,0 +1,8 @@
+import {moneyCents,businessLateCharge} from './accounting-math.mjs?v=1bfa441d13b0456e';
+export function loanPosition(r,day){
+ let principalCents=0,accruedCents=0,settlementCents=0,overdueCents=0,days=0;
+ for(const q of r.schedule||[]){const capital=Math.max(0,moneyCents(q.principal)-Math.max(0,moneyCents(q.paid)-moneyCents(q.interestPaid||0))),interest=Math.max(0,moneyCents(q.interest+q.penalty)-moneyCents(q.interestPaid||0)),lateDays=Math.max(0,Math.floor((Date.parse(day)-Date.parse(q.due))/86400000)),extra=Math.max(0,moneyCents(businessLateCharge(q.principal,r.lateRate,lateDays))-moneyCents(q.penalty));principalCents+=capital;accruedCents+=q.accrued?interest:0;if(capital||interest){settlementCents+=capital+((q.accrued||q.due<=day)?interest:0)+extra;if(q.due<day){days=Math.max(days,lateDays);overdueCents+=capital+interest+extra;}}}
+ return {principalCents,accruedCents,settlementCents,overdueCents,days};
+}
+export function loanAssessment(r,a){const disposableCents=a.incomeCents-a.expenseCents-a.debtCents,monthly={diaria:30,semanal:52/12,quincenal:2,mensual:1}[r.frequency],requiredCents=Math.ceil(Math.max(...r.schedule.map(q=>moneyCents(q.total)))*monthly);return {disposableCents,requiredCents,eligible:disposableCents>=requiredCents&&disposableCents>0};}
+export function loanRisk(r,day){const p=loanPosition(r,day),rules=r.collectionPolicy||[{days:0,rate:0,label:'Al día'},{days:1,rate:5,label:'Contacto'},{days:31,rate:25,label:'Visita'},{days:61,rate:50,label:'Supervisión'},{days:91,rate:100,label:'Revisión legal'}],rule=[...rules].sort((a,b)=>a.days-b.days).filter(x=>x.days<=p.days).at(-1);return {...p,stage:rule?.label||'Al día',provisionCents:Math.round(p.principalCents*(rule?.rate||0)/100)};}

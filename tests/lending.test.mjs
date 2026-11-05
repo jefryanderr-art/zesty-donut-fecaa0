@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {loanPosition,loanAssessment,loanRisk} from '../public/lending-math.mjs';
+import {lendingOperation} from '../netlify/lib/lending.mjs';
+const loan=()=>({id:'loan-1',module:'cartera',branchId:'principal',date:'2026-01-01',frequency:'mensual',lateRate:0,status:'Vigente',principal:200,schedule:[{number:1,due:'2026-02-01',principal:100,interest:10,total:110,paid:0,penalty:0},{number:2,due:'2026-03-01',principal:100,interest:10,total:110,paid:0,penalty:0}],events:[]});
+test('liquidación excluye interés futuro, incluye interés vencido',()=>{assert.equal(loanPosition(loan(),'2026-02-15').settlementCents,21000);});
+test('pago parcial conserva capital mientras cubre solo interés',()=>{const r=loan();Object.assign(r.schedule[0],{paid:6,interestPaid:6,accrued:true});const p=loanPosition(r,'2026-02-15');assert.equal(p.principalCents,20000);assert.equal(p.accruedCents,400);assert.equal(p.settlementCents,20400);});
+test('capacidad usa cuota máxima mensual equivalente',()=>{const r=loan();r.frequency='quincenal';assert.equal(loanAssessment(r,{incomeCents:30000,expenseCents:5000,debtCents:4000}).eligible,false);});
+test('antigüedad y provisión aplican el tramo configurado',()=>{const r=loan();r.collectionPolicy=[{days:0,rate:0,label:'Normal'},{days:10,rate:25,label:'Visita'}];const p=loanRisk(r,'2026-02-15');assert.equal(p.days,14);assert.equal(p.provisionCents,5000);assert.equal(p.stage,'Visita');});
+const ctx={check:(v,m)=>{if(!v)throw Error(m);},date:v=>v,permit:()=>{}};
+test('castigo rechaza aprobación fuera del dueño antes del asiento',async()=>{await assert.rejects(lendingOperation({}, {branchId:'principal',owner:false},{email:'gestor@example.invalid'},{operation:'loanWriteoff',date:'2026-02-15',confirmed:true},ctx,loan(),()=>{throw Error('No debe contabilizar');}),/Solo el dueño/);});
+test('reestructuración rechaza interés vencido pendiente',async()=>{await assert.rejects(lendingOperation({}, {branchId:'principal',owner:true},{email:'owner@example.invalid'},{operation:'loanRestructure',date:'2026-02-15',confirmed:true,mode:'Reestructuración',reason:'Acuerdo'},ctx,loan()),/intereses y mora/);});
+test('operaciones de cartera rechazan otra sucursal',async()=>{await assert.rejects(lendingOperation({}, {branchId:'otra',owner:true},{email:'owner@example.invalid'},{operation:'loanManage',date:'2026-02-15',confirmed:true},ctx,loan()),/sucursal/);});
