@@ -1,3 +1,55 @@
+# Cierre de pendientes solicitado: lealtad, alimentos, catering y panadería
+
+Esta continuación reemplaza el estado de los puntos solicitados en la entrega anterior. Se trabajó en ese orden y se conservaron las rondas, mesas, historial de clientes, tablero, caja rápida y hornadas existentes. Los apartados posteriores siguen como historia; sus listas de pendientes no describen esta continuación.
+
+## Base
+
+La facturación desde fichas incorporó Consulta de lealtad y autorización con contraseña. El beneficio se consulta para el cliente de la ficha y la fecha seleccionada; cambiar la fecha exige consultarlo de nuevo. La autorización se vincula a producto, cantidad y precio de las líneas que realmente factura el servidor, incluidos IVA y cargos calculados por el motor compartido. Se conserva la política de roles, máximo, autorización de un uso y bitácora. No se añadió otro programa de lealtad. El pago mixto con vale en este formulario no formó parte de esta solicitud y conserva su alcance anterior.
+
+## Restaurante, comida rápida y cocina
+
+Producción permite configurar grupos de modificadores, opciones obligatorias y extras de catálogo. En Cuentas abiertas, «Plato / presentación / extras» guarda la selección estructurada y agrega los extras como líneas con precio propio. El precio del extra corresponde a cada unidad base. Se consulta el estimado antes de agregar y no se emite factura al registrar el consumo. Esta interfaz exige lectura de Producción e Inventario además de escritura de Cuentas abiertas; el servidor conserva las comprobaciones aunque falte la configuración en una proyección limitada.
+
+«Dividir» añade persona y separa cantidades conservando mesa, responsable y familia de la cuenta. Se repite para las personas necesarias y la última conserva la cuenta original. Plato y extras estructurados se dividen en la misma proporción. Cada parte se factura independientemente y su instantánea incluye persona y mesa, también al imprimir o emitir una nota de crédito. «Trasladar mesa» mueve juntas las partes abiertas de la familia y valida capacidad, ocupación y reservas; las facturas anteriores no cambian.
+
+«Sugerir propina / reparto» permite confirmar el porcentaje voluntario, un servicio exclusivo y pesos por mesero. El informe desde Mesas y reservas reparte en centavos el subtotal realmente facturado de esa propina, descontando devoluciones conocidas, incluidas las posteriores al período consultado. El residuo se asigna a la última persona. Es una propuesta de reparto, no nómina, pago ni liquidación automática; el tratamiento del servicio y sus impuestos se revisa con el contador.
+
+El dueño puede activar por receta el bloqueo de plato agotado ante falta de insumos y definir una fecha exclusiva para menú del día. El servidor comprueba demanda agregada de ingredientes, además de las validaciones anteriores de existencia y FEFO. El bloqueo es opcional para no reinterpretar recetas históricas. No convierte una venta de terminado en consumo duplicado de sus ingredientes.
+
+«Crear combo / caja de regalo» utiliza un servicio sin consumibles para el empaque y componentes inventariables. Se agrega desde una cuenta mediante la operación de opciones. Sus componentes se facturan y descuentan como líneas ordinarias, con sus precios, costos y trazabilidad; el total es su suma más el empaque, que puede costar cero. No se admiten combos anidados ni se descuenta inventario dos veces. Un precio promocional rebajado utiliza el descuento autorizado habitual, no un precio oculto de paquete.
+
+«Merma / consumo interno» exige cantidad, motivo, zona y cuenta contable; si hay lotes, exige seleccionar uno con existencia suficiente. Conserva movimiento de inventario y asiento, y rechaza artículos con series. «Conteo diario por zona» reutiliza el conteo inmutable para terminados e insumos de cocina, barra o bodega: observar no ajusta stock. «Comprar insumos / proveedor» conduce a Compras, donde se conservan el proveedor, documento y operación contable ya existentes. No se creó un segundo circuito de compras. PEPS conserva sus bloqueos previos de producción y recorridos de inventario incompatibles.
+
+## Catering
+
+Proyectos incorpora «Cotizar evento de catering» con cliente activo, invitados, entrega con fecha/hora, recetas y cantidades por invitado, conceptos cotizados y calendario opcional de hasta cinco pagos que debe sumar el total. Guarda un requerimiento inicial de insumos. «Producción y compras» recalcula la hoja desde las recetas actuales, muestra existencias y faltantes, permite imprimir y presenta los costos asociados; no reserva, produce ni compra automáticamente. Las compras con proveedor se registran en Compras y se vinculan mediante la operación existente del proyecto. Los costos se registran con «Registrar costo».
+
+El checklist conserva hasta quince tareas de equipo, personal y transporte. «Eventos programados» organiza entregas. Se reutilizan anticipos contra pasivo y cobros sobre la factura. «Facturar etapa» emite cantidades parciales o la entrega completa, exige una clave única y no permite exceder los productos y cantidades cotizados. El anticipo se aplica hasta el crédito de la etapa; su remanente se conserva para las siguientes. Marcar Entregada exige haber facturado todos los conceptos. Una fecha programada de pago no acredita cobro. Las notas de crédito no reabren automáticamente cantidades de etapas para volver a facturar.
+
+## Panadería
+
+Las recetas admiten hasta cinco presentaciones expresadas en la unidad base: unidad, docena, caja o porción. «Vender presentación» prepara la factura con la cantidad convertida y deja cliente, precio y pago para revisión. Las fracciones deben caber exactamente en los tres decimales del inventario; para tercios u otras fracciones incompatibles debe elegirse una unidad base menor. No se redondean conversiones silenciosamente ni se transforma el catálogo histórico.
+
+El dueño configura el porcentaje sugerido del producto anterior. En la factura directa, «Sugerir descuento del producto anterior» requiere lotes disponibles elaborados el día anterior y el mismo porcentaje en todas las líneas. Exige la autorización normal y no se combina con lealtad. Al emitir, el servidor verifica que todos los lotes realmente asignados por FEFO correspondan a esa elaboración. No permite elegir un lote más nuevo para eludir el orden vigente.
+
+«Encargo / pedido mayorista» conserva tamaño, sabor, relleno, dedicatoria, cliente, productos, fecha/hora, calendario de pagos y marca de mayorista. El dueño puede adjuntar una referencia privada JPG, PNG o WebP de hasta 1 MB con autorización explícita. Se conserva en Blobs con referencia en Database; la descarga vuelve a validar sesión, módulo, empresa y sucursal, y se audita. El límite es de 100 referencias o 50 MB por empresa, incluidas versiones retenidas. No se publican fotos ni se envían al asistente.
+
+«Entregas programadas» y «Agenda de producción» muestran los encargos autorizados. Desde su ficha se registran anticipos; al retirar se emite una factura a crédito para aplicarlos y se cobra el saldo mediante los abonos existentes. Los saldos e historial de cobros exigen los permisos contables habituales.
+
+La vida útil configurada en la receta genera vencimiento y lote de las próximas producciones; una fecha manual explícita prevalece. Los lotes anteriores no cambian. Las alertas consultables y FEFO conservan su validación. Se admiten hasta cuatro períodos de precio por receta, sin solapamientos; el precio vigente se comparte entre servidor y preparación de facturas, sin cambiar precios históricos. Los combos y cajas reutilizan el circuito de componentes descrito arriba.
+
+«Producción, venta y margen» compara saldos inicial/final y actual, producción, venta neta, merma, consumo interno, costo de producción, costo histórico vendido y margen después de desperdicio registrado. Incluye artículos con recetas y artículos con desperdicio o consumo durante el período, conteos observados por zona y alertas de vencimiento; permite imprimir. Utiliza costos exactos en centavos de las capas cuando existen. No incluye gastos indirectos en el margen ni trata diferencias de conteo como merma automática.
+
+## Persistencia y comprobaciones
+
+Las ampliaciones utilizan businessRecords, asientos, movimientos, versiones y metadatos residuales de las tablas existentes. Los importes nativos nuevos utilizan amountCents y unitCents ya declarados en el codec. No se modificaron esquema ni migraciones aplicadas. Las mutaciones conservan revisión optimista, transacción de empresa, idempotencia, permisos por módulo/plan, sucursal del servidor y auditoría. Las fotos se incluyen en el cómputo de almacenamiento privado y conservan su referencia en respaldos y versiones.
+
+Se revisaron sintaxis y diferencias estáticamente y se prepararon casos para la plataforma sobre opciones y extras, conversiones, agotados, traslados de familias, cotizaciones, calendario, temporada y merma por lote. **No se ejecutaron pruebas, servidores ni compilaciones locales.** Se actualizaron la guía del asistente, respuestas rápidas y huellas de recursos.
+
+Quedan pendientes después del despliegue las comprobaciones funcionales y de concurrencia: autorizaciones de lealtad en cada ficha y etapa, cambios entre pestañas, devolución y nueva consulta del beneficio, ventas y anulaciones de combos, divisiones con rondas enviadas, traslados simultáneos, reparto y devoluciones de propinas, lotes de sobrantes y vida útil, fracciones de presentaciones, temporadas, anticipos parciales y cobros por etapas, costos/compras de evento, cargas y descargas privadas, roles/planes/sucursales/consolidado/soporte, restauración, impresión, móvil, oscuro y teclado. La revisión estática no demuestra esos resultados. Los pendientes históricos ajenos a esta solicitud, como liquidación real de repartidores y domicilio desde rondas, no se abordaron.
+
+---
+
 # Contexto de factura y rondas de alimentos
 
 ## Continuación del 5 de noviembre: tarjetas, operación de alimentos y hornadas
