@@ -84,7 +84,7 @@ ACT.businessMenu=async({r:route},button)=>{
  }finally{button.disabled=false}
 };
 const businessAuth=authView;
-authView=function(){businessAuth();if(!U)$('#af .reg')?.insertAdjacentHTML('beforeend',businessTypeField())};
+authView=function(){businessAuth()};
 const businessSettings=V.ajustes;
 V.ajustes=async function(){const id=CO.id;await businessSettings();if(R!=='ajustes'||CO?.id!==id)return;$('#main').insertAdjacentHTML('afterbegin',`<section class="card"><h3>${esc(uiT("business.8","Mi tipo de negocio"))}</h3><p>${esc(businessProfile().name)}</p><p>${esc(businessProfile().salesFlow)}</p>${CO.owner?`<button class="btn ghost" data-a="businessProfile">${esc(uiT("business.7","Personalizar mi sistema"))}</button>`:''}</section>`);enforceAccessUI()};
 ACT.businessProfile=()=>{

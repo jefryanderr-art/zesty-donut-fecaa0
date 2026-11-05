@@ -9,7 +9,7 @@ const billingCompanyNotice='El plan de la empresa está pendiente de renovación
 function billingCanManage(){return CO?.owner===true&&!CO.support&&BILLING?.canManageBilling!==false}
 function billingCan(module){return !CO?.billingPlan?.blockedModules?.includes(billingModule(module))}
 async function refreshBilling(){
- if(!U)return;
+ if(!U||!CO||S?.cfg?.profilePending)return;
  if(CO?.support){try{await api('data?c='+CO.id)}catch(error){if([402,403,404].includes(error.status)){const account=await api('me');COS=account.companies;CO=null;S=null;await openCompany(COS.find(c=>c.owner)?.id);return}throw error}}
  const companyId=CO?.id,previousPlan=JSON.stringify(CO?.billingPlan);
  const data=await api('billing/me'+(companyId?'?c='+encodeURIComponent(companyId):''));

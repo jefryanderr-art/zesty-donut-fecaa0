@@ -5,7 +5,7 @@ import {guardPersonnel} from './personnel.mjs';
 import {guardTreasury} from './treasury.mjs';
 import {guardBankReconciliations} from './banks.mjs';
 import {guardServicePayroll} from './service-commission.mjs';
-import { catalog, validateProfile } from './business-profile.mjs';
+import { catalog, validateProfile, initialCompanyDocument, validateCompanyDetails } from './business-profile.mjs';
 import {projectServiceProduct,projectServiceEntry} from './service-catalog.mjs';
 import { fiscalAnnualTotals } from './fiscal-projection.mjs';
 import { normalizeItemQuantity } from './accounting-engine.mjs';
@@ -441,6 +441,7 @@ export async function updateCompany(companyId, session, revision, mutate, action
       return result;
     };
     const fullCompany = access.company;
+    if(fullCompany.data?.cfg?.profilePending && !['Operación: completeProfile','Reparación de campos iniciales'].includes(action))accessError('Completa primero el perfil de tu empresa.',409);
     const company = { ...fullCompany, data: scopeBranch(fullCompany.data, access) };
     if (!Number.isInteger(revision) || company.revision !== revision) accessError('Los datos cambiaron en otra pestaña. Descarga un respaldo y recarga antes de continuar.', 409);
     let phase = performance.now();
@@ -572,14 +573,17 @@ export async function migrateAccountingStorage(companyId, session, body) {
 }
 
 // Shared creation path: caller supplies the server-resolved limit, never browser authority.
-export async function createOwnedCompany(client,session,{name,description='',companyLimit=null,testPlan=null,uniqueName=false,id,businessType='comercio',country='Nicaragua'}){
+export async function createOwnedCompany(client,session,{name,description='',companyLimit=null,testPlan=null,uniqueName=false,id,businessType='comercio',country='Nicaragua',cur='C$',ruc='',firstOnly=false}){
  if(session.member)accessError('Los colaboradores no pueden crear empresas.');
  await client.select({email:users.email}).from(users).where(eq(users.email,session.email)).for('update');
  const current=await client.select({id:companies.id,name:companies.name}).from(companies).where(and(eq(companies.ownerEmail,session.email),isNull(companies.archivedAt)));
+ if(firstOnly&&current.length)return current[0];
  if(companyLimit!=null&&current.length>=companyLimit)accessError('Se alcanzó el límite de empresas del plan.',403);
- const base=String(name||'').trim().slice(0,80);if(!base)accessError('Escribe un nombre de empresa',400);
+ const details=validateCompanyDetails({name,businessType,country,cur,ruc});
+ const base=details.name;cur=details.cur;ruc=details.ruc;country=details.country;
  name=base;if(uniqueName){let n=2;while(current.some(c=>c.name===name))name=base.slice(0,70)+' '+n++}
- const [created]=await client.insert(companies).values({...(id?{id}:{}),ownerEmail:session.email,name,description:String(description).trim().slice(0,2000),testPlan,isPlatformCompany:false,...validateProfile(businessType,{invoiceCountry:country}),onboardingDone:false}).returning({id:companies.id});
+ const [created]=await client.insert(companies).values({...(id?{id}:{}),ownerEmail:session.email,name,description:String(description).trim().slice(0,2000),testPlan,data:initialCompanyDocument({name,country,cur,ruc,businessType}),isPlatformCompany:false,...validateProfile(businessType,{invoiceCountry:country}),onboardingDone:false}).returning();
+ await syncAccounting(client,{data:null},created);
  await audit(client,created.id,session,'Empresa creada',[{area:'name',before:null,after:name}],0);
- return created;
+ return {id:created.id};
 }

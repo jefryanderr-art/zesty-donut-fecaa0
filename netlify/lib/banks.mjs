@@ -7,7 +7,7 @@ export const BANK_OPS=['bankEnable','bankEntry','bankLockEnable','bankCreate','b
 const fail=message=>{throw Object.assign(new Error(message),{status:400,publicMessage:message})};
 const check=(ok,message)=>{if(!ok)fail(message)};
 export const bankBaseCurrency=data=>data.cfg?.cur==='C$'?'NIO':data.cfg?.cur||'NIO';
-const records=data=>(data.businessRecords||[]).filter(r=>r.module==='bancos');
+const records=data=>(data?.businessRecords||[]).filter(r=>r.module==='bancos');
 const base=(name,date,branchId,kind)=>({id:randomUUID(),module:'bancos',name:text(name),date,branchId,kind,status:'Abierta',events:[]});
 const text=(v,max=200)=>String(v??'').trim().slice(0,max);
 const safeSum=rows=>rows.reduce((n,v)=>{check(Number.isSafeInteger(n+v),'Saldo fuera de rango.');return n+v},0);
