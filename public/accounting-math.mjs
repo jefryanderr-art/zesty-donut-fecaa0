@@ -137,9 +137,16 @@ export function creditReturnSummary(original, previousNotes, items, finalReturn,
   return {subtotal, vat, total, debtReduction, refund};
 }
 
-export function customerCreditBalance(customerId, entries){
+// Misma selección de movimientos para crédito y estado de cuenta; no asigna por nombre.
+export function customerAccountEntries(customerId, entries){
  const invoices=new Set(entries.filter(entry=>entry.customerId===customerId).map(entry=>entry.id));
- return entries.reduce((sum,entry)=>sum+(entry.allocationJournal?(entry.lines||[]).filter(l=>invoices.has(l.invoiceId)):invoices.has(entry.id)||invoices.has(entry.invoiceId)?entry.lines||[]:[]).filter(line=>line.a==='1201').reduce((total,line)=>total+line.d-line.c,0),0);
+ return entries.flatMap(entry=>{
+  if(entry.allocationJournal){const lines=(entry.lines||[]).filter(line=>invoices.has(line.invoiceId));return lines.length?[{...entry,lines}]:[];}
+  return invoices.has(entry.id)||invoices.has(entry.invoiceId)?[entry]:[];
+ });
+}
+export function customerCreditBalance(customerId, entries){
+ return customerAccountEntries(customerId,entries).reduce((sum,entry)=>sum+(entry.lines||[]).filter(line=>line.a==='1201').reduce((total,line)=>total+line.d-line.c,0),0);
 }
 
 // Recurrentes: fechas civiles con fin exclusivo e importes nativos en centavos.
