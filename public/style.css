@@ -484,3 +484,7 @@ body{font-family:var(--ui-font,'DM Sans',sans-serif)}
 .sale-context-fields{margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px}
 .sale-context-fields summary{cursor:pointer;min-height:44px}
 @media(max-width:640px){#main:has(#operating-filter){padding-bottom:calc(110px + env(safe-area-inset-bottom,0px))}.business-board button,.business-panel-modules button{min-height:44px}.md:has(.sale-context-fields) .mb{padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}}
+
+.food-table-board{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin:16px 0}.food-table{border-top:4px solid var(--accent,#35775b)}.food-table[data-state="Ocupada"]{border-top-color:#b67a30}.food-table[data-state="Por cobrar"]{border-top-color:#a95346}.food-table small,.food-table strong{display:block}.food-table h3{margin:8px 0}.food-table .lk{margin:6px 8px 0 0}
+
+.quick-catalog-grid,.quick-ready{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}.quick-catalog-grid .btn{min-height:76px;display:flex;flex-direction:column;justify-content:center;white-space:normal}.quick-ready .card{display:grid;gap:12px;text-align:center}.quick-ready strong{font-size:2.6rem}.quick-catalog summary{padding:12px 0;font-weight:700}

@@ -1,3 +1,7 @@
+import {DELIVERY_OPS,deliveryZoneRecord,deliveryOperation} from './delivery.mjs';
+import {BAKERY_OPS,bakeryCounterRecord,bakeryOperation} from './bakery.mjs';
+import {FOOD_OPS,diningRecord,foodOperation} from './food-service.mjs';
+import {BENEFIT_OPS,benefitRecord,benefitOperation,giftPayment,redeemGift,giftReturn,loyaltyOffer} from './customer-benefits.mjs';
 import {saleContext} from './sale-context.mjs';
 import {companyProfileFields} from '../../db/accounting-model.mjs';
 import {finishCompanyProfile} from './business-profile.mjs';
@@ -174,7 +178,7 @@ function currentShift(data, access, session, id) {
   return shift;
 }
 const shiftPayments = (data, shift) => {
-  const result = { efectivo: 0, tarjeta: 0, transferencia: 0, credito: 0 };
+  const result = { efectivo: 0, tarjeta: 0, transferencia: 0, credito: 0, vale: 0 };
   for (const entry of data.entries.filter(record => record.shiftId === shift.id && ['venta', 'nota-credito'].includes(record.type))) for (const payment of entry.payments || []) result[payment.method] = round(result[payment.method] + payment.amount * (entry.type === 'nota-credito' ? -1 : 1));
   return result;
 };
@@ -194,6 +198,10 @@ export function guardCash(previous, next) {
   }
 }
 export function guardLedgerMutation(previous, next, access, {restoreServiceConfiguration=false}={}) {
+  requireValue(equal((previous?.businessRecords||[]).filter(deliveryZoneRecord),(next.businessRecords||[]).filter(deliveryZoneRecord)),'Usa la configuración de zonas de entrega.');
+  requireValue(equal((previous?.businessRecords||[]).filter(bakeryCounterRecord),(next.businessRecords||[]).filter(bakeryCounterRecord)),'Usa el conteo de mostrador.');
+  requireValue(equal((previous?.businessRecords||[]).filter(diningRecord),(next.businessRecords||[]).filter(diningRecord)),'Usa las operaciones de mesas y reservas.');
+  requireValue(equal((previous?.businessRecords||[]).filter(benefitRecord),(next.businessRecords||[]).filter(benefitRecord)),'Usa las operaciones de tarjetas y lealtad.');
   requireValue(equal(previous?.cfg?.costing,next.cfg?.costing)&&equal(previous?.cfg?.costingHistory,next.cfg?.costingHistory),'Cambia el método de costeo desde su operación específica.');
   const restoreService=restoreServiceConfiguration===true&&access.owner;
   if(!restoreService)for(const key of companyProfileFields)requireValue(equal(previous?.cfg?.[key],next.cfg?.[key]),'Completa el perfil desde su formulario protegido.');
@@ -343,12 +351,14 @@ function registerCost(data, access, session, body) {
 async function makeSale(data, access, session, body, client, companyId, trustedSourceId=null) {
   ensurePrintVersions(data,access.company,session);
   requirePermission(access, 'facturacion');
-  const context = saleContext(body.saleContext, requireValue);
+  await consumeDiscount(client,companyId,access,session,body);
+  let context = saleContext(body.saleContext, requireValue);
   const date = dateValue(body.date), payments = body.payments;
-  requireValue(Array.isArray(payments) && payments.length > 0 && payments.length <= 4, 'Indica las formas de pago.');
+  requireValue(!(body.loyalty===true||body.quickService===true||(Array.isArray(payments)&&payments.some(p=>p.method==='vale')))||body.operationId,'La operación requiere un identificador único.');
+  requireValue(Array.isArray(payments) && payments.length > 0 && payments.length <= 5, 'Indica las formas de pago.');
   const methods = new Set();
   for (const payment of payments) {
-    requireValue(['efectivo', 'tarjeta', 'transferencia', 'credito'].includes(payment.method) && !methods.has(payment.method), 'Forma de pago inválida o repetida.');
+    requireValue(['efectivo', 'tarjeta', 'transferencia', 'credito', 'vale'].includes(payment.method) && !methods.has(payment.method), 'Forma de pago inválida o repetida.');
     methods.add(payment.method); payment.amount = amount(payment.amount);
   }
   const nonCredit = payments.some(payment => payment.method !== 'credito');
@@ -409,9 +419,13 @@ async function makeSale(data, access, session, body, client, companyId, trustedS
   data.invoiceSequences[series] = sequence;
   fiscalIssueGuard(access.company.data,{series,sequence,branchId:access.branchId,totalCents:cents(total),customer});
   const reference = `${series}-${String(sequence).padStart(8, '0')}`;
+  if(body.quickService===true){context||={resourceLabel:'Recurso',modality:'llevar'};context.ticket=reference;}
   requireValue(!data.entries.some(entry => entry.type === 'venta' && entry.reference === reference), 'La numeración coincide con una factura histórica. Configura el siguiente número de serie.');
   requireValue((settings.series||[{code:'A',branchId:'principal'}]).some(record=>record.code===series&&(record.branchId||'principal')===access.branchId),'Selecciona una serie de la sucursal activa.');
-  const paymentAccounts = { efectivo: '1104', tarjeta: '1102', transferencia: '1102', credito: '1201' };
+  const gift=giftPayment(data,body,date,requireValue);
+  const loyalty=body.loyalty===true?loyaltyOffer(data,customer?.id,date):null;
+  requireValue(body.loyalty!==true||(loyalty?.available>0&&discount===loyalty.percent),'El cliente no tiene este beneficio disponible.');
+  const paymentAccounts = { vale:gift?.r.liability, efectivo: '1104', tarjeta: '1102', transferencia: '1102', credito: '1201' };
   const lines = payments.map(payment => ({ a: paymentAccounts[payment.method], d: payment.amount, c: 0 }));
   lines.push({ a: '4101', d: 0, c: subtotal });
   if (vat) lines.push({ a: '2106', d: 0, c: vat });
@@ -420,6 +434,8 @@ async function makeSale(data, access, session, body, client, companyId, trustedS
   const quotation=body.sourceQuotation?data.quotations?.find(q=>q.id===body.sourceQuotation):null;
   requireValue(!body.sourceQuotation||quotation?.status==='Pendiente','La cotización no está disponible para convertir.');
   const entry = appendEntry(data, session, { date, due, ...(context?{saleContext:context}:{}), ...(paymentTerms?{paymentTerms}:{}), ...(creditDecision?.exceeded?{creditWarning:{...creditDecision,confirmedBy:actorName(session)}}:{}), reference, series, sequence, type: 'venta', origin: body.origin === 'ventas' ? 'ventas' : 'facturacion', desc: 'Venta - ' + (customer?.name || text(body.party) || 'Cliente general'), party: customer?.name || text(body.party) || 'Cliente general', customerId: customer?.id || '', customer: customer ? { name: customer.name, taxId: customer.taxId, address: customer.address, phone: customer.phone } : null, operatorId: operatorId(access, session), operatorName: actorName(session), shiftId: shift?.id || null, discount, discountAudit: discount > 0 ? {actor:actorName(session),userId:operatorId(access,session),percent:discount,amountCents:cents(round(invoiceTotals(items.map(item=>({...item,u:item.listPrice}))).total-total)),at:new Date().toISOString()} : null, items, payments, ...(cashTender?{cashTender}:{}), pay: credit ? '1201' : methods.has('efectivo') ? '1104' : '1102', subtotal, vat, total, creditAmount: credit, ...(businessAllocations.length?{businessAllocations}:{}), stock: items.filter(item=>!item.service).map(item => ({ pid: item.p, q: -item.q, unit: item.unit, unitCost: item.cost })), lines });
+  redeemGift(gift,entry);
+  if(loyalty)entry.loyalty={configId:loyalty.configId,percent:loyalty.percent};
   if(entry.discountAudit) await audit(client,companyId,session,'Descuentos',[{area:'descuentos',event:'Factura con descuento',invoiceId:entry.id,reference:entry.reference,...entry.discountAudit}]);
   if(serviceSnapshots.length)entry.serviceSnapshots=serviceSnapshots;
   if(servicePlan.rows.length){
@@ -442,6 +458,7 @@ function creditNote(data, access, session, body) {
   requirePermission(access, 'facturacion');
   if (!supervisor(access)) accessError('La anulación o devolución requiere el acceso de un supervisor.');
   const original = data.entries.find(entry => entry.id === body.id && entry.type === 'venta');
+  requireValue(!original?.giftRedemption||body.operationId,'La devolución de vale requiere un identificador único.');
   requireValue(original && original.items?.length && text(body.reason), 'Selecciona una factura e indica el motivo.');
   requireValue(original.items.every(item => Number.isFinite(item.cost)), 'La factura histórica no guarda costos por producto. Conserva el original y registra un ajuste contable documentado con el contador.');
   const reasonCategories = ['el cliente no la compró','error de precio','devolución','otro'];
@@ -453,24 +470,28 @@ function creditNote(data, access, session, body) {
   const {items,finalReturn}=allocateReturnItems(original.items,previousNotes,body.items);
   requireValue(items.every(item=>data.products.some(product=>product.id===item.p)),'Uno de los productos de la devolución ya no existe.');
   const {subtotal,vat,total,debtReduction,refund}=creditReturnSummary(original,previousNotes,items,finalReturn,data.entries);
+  const giftRestore=giftReturn(data,original,previousNotes,refund,requireValue);
+  const cashRefund=round(refund-(giftRestore?.amountCents||0)/100);
   const payments = [];
+  if(giftRestore)payments.push({method:'vale',amount:giftRestore.amountCents/100});
   if (debtReduction) payments.push({ method: 'credito', amount: debtReduction });
   let shift = null;
-  if (refund) {
+  if (cashRefund) {
     requireValue(['efectivo', 'tarjeta', 'transferencia'].includes(body.refundMethod), 'Selecciona cómo se devuelve el dinero.');
     shift = currentShift(data, access, session, body.shiftId);
     requireValue(date >= shift.date, 'La nota no puede ser anterior al turno de devolución.');
-    payments.push({ method: body.refundMethod, amount: refund });
-    if (body.refundMethod === 'efectivo') requireValue(round(shift.opening + shiftPayments(data, shift).efectivo) >= refund, 'No hay efectivo suficiente en el turno para devolverlo.');
+    payments.push({ method: body.refundMethod, amount: cashRefund });
+    if (body.refundMethod === 'efectivo') requireValue(round(shift.opening + shiftPayments(data, shift).efectivo) >= cashRefund, 'No hay efectivo suficiente en el turno para devolverlo.');
   }
   const lines = [{ a: '4101', d: subtotal, c: 0 }];
   if (vat) lines.push({ a: '2106', d: vat, c: 0 });
-  for (const payment of payments) lines.push({ a: payment.method === 'credito' ? '1201' : payment.method === 'efectivo' ? '1104' : '1102', d: 0, c: payment.amount });
+  for (const payment of payments) lines.push({ a: payment.method === 'vale' ? giftRestore.r.liability : payment.method === 'credito' ? '1201' : payment.method === 'efectivo' ? '1104' : '1102', d: 0, c: payment.amount });
   let cost = round(items.reduce((sum, item) => sum + item.q * item.cost, 0));
   if (finalReturn) cost = round(original.lines.filter(line => line.a === '5101').reduce((sum, line) => sum + line.d - line.c, 0) - previousNotes.reduce((sum, note) => sum + note.lines.filter(line => line.a === '5101').reduce((total, line) => total + line.c - line.d, 0), 0));
   if (cost) lines.push(...linesBetween('1301', '5101', cost));
   const number = (data.invoiceSequences.NC || 0) + 1; data.invoiceSequences.NC = number;
   const note = appendEntry(data, session, { date, type: 'nota-credito', invoiceId: original.id, ...(original.saleContext?{saleContext:structuredClone(original.saleContext)}:{}), reference: 'NC-' + String(number).padStart(8, '0'), desc: 'Nota de crédito - ' + (original.reference || original.id), party: original.party, customerId: original.customerId || '', reason: text(body.reason, 1000), reasonCategory: body.reasonCategory, supervisor: actorName(session), originalOperatorId: original.operatorId || null, originalOperatorName: original.operatorName || original.actor || 'Histórico', operatorId: operatorId(access, session), shiftId: shift?.id || null, items, payments, debtReduction, refund, subtotal, vat, total, stock: items.filter(item=>!item.service).map(item => ({ pid: item.p, q: item.q, unit: item.unit || 'unidad', unitCost: item.cost })), lines });
+  if(giftRestore){giftRestore.r.balanceCents+=giftRestore.amountCents;giftRestore.r.status='Activa';giftRestore.r.events.push({action:'Restitución por nota de crédito',date,entryId:note.id,amountCents:giftRestore.amountCents});note.giftRestoration={id:giftRestore.r.id,amountCents:giftRestore.amountCents};}
   for (const item of items.filter(item=>!item.service)) { const product = data.products.find(record => record.id === item.p), value = product.stock * product.cost + item.q * item.cost; product.stock = Math.round((product.stock + item.q) * 1e6) / 1e6; product.cost = round(value / product.stock); }
   restoreBusinessReturn(data,access,original,note,body,{check:requireValue,permit:requirePermission});
   return note;
@@ -491,6 +512,7 @@ async function saveAttachment(data, companyId, body, record, addedKeys, historic
   record.receipt = { key, name: text(file.name, 180).replace(/[\x00-\x1f\x7f/\\]/g, '') || 'comprobante', type: file.type, size: bytes.length };
 }
 export async function runOperation(companyId, session, body) {
+  if(body.operation==='loyaltyOffer')return db.transaction(async client=>{const access=await companyAccess(client,companyId,session,true);requireModule(access,'facturacion');requireValue(access.branchId,'Selecciona una sucursal.');const data=scopeBranch(access.company.data,access);requireValue(data.customers.some(c=>c.id===body.customerId&&c.status==='activo'),'Selecciona un cliente activo.');return {offer:loyaltyOffer(data,body.customerId,dateValue(body.date))};});
   if(body.operation==='workflowReport')return db.transaction(async client=>{
     const access=await companyAccess(client,companyId,session,true);requireModule(access,body.module);
     requireValue(access.branchId&&WORKFLOW_MODULES.includes(body.module),'Selecciona un módulo y sucursal autorizados.');
@@ -629,7 +651,7 @@ export async function runOperation(companyId, session, body) {
     accessError('La ampliación de tesorería no está habilitada.',503);
   });
   const addedKeys = [];
-  if((body.operation==='completeProfile'||WORKFLOW_OPS.includes(body.operation)||PERSONNEL_OPS.includes(body.operation)||CERTIFICATE_OPS.includes(body.operation)||CLIENT_OPS.includes(body.operation)||FISCAL_OPS.includes(body.operation)||INVENTORY_OPS.includes(body.operation)||ANALYSIS_OPS.includes(body.operation)||BUDGET_OPS.includes(body.operation)||TREASURY_OPS.includes(body.operation)||BANK_OPS.includes(body.operation)||RECURRING_OPS.includes(body.operation)||BUSINESS_OPS.includes(body.operation)||['serviceDefinition','economicSector','specializedChart','serviceAccrueCommission'].includes(body.operation))&&!body.operationId)accessError('La operación requiere un identificador único.',400);
+  if((DELIVERY_OPS.includes(body.operation)||BAKERY_OPS.includes(body.operation)||FOOD_OPS.includes(body.operation)||BENEFIT_OPS.includes(body.operation)||body.operation==='completeProfile'||WORKFLOW_OPS.includes(body.operation)||PERSONNEL_OPS.includes(body.operation)||CERTIFICATE_OPS.includes(body.operation)||CLIENT_OPS.includes(body.operation)||FISCAL_OPS.includes(body.operation)||INVENTORY_OPS.includes(body.operation)||ANALYSIS_OPS.includes(body.operation)||BUDGET_OPS.includes(body.operation)||TREASURY_OPS.includes(body.operation)||BANK_OPS.includes(body.operation)||RECURRING_OPS.includes(body.operation)||BUSINESS_OPS.includes(body.operation)||['serviceDefinition','economicSector','specializedChart','serviceAccrueCommission'].includes(body.operation))&&!body.operationId)accessError('La operación requiere un identificador único.',400);
   let output = null;
   if(body.operationId && !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.operationId)) accessError('Identificador de operación inválido.',400);
   const receipt=body.operationId?{id:body.operationId,actor:session.email+':'+(session.memberId||''),hash:createHash('sha256').update(JSON.stringify(body)).digest('hex'),resultId:()=>typeof output==='string'?output:null}:null;
@@ -645,7 +667,7 @@ export async function runOperation(companyId, session, body) {
       let businessPatch={};
       const operation = body.operation, userId = operatorId(access, session);
       if (['printSettings','settings','creditNote'].includes(operation)) ensurePrintVersions(data, access.company, operationSession);
-      if(operation==='sale') await consumeDiscount(client,companyId,access,operationSession,body);
+
       if(operation==='completeProfile'){
         requireValue(access.owner,'Solo el dueño completa el perfil.');requirePermission(access,'ajustes');
         const completed=finishCompanyProfile({...company,data:access.company.data},body);
@@ -653,6 +675,10 @@ export async function runOperation(companyId, session, body) {
         businessPatch={name:completed.name,businessType:completed.businessType,businessCustomization:completed.businessCustomization};
         data.cfg=completed.data.cfg;data.accounts=completed.data.accounts;
       }
+      else if(DELIVERY_OPS.includes(operation))output=deliveryOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,date:dateValue});
+      else if(BAKERY_OPS.includes(operation))output=bakeryOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,date:dateValue});
+      else if(FOOD_OPS.includes(operation))output=foodOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,date:dateValue});
+      else if(BENEFIT_OPS.includes(operation))output=benefitOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,entry:appendEntry,date:dateValue,amount,financialCash});
       else if(operation==='costingMethod'){requireValue(body.operationId,'El cambio requiere un identificador único.');output=configureCosting(data,access,operationSession,body,requirePermission);}
       else if(operation==='fifoPurchase'){
         requireValue(fifoEnabled(data)&&body.operationId,'La compra PEPS requiere activación e identificador único.');requirePermission(access,'compras');requirePermission(access,'inventario');
