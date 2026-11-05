@@ -6,7 +6,10 @@ import { companyAccess, allowed, accessError, passwordDigest, verifyPassword, au
 import { operatorId, operationalRole } from './policies.mjs';
 const key = id => 'discount-policy:' + id;
 const admin = access => access.owner || allowed(access, 'accesibilidad', true);
-const fingerprint = body => createHash('sha256').update(JSON.stringify({discount:Number(body.discount),items:body.items})).digest('hex');
+const fingerprint = body => {
+ if(!Array.isArray(body.items)||!body.items.length||body.items.length>200||body.items.some(i=>!i||typeof i.p!=='string'||typeof i.q!=='number'||!Number.isFinite(i.q)||i.q<=0||typeof i.u!=='number'||!Number.isFinite(i.u)||i.u<0))accessError('Revisa productos, cantidades y precios antes de autorizar.',400);
+ return createHash('sha256').update(JSON.stringify({discount:Number(body.discount),items:body.items.map(i=>({p:i.p,q:i.q,u:i.u}))})).digest('hex');
+};
 const safe = policy => ({configured:!!policy.hash,maximum:policy.maximum ?? 99,roles:policy.roles || [],version:policy.version||0});
 async function read(client,id){return (await client.select().from(siteContent).where(eq(siteContent.id,key(id))))[0]?.content || {};}
 async function save(client,id,content){await client.insert(siteContent).values({id:key(id),content}).onConflictDoUpdate({target:siteContent.id,set:{content,updatedAt:new Date()}});}

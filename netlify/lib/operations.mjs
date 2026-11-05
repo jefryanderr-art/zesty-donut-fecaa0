@@ -1,3 +1,4 @@
+import {effectiveFoodPrice,workflowRecord} from './food-workflows.mjs';
 import {DELIVERY_OPS,deliveryZoneRecord,deliveryOperation} from './delivery.mjs';
 import {BAKERY_OPS,bakeryCounterRecord,bakeryOperation} from './bakery.mjs';
 import {FOOD_OPS,diningRecord,foodOperation} from './food-service.mjs';
@@ -198,6 +199,8 @@ export function guardCash(previous, next) {
   }
 }
 export function guardLedgerMutation(previous, next, access, {restoreServiceConfiguration=false}={}) {
+  requireValue(equal((previous?.businessRecords||[]).filter(r=>r.foodSettings).map(r=>({id:r.id,foodSettings:r.foodSettings})),(next.businessRecords||[]).filter(r=>r.foodSettings).map(r=>({id:r.id,foodSettings:r.foodSettings}))),'Usa la configuración de recetas.');
+  requireValue(equal((previous?.businessRecords||[]).filter(workflowRecord),(next.businessRecords||[]).filter(workflowRecord)),'Usa las operaciones de eventos y encargos.');
   requireValue(equal((previous?.businessRecords||[]).filter(deliveryZoneRecord),(next.businessRecords||[]).filter(deliveryZoneRecord)),'Usa la configuración de zonas de entrega.');
   requireValue(equal((previous?.businessRecords||[]).filter(bakeryCounterRecord),(next.businessRecords||[]).filter(bakeryCounterRecord)),'Usa el conteo de mostrador.');
   requireValue(equal((previous?.businessRecords||[]).filter(diningRecord),(next.businessRecords||[]).filter(diningRecord)),'Usa las operaciones de mesas y reservas.');
@@ -376,10 +379,10 @@ async function makeSale(data, access, session, body, client, companyId, trustedS
     const product = data.products.find(record => record.id === item.p), quantity = normalizeItemQuantity(item.q);
     requireValue(product && Number.isFinite(quantity) && quantity > 0 && quantity <= 1000000, 'Producto o cantidad inválida.');
     if(product.kind!=='service')quantities.set(product.id, (quantities.get(product.id) || 0) + quantity);
-    const price = amount(item.u ?? product.price, true), unit = round(price * (1 - discount / 100)), vatRate = Number(product.vatRate || 0);
+    const price = amount(item.u ?? effectiveFoodPrice(data,product,date), true), unit = round(price * (1 - discount / 100)), vatRate = Number(product.vatRate || 0);
     requireValue(Number.isFinite(price) && price >= 0 && Number.isFinite(vatRate) && vatRate >= 0 && vatRate <= 100, 'Precio o IVA de producto inválido.');
-    requireValue(price >= product.price, 'Usa el campo de descuento autorizado para rebajar el precio de catálogo.');
-    return { ...(typeof item.note==='string'&&item.note.trim()?{note:text(item.note,500)}:{}), originalPrice: product.price, code: product.code || '', p: product.id, name: product.name, unit: product.unit || 'unidad', q: quantity, listPrice: price, u: unit, cost: product.kind==='service'?0:product.cost, ...(product.kind==='service'?{service:true}:{}), vatRate };
+    requireValue(price >= effectiveFoodPrice(data,product,date), 'Usa el campo de descuento autorizado para rebajar el precio de catálogo.');
+    return { ...(typeof item.note==='string'&&item.note.trim()?{note:text(item.note,500)}:{}), originalPrice: effectiveFoodPrice(data,product,date), code: product.code || '', p: product.id, name: product.name, unit: product.unit || 'unidad', q: quantity, listPrice: price, u: unit, cost: product.kind==='service'?0:product.cost, ...(product.kind==='service'?{service:true}:{}), vatRate };
   });
   const servicePlan=serviceConsumptionPlan(data,body.items);
   requireValue(!servicePlan.rows.length||body.serviceConsumptionConfirmed===true,'Confirma los consumibles del servicio antes de emitir.');
@@ -423,6 +426,11 @@ async function makeSale(data, access, session, body, client, companyId, trustedS
   requireValue(!data.entries.some(entry => entry.type === 'venta' && entry.reference === reference), 'La numeración coincide con una factura histórica. Configura el siguiente número de serie.');
   requireValue((settings.series||[{code:'A',branchId:'principal'}]).some(record=>record.code===series&&(record.branchId||'principal')===access.branchId),'Selecciona una serie de la sucursal activa.');
   const gift=giftPayment(data,body,date,requireValue);
+  if(body.previousDay===true){
+    requireValue(body.loyalty!==true&&discount>0&&body.operationId,'El descuento del día anterior no se acumula con lealtad.');
+    const previous=new Date(date+'T12:00:00Z');previous.setUTCDate(previous.getUTCDate()-1);const manufactured=previous.toISOString().slice(0,10);
+    for(const item of items){const recipe=data.businessRecords.find(r=>r.module==='produccion'&&r.status==='Activa'&&r.productId===item.p);requireValue(recipe?.foodSettings?.previousPercent===discount,'El producto no tiene este descuento configurado.');const allocations=businessAllocations.filter(a=>data.businessRecords.some(r=>r.id===a.id&&r.module==='lotes'&&r.productId===item.p));requireValue(allocations.length&&allocations.every(a=>data.businessRecords.find(r=>r.id===a.id)?.date===manufactured),'El lote asignado por FEFO no fue elaborado el día anterior.');}
+  }
   const loyalty=body.loyalty===true?loyaltyOffer(data,customer?.id,date):null;
   requireValue(body.loyalty!==true||(loyalty?.available>0&&discount===loyalty.percent),'El cliente no tiene este beneficio disponible.');
   const paymentAccounts = { vale:gift?.r.liability, efectivo: '1104', tarjeta: '1102', transferencia: '1102', credito: '1201' };
@@ -435,6 +443,7 @@ async function makeSale(data, access, session, body, client, companyId, trustedS
   requireValue(!body.sourceQuotation||quotation?.status==='Pendiente','La cotización no está disponible para convertir.');
   const entry = appendEntry(data, session, { date, due, ...(context?{saleContext:context}:{}), ...(paymentTerms?{paymentTerms}:{}), ...(creditDecision?.exceeded?{creditWarning:{...creditDecision,confirmedBy:actorName(session)}}:{}), reference, series, sequence, type: 'venta', origin: body.origin === 'ventas' ? 'ventas' : 'facturacion', desc: 'Venta - ' + (customer?.name || text(body.party) || 'Cliente general'), party: customer?.name || text(body.party) || 'Cliente general', customerId: customer?.id || '', customer: customer ? { name: customer.name, taxId: customer.taxId, address: customer.address, phone: customer.phone } : null, operatorId: operatorId(access, session), operatorName: actorName(session), shiftId: shift?.id || null, discount, discountAudit: discount > 0 ? {actor:actorName(session),userId:operatorId(access,session),percent:discount,amountCents:cents(round(invoiceTotals(items.map(item=>({...item,u:item.listPrice}))).total-total)),at:new Date().toISOString()} : null, items, payments, ...(cashTender?{cashTender}:{}), pay: credit ? '1201' : methods.has('efectivo') ? '1104' : '1102', subtotal, vat, total, creditAmount: credit, ...(businessAllocations.length?{businessAllocations}:{}), stock: items.filter(item=>!item.service).map(item => ({ pid: item.p, q: -item.q, unit: item.unit, unitCost: item.cost })), lines });
   redeemGift(gift,entry);
+  if(body.previousDay===true)entry.previousDayDiscount=true;
   if(loyalty)entry.loyalty={configId:loyalty.configId,percent:loyalty.percent};
   if(entry.discountAudit) await audit(client,companyId,session,'Descuentos',[{area:'descuentos',event:'Factura con descuento',invoiceId:entry.id,reference:entry.reference,...entry.discountAudit}]);
   if(serviceSnapshots.length)entry.serviceSnapshots=serviceSnapshots;
@@ -705,7 +714,7 @@ export async function runOperation(companyId, session, body) {
       else if(BANK_OPS.includes(operation))output=bankOperation(data,access,operationSession,body,{permit:requirePermission,entry:appendEntry});
       else if(RECURRING_OPS.includes(operation))output=await recurringOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,amount,entry:appendEntry,financialCash,credit:b=>creditNote(data,access,operationSession,b),sale:(b,id)=>makeSale(data,access,operationSession,b,client,companyId,id)});
       else if(BUSINESS_OPS.includes(operation)){
-        output=await businessOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,amount,date:dateValue,entry:appendEntry,financialCash,registerCost,sale:(b,id)=>makeSale(data,access,operationSession,b,client,companyId,id)});
+        output=await businessOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,amount,date:dateValue,entry:appendEntry,financialCash,registerCost,storePhoto:async file=>{requireValue(file&&typeof file.content==='string'&&file.content.length<=1400000&&/^[A-Za-z0-9+/]*={0,2}$/.test(file.content),'Imagen inválida.');const bytes=Buffer.from(file.content,'base64');const valid=file.type==='image/jpeg'?bytes[0]===255&&bytes[1]===216&&bytes[2]===255:file.type==='image/png'?bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):file.type==='image/webp'&&bytes.subarray(0,4).toString()==='RIFF'&&bytes.subarray(8,12).toString()==='WEBP';requireValue(valid&&bytes.length>0&&bytes.length<=1048576,'Adjunta JPG, PNG o WebP de hasta 1 MB.');const refs=[...new Map([access.company.data,...historical.map(h=>h.data)].flatMap(d=>(d?.businessRecords||[]).filter(r=>r.referencePhoto).map(r=>[r.referencePhoto.key,r.referencePhoto]))).values()];requireValue(refs.length<100&&refs.reduce((n,r)=>n+r.size,0)+bytes.length<=50*1048576,'Las referencias privadas superan 100 archivos o 50 MB.');const key=companyId+'/'+randomUUID();addedKeys.push(key);await getStore({name:'acontec-private-receipts',consistency:'strong'}).set(key,bytes);return {key,type:file.type,name:text(file.name,180),size:bytes.length};},sale:(b,id)=>makeSale(data,access,operationSession,b,client,companyId,id)});
         if(operation==='businessOnboard'){businessPatch=output;output=null;}
       }
       else if(operation==='serviceDefinition')output=configureService(data,access,body,{permit:requirePermission});

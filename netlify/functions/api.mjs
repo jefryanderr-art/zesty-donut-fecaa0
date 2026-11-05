@@ -456,6 +456,16 @@ const handleRequest = async (request, context, metrics) => {
       if (body.revision !== access.company.revision) return fail('La empresa cambió. Recarga antes de subir el logo.', 409);
       try { return json({ logo: await storeImage(body.image, 300000) }); } catch { return fail('El logo debe ser una imagen WebP válida de hasta 300 KB.'); }
     }
+    if(path==='order-reference'&&method==='GET'){
+      const companyId=url.searchParams.get('c'),access=await companyAccess(db,companyId,session);
+      const record=scopeBranch(access.company.data,access).businessRecords?.find(r=>r.id===url.searchParams.get('id')&&['bakery-order','bakery-wholesale'].includes(r.kind));
+      if(!record?.referencePhoto?.key?.startsWith(companyId+'/'))return fail('Referencia no encontrada.',404);
+      requireModule(access,record.module);
+      const bytes=await getStore({name:'acontec-private-receipts',consistency:'strong'}).get(record.referencePhoto.key,{type:'arrayBuffer'});
+      if(!bytes)return fail('Referencia no encontrada.',404);
+      await audit(db,companyId,session,'Consulta de referencia privada',[{recordId:record.id,branchId:access.branchId}]);
+      return new Response(bytes,{headers:{'content-type':'application/octet-stream','content-disposition':'attachment; filename=referencia.'+({ 'image/png':'png','image/jpeg':'jpg','image/webp':'webp'}[record.referencePhoto.type]||'bin'),'cache-control':'private, no-store','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; sandbox"}});
+    }
     if (path === 'operation-receipt' && method === 'GET') {
       const companyId = url.searchParams.get('c');
       const access = await companyAccess(db, companyId, session);

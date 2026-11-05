@@ -6,7 +6,7 @@
   try{acknowledged=localStorage.getItem(privacyKey)==='seen'}catch{}
   let messages=[],identity='',opened=false,pending=false,request=null,generation=0;
   const quick=[
-["facturacion", "¿Cómo canjeo una tarjeta de regalo?", "1. En Crear factura abre Tarjetas, vales y lealtad. 2. Selecciona la tarjeta y activa su forma de pago; asigna el importe y completa con otro medio si hace falta. 3. Confirma una sola factura. El canje reduce el pasivo y la nota de crédito restituye el saldo utilizado. Verifica con tu contador."],
+["facturacion", "¿Cómo canjeo una tarjeta de regalo?", "1. En Crear factura abre Tarjetas, vales y lealtad. 2. Selecciona la tarjeta y activa su forma de pago; asigna el importe y completa con otro medio si hace falta. 3. En facturas desde fichas también puedes consultar y autorizar lealtad. Confirma una sola factura. El canje reduce el pasivo y la nota de crédito restituye el saldo utilizado. Verifica con tu contador."],
 ["cuentas_abiertas", "¿Cómo recibo una reserva de mesa?", "1. Abre Mesas y reservas en Cuentas abiertas. 2. Selecciona Recibir y abrir cuenta en la reserva. 3. Agrega consumos desde la cuenta; la reserva no emite factura al llegar."],
 ["produccion", "¿Dónde registro una hornada?", "1. En Producción abre Hornadas y mostrador. 2. Selecciona una receta y registra unidades, merma y motivo; revisa los insumos. 3. Con vencimiento se crea el lote terminado. Las etiquetas usan los ingredientes y alérgenos declarados. Verifica con tu contador."],
 

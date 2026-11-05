@@ -303,3 +303,10 @@ export function inventoryShareCents(valueCents,quantity,totalQuantity){
  if(!Number.isSafeInteger(valueCents)||valueCents<0||!Number.isSafeInteger(q)||!Number.isSafeInteger(total)||q<0||total<=0||q>total)throw new AccountingValidationError('Reparto de capas PEPS inválido.');
  return Number((BigInt(valueCents)*BigInt(q)*2n+BigInt(total))/(BigInt(total)*2n));
 }
+
+// Precio de catálogo vigente por sucursal; los históricos y precios confirmados no se reescriben.
+export function businessSeasonPrice(product,records,date){
+ const recipe=(records||[]).find(r=>r.module==='produccion'&&r.productId===product.id&&r.status==='Activa'&&r.foodSettings);
+ const season=recipe?.foodSettings?.seasons?.find(s=>s.from<=date&&s.to>=date);
+ return season?season.unitCents/100:product.price;
+}
