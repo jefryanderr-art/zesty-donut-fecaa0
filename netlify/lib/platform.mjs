@@ -98,14 +98,21 @@ export async function supportAction(session,companyId,method,body){
  await db.transaction(async client=>{if(body.revoke)await client.delete(supportGrants).where(eq(supportGrants.companyId,companyId));else await client.insert(supportGrants).values({companyId,email,grantedBy:session.email,expiresAt:new Date(Date.now()+24*3600000)}).onConflictDoUpdate({target:supportGrants.companyId,set:{email,grantedBy:session.email,expiresAt:new Date(Date.now()+24*3600000),createdAt:new Date()}});await client.insert(auditEvents).values({companyId,actor:session.email,action:body.revoke?'Soporte revocado':'Soporte autorizado por 24 horas · solo lectura',changes:[{area:'support',email,reason:clean(body.reason,1000)}]})});return {ok:true};
 }
 
+export function planTestCompanyId(email){
+ const hash=createHash('sha256').update('acontec:plan-test:'+email).digest('hex');
+ return [hash.slice(0,8),hash.slice(8,12),hash.slice(12,16),hash.slice(16,20),hash.slice(20,32)].join('-');
+}
+export function canChangeTestBusinessProfile(company,session,isAdmin){
+ return isAdmin===true&&!session.member&&company.ownerEmail===session.email&&!company.isPlatformCompany&&!company.archivedAt&&company.id===planTestCompanyId(session.email);
+}
+
 export async function ensurePlanTestCompany(session){
  if(!await isPlatformAdmin(session))return;
  await db.transaction(async client=>{
   const [owner]=await client.select({platformAdmin:users.platformAdmin}).from(users).where(eq(users.email,session.email)).for('update');
   if(!owner?.platformAdmin)return;
   // Stable identity survives renames and archiving; the owner lock serializes creation.
-  const hash=createHash('sha256').update('acontec:plan-test:'+session.email).digest('hex');
-  const id=[hash.slice(0,8),hash.slice(8,12),hash.slice(12,16),hash.slice(16,20),hash.slice(20,32)].join('-');
+  const id=planTestCompanyId(session.email);
   const [existing]=await client.select({id:companies.id}).from(companies).where(eq(companies.id,id));
   if(existing)return;
   const [pro]=await client.select({id:servicePlans.id}).from(servicePlans).where(eq(servicePlans.id,'pro'));

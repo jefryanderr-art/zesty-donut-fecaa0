@@ -15,7 +15,7 @@ import '../../public/cloud-sync.js';
 import {deliverMessages} from '../lib/service-mail.mjs';
 import {serviceReceipt} from '../lib/service-receipts.mjs';
 import {plans, billingRoute, subscription, requireBilling} from '../lib/billing.mjs';
-import {ensurePlanTestCompany,testCompaniesRoute,requirePlatform,platformSummary,platformAction,supportAction} from '../lib/platform.mjs';
+import {canChangeTestBusinessProfile,ensurePlanTestCompany,testCompaniesRoute,requirePlatform,platformSummary,platformAction,supportAction} from '../lib/platform.mjs';
 import { gunzipSync } from 'node:zlib';
 import { statement } from '../lib/reporting.mjs';
 import { integrityReport } from '../lib/accounting-engine.mjs';
@@ -659,7 +659,7 @@ const handleRequest = async (request, context, metrics) => {
       const result=await updateCompany(url.searchParams.get('c'),session,body.revision,(company,access)=>{
         if(!access.owner)accessError('Solo el dueño personaliza el sistema.');
         requireModule(access,'ajustes',true);
-        return fixedBusinessProfile(company,body,isAdmin);
+        return fixedBusinessProfile(company,body,canChangeTestBusinessProfile(company,session,isAdmin));
       },'Perfil de negocio actualizado');
       return json(result);
     }
@@ -672,7 +672,7 @@ const handleRequest = async (request, context, metrics) => {
     if (path === 'company' && method === 'POST') {
       if (session.member) return fail('Los colaboradores no pueden crear empresas.', 403);
       const billing=await requireBilling(session.email,isAdmin);
-      const companyLimit=billing.plan?.limits?.companies;
+      const companyLimit=isAdmin?null:billing.plan?.limits?.companies;
       if(companyLimit!=null&&owned.filter(c=>c.owner).length>=companyLimit)return fail('Se alcanzó el límite de empresas del plan.',403);
       if (!companyName(body.name)) return fail('Escribe un nombre de empresa');
       const company = await db.transaction(client => createOwnedCompany(client,session,{name:body.name,description:body.description,businessType:body.businessType||'comercio',country:body.country||'Nicaragua',cur:body.cur||'C$',ruc:body.ruc||'',companyLimit}));
@@ -738,7 +738,7 @@ const handleRequest = async (request, context, metrics) => {
           const access = await companyAccess(client, companyId, session, true);
           const { id, name, description } = access.company;
           await client.update(sessions).set({activeCompanyId:id}).where(eq(sessions.tokenHash,hashToken(sessionToken(request))));
-          const company = { businessType:access.company.businessType, businessCustomization:access.company.businessCustomization, onboardingDone:access.company.onboardingDone, assistantAvailable:assistantAvailable(access), assistantGlobalEnabled:assistantOn()&&!access.support, assistantEnabled:access.company.assistantEnabled, assistantTimeZone:access.company.assistantTimeZone, testPlan:access.company.testPlan, internalTestPlan:access.internalTestPlan, isPlatformCompany:access.company.isPlatformCompany, billingPlan:access.billingPlan, entitlement:access.entitlement, readOnlyLimit:access.readOnlyLimit, support:access.support||false,supportExpiresAt:access.supportExpiresAt, id, name, description, owner: access.owner, permissions: access.permissions, memberId: access.member?.id, role: access.owner ? 'Dueño' : access.member?.role, branches: access.branches, branchId: access.branchId, unrestrictedBranches: access.unrestrictedBranches };
+          const company = { canChangeBusinessProfile:canChangeTestBusinessProfile(access.company,session,isAdmin), businessType:access.company.businessType, businessCustomization:access.company.businessCustomization, onboardingDone:access.company.onboardingDone, assistantAvailable:assistantAvailable(access), assistantGlobalEnabled:assistantOn()&&!access.support, assistantEnabled:access.company.assistantEnabled, assistantTimeZone:access.company.assistantTimeZone, testPlan:access.company.testPlan, internalTestPlan:access.internalTestPlan, isPlatformCompany:access.company.isPlatformCompany, billingPlan:access.billingPlan, entitlement:access.entitlement, readOnlyLimit:access.readOnlyLimit, support:access.support||false,supportExpiresAt:access.supportExpiresAt, id, name, description, owner: access.owner, permissions: access.permissions, memberId: access.member?.id, role: access.owner ? 'Dueño' : access.member?.role, branches: access.branches, branchId: access.branchId, unrestrictedBranches: access.unrestrictedBranches };
           return json({ data: projectData(access.company.data, access), revision: access.company.revision, company });
         });}catch(error){
           // companyAccess checks ownership/membership before checking the owner's plan.
