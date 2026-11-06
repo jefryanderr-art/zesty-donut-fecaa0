@@ -26,7 +26,7 @@ import { getStore } from '@netlify/blobs';
 import { and, desc, eq, lt, or, isNull, sql, getTableColumns } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
 import { companies, companyMembers, companyBackups, auditEvents, sessions, saveOperations } from '../../db/schema.ts';
-import { OPERATION_ARRAYS, roleAllows, salesAdministrator, cashAdministrator, operatorId, receiptRecords } from './policies.mjs';
+import { adminEmail, OPERATION_ARRAYS, roleAllows, salesAdministrator, cashAdministrator, operatorId, receiptRecords } from './policies.mjs';
 
 export const MODULES = [...catalog.all, 'ventas', 'compras', 'gastos', 'inventario', 'contabilidad', 'finanzas', 'personal', 'fiscal', 'ajustes', 'accesibilidad', 'auditoria', 'auditoria_revision', 'facturacion', 'cajas', 'costos', 'proveedores', 'diseno_factura'];
 const DATA_MODULES = ['compras', 'gastos', 'inventario', 'contabilidad', 'finanzas', 'personal', 'fiscal'];
@@ -104,7 +104,7 @@ export async function companyAccess(client, companyId, session, lock = false, lo
     } else billing=await requireBilling(company.ownerEmail,ownerUser?.platformAdmin===true,client);
     const result=await branchAccess(access,session);result.billingPlan=billing.plan;result.entitlement=billing.ent;result.internalTestPlan=internalTest?billing.plan.id:null;
     const ownedRows=await client.select({id:companies.id}).from(companies).where(and(eq(companies.ownerEmail,company.ownerEmail),isNull(companies.archivedAt))).orderBy(sql`coalesce((select min(${auditEvents.createdAt}) from ${auditEvents} where ${auditEvents.companyId}=${companies.id} and ${auditEvents.action}='Empresa creada'), (select min(${auditEvents.createdAt}) from ${auditEvents} where ${auditEvents.companyId}=${companies.id}), ${companies.updatedAt})`,companies.id);
-    const limit=billing.plan?.limits?.companies;result.readOnlyLimit=!company.isPlatformCompany&&!internalTest&&limit!=null&&ownedRows.findIndex(c=>c.id===company.id)>=limit;
+    const limit=billing.plan?.limits?.companies;result.readOnlyLimit=!(ownerUser?.platformAdmin===true&&company.ownerEmail===adminEmail())&&!company.isPlatformCompany&&!internalTest&&limit!=null&&ownedRows.findIndex(c=>c.id===company.id)>=limit;
     if(result.billingPlan?.blockedModules?.includes('sucursales')||result.billingPlan?.limits?.branches===1){result.branchId='principal';result.branches=result.branches.filter(b=>b.id==='principal');result.unrestrictedBranches=companyBranches(company.data).length===1}
     return result;};
   if (!session.member && company.ownerEmail === session.email) {

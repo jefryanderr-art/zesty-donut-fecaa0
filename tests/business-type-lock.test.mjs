@@ -33,7 +33,27 @@ test('corrección administrativa exige plataforma, revisión y tipo anterior, co
 });
 test('API conecta el candado y ambas restauraciones a las políticas de servidor',async()=>{
  const source=await readFile(new URL('../netlify/functions/api.mjs',import.meta.url),'utf8');
- assert.ok(source.includes('return fixedBusinessProfile(company,body,isAdmin)'));
+ assert.ok(source.includes('return fixedBusinessProfile(company,body,canChangeTestBusinessProfile(company,session,isAdmin))'));
  assert.ok(source.includes('profilePatch=restoredBusinessProfile(company,body.profile,isAdmin)'));
  assert.ok(source.includes('profilePatch=restoredBusinessProfile(company,backup,isAdmin)'));
+});
+
+test('selector de prueba exige administrador verificado, propietario e identidad estable',async()=>{
+ const source=await readFile(new URL('../netlify/lib/platform.mjs',import.meta.url),'utf8');
+ const helpers=source.slice(source.indexOf('export function planTestCompanyId'),source.indexOf('export async function ensurePlanTestCompany')).replaceAll('export ','');
+ const {createHash}=await import('node:crypto');
+ const {planTestCompanyId,canChangeTestBusinessProfile:canChange}=new Function('createHash',helpers+';return {planTestCompanyId,canChangeTestBusinessProfile}')(createHash);
+ const session={email:'admin@example.invalid'},company={id:planTestCompanyId(session.email),ownerEmail:session.email,businessType:'comercio',businessCustomization:{},testPlan:'basico'};
+ assert.equal(canChange(company,session,true),true);
+ assert.equal(canChange({...company,name:'Renombrada',testPlan:'pro'},session,true),true);
+ assert.equal(canChange(company,session,false),false);
+ assert.equal(canChange(company,{...session,member:{id:'colaborador'}},true),false);
+ for(const patch of [{id:'otra',name:'Empresa de prueba de plan'},{ownerEmail:'otro@example.invalid'},{isPlatformCompany:true},{archivedAt:new Date()}])assert.equal(canChange({...company,...patch},session,true),false);
+ const original=structuredClone(company);
+ for(const profile of (await import('../netlify/lib/business-profile.mjs')).catalog.profiles){
+  const patch=fixedBusinessProfile(company,{businessType:profile.id,businessCustomization:{}},canChange(company,session,true));
+  assert.deepEqual(Object.keys(patch).sort(),['businessCustomization','businessType']);
+  assert.equal(patch.businessType,profile.id);
+ }
+ assert.deepEqual(company,original);
 });
