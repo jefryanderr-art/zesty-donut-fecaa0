@@ -31,7 +31,7 @@ export function safePaymentUrl(value){
   console.warn('pagadito_payment_url',{domain:null,reason:'invalid_url'});
   billingError('Enlace de pago inválido.',502);
  }
- const reason=!expectedDomain?'invalid_environment':url.protocol!=='https:'?'https_required':url.hostname!==expectedDomain?'domain_not_allowed':url.username||url.password?'embedded_credentials':url.port?'custom_port':null;
+ const reason=!expectedDomain?'invalid_environment':url.protocol!=='https:'?'https_required':!(url.hostname==='pagadito.com'||url.hostname.endsWith('.pagadito.com'))||/(^|[.-])sandbox([.-]|$)/i.test(url.hostname)?'domain_not_allowed':url.username||url.password?'embedded_credentials':url.port?'custom_port':null;
  // Nunca registrar URL completa, ruta, consulta, fragmento ni credenciales.
  if(reason){
   console.warn('pagadito_payment_url',{domain:url.hostname,reason});
