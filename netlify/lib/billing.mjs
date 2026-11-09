@@ -97,8 +97,9 @@ export async function checkout(session,body,request){
  try{
   const response=await pagadito('authorization-recurring-payments',{permissions:'initial_payment,automatic_charges',currency:'USD',pending_charges:charges.map(c=>({ern:c.ern,description:`Acontec ${plan.name} ${body.interval}`,date:c.date,amount:(c.amountCents/100).toFixed(2),details:[{quantity:1,description:`Suscripción ${plan.name}`,price:(c.amountCents/100).toFixed(2)}]}))});
   definitelyRejected=!!response.code&&response.code!=='PG1008';
-  if(response.code!=='PG1008'||!response.data?.url||!response.data?.token)billingError('No se pudo iniciar el pago con Pagadito.',502);
-  const url=safePaymentUrl(response.data.url);
+  const paymentUrl=response.data?.url||response.data?.payment_url||response.data?.link;
+  if(response.code!=='PG1008'||!paymentUrl||!response.data?.token)billingError('No se pudo iniciar el pago con Pagadito.',502);
+  const url=safePaymentUrl(paymentUrl);
   await db.update(billingCheckouts).set({state:'pending',providerToken:response.data.token,paymentUrl:url}).where(eq(billingCheckouts.id,id));
   await event(db,session.email,session.email,'Checkout iniciado',{checkout:id,plan:plan.id,interval:body.interval,environment:config.environment,count});return {url,count};
  }catch(error){

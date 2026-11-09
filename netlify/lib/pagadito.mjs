@@ -26,9 +26,18 @@ export async function pagadito(path,body,environment){
 export function safePaymentUrl(value){
  const config=providerConfig();
  const expectedDomain={sandbox:'sandbox.pagadito.com',production:'pagadito.com'}[config.environment];
+ const type=typeof value,trimmed=type==='string'?value.trim():'';
+ const prefix=trimmed.startsWith('https://')?'https://':trimmed.startsWith('http://')?'http://':trimmed.startsWith('//')?'//':'none';
  let url;
- try{url=new URL(value)}catch{
-  console.warn('pagadito_payment_url',{domain:null,reason:'invalid_url'});
+ try{
+  if(type!=='string')throw new TypeError();
+  let normalized=trimmed;
+  if(normalized.startsWith('//'))normalized='https:'+normalized;
+  else if(/^(?:[a-z0-9-]+\.)*pagadito\.com(?=[:/?#]|$)/i.test(normalized))normalized='https://'+normalized;
+  normalized=normalized.replace(/\s+/g,space=>encodeURI(space));
+  url=new URL(normalized);
+ }catch{
+  console.warn('pagadito_payment_url',{type,length:type==='string'?value.length:null,prefix,domain:url?.hostname||null,reason:'invalid_url'});
   billingError('Enlace de pago inválido.',502);
  }
  const reason=!expectedDomain?'invalid_environment':url.protocol!=='https:'?'https_required':!(url.hostname==='pagadito.com'||url.hostname.endsWith('.pagadito.com'))||/(^|[.-])sandbox([.-]|$)/i.test(url.hostname)?'domain_not_allowed':url.username||url.password?'embedded_credentials':url.port?'custom_port':null;
