@@ -19,36 +19,41 @@ import { ADVANCED_ARRAYS } from './advanced.mjs';
 import { branchAccess, scopeBranch, mergeBranch, companyBranches, materializeBranches } from './branches.mjs';
 import { syncBarcodes, guardPeriods } from './controls.mjs';
 import { repairTestPlanRevision, readAccounting, syncAccounting, convertAccounting, returnToLegacy, storageState, retainedCompanyData } from './accounting-storage.mjs';
-import { normalizeDocument } from './accounting-codec.mjs';
+import { accountingDocument, operationalDocument, normalizeDocument } from './accounting-codec.mjs';
 import { promisify } from 'node:util';
 import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
 import { and, desc, eq, lt, or, isNull, sql, getTableColumns } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
-import { companies, companyMembers, companyBackups, auditEvents, sessions, saveOperations } from '../../db/schema.ts';
-import { adminEmail, OPERATION_ARRAYS, roleAllows, salesAdministrator, cashAdministrator, operatorId, receiptRecords } from './policies.mjs';
+import { companies, companyMembers, companyRoles, companyBackups, auditEvents, sessions, saveOperations } from '../../db/schema.ts';
+import { roleRules, adminEmail, OPERATION_ARRAYS, roleAllows, salesAdministrator, cashAdministrator, operatorId, receiptRecords } from './policies.mjs';
 
-export const MODULES = [...catalog.all, 'ventas', 'compras', 'gastos', 'inventario', 'contabilidad', 'finanzas', 'personal', 'fiscal', 'ajustes', 'accesibilidad', 'auditoria', 'auditoria_revision', 'facturacion', 'cajas', 'costos', 'proveedores', 'diseno_factura'];
+export const MODULES = ['panel', ...catalog.all, 'ventas', 'compras', 'gastos', 'inventario', 'contabilidad', 'finanzas', 'personal', 'fiscal', 'ajustes', 'accesibilidad', 'auditoria', 'auditoria_revision', 'facturacion', 'cajas', 'costos', 'proveedores', 'diseno_factura'];
 const DATA_MODULES = ['compras', 'gastos', 'inventario', 'contabilidad', 'finanzas', 'personal', 'fiscal'];
 const deriveKey = promisify(scrypt);
 const round = value => Math.round(value * 100) / 100;
 const canonical = value => JSON.stringify(value, (key, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(name => [name, item[name]])) : item);
 export const equal = (first, second) => canonical(first) === canonical(second);
-export const requireModule = (access,module,write=false) => { requirePlanModule(access.billingPlan,module); if(!allowed(access,module,write))accessError('No tienes permiso para '+module+'.'); };
-export const allowed = (access, module, write = false) => {
+export const requireModule = (access,module,write=false) => { requirePlanModule(access.billingPlan,module); if(!allowed(access,module,write,write ? access.permissionAction : 'view'))accessError('No tienes permiso para '+module+'.'); };
+export const allowed = (access, module, write = false, action = null) => {
   if(module==='auditoria_revision'&&access.support)return false;
   if(access.support && write)return false;
   if(access.billingPlan && !moduleIncluded(access.billingPlan,module))return false;
   if(access.readOnlyLimit && write)return false;
   if (access.owner) return true;
   module=({control_personal:'personal',sucursales:'ajustes',decisiones:'finanzas'})[module]||module;
+  if (module === 'accesibilidad') {
+    if (access.rolePolicy) return roleRules.permits(access.rolePolicy,module,'edit');
+    if (access.permissions?.accesibilidad !== 'escritura' || !roleAllows(access,module)) return false;
+  }
+  if (access.rolePolicy) return action ? roleRules.permits(access.rolePolicy,module,action) : write ? ['create','edit','delete'].some(a=>roleRules.permits(access.rolePolicy,module,a)) : roleRules.permits(access.rolePolicy,module);
   const fallback = { facturacion: 'ventas', cajas: 'contabilidad', costos: 'gastos', proveedores: 'compras' };
   const level = access.permissions?.[module] ?? (module==='auditoria_revision'&&access.member?.role?.toLowerCase()==='contador'?'escritura':undefined) ?? (access.member?.role?.toLowerCase() === 'contador' ? access.permissions?.[fallback[module]] : undefined);
   return !!roleAllows(access, module) && !(write && roleAllows(access, module) === 'lectura') && (level === 'escritura' || (!write && level === 'lectura'));
 };
 export const allData = (access, write = false) => (access.company?.data?.businessRecords||[]).every(r=>allowed(access,r.module,write)) && (access.company?.data?.fiscalWorkflows||[]).every(r=>allowed(access,r.module,write)) && access.unrestrictedBranches !== false && !(access.billingPlan?.blockedModules||[]).some(m=>['control_personal','decisiones'].includes(m)) && salesAdministrator(access) && [...DATA_MODULES, 'ventas', 'facturacion', 'cajas', 'costos', 'proveedores'].every(module => allowed(access, module, write));
 export const actorName = session => session.member ? `${session.member.name} (${session.member.username || session.email})` : session.email;
-export const safeMember = member => ({ id: member.id, email: member.email, username: member.username, name: member.name, role: member.role, permissions: member.permissions, branchIds: member.branchIds, active: member.active, version: member.version });
+export const safeMember = member => ({ id: member.id, email: member.email, username: member.username, name: member.name, role: member.role, roleId: member.roleId, permissionExceptions: member.permissionExceptions, permissions: member.permissions, branchIds: member.branchIds, active: member.active, version: member.version });
 export function accessError(message, status = 403) {
   const error = new Error(message);
   error.publicMessage = message;
@@ -102,7 +107,6 @@ export async function companyAccess(client, companyId, session, lock = false, lo
       if(!plan)accessError('Plan no disponible.',403);
       billing={ent,plan:{...plan,limits:ownerUser?.platformAdmin?plan.limits:planLimits(plan,sub)}};
     } else billing=await requireBilling(company.ownerEmail,ownerUser?.platformAdmin===true,client);
-    if(company.data&&loadAccounting!=='guide'){company.data.cfg||={};company.data.cfg.allowNegativeValues=company.allowNegativeValues===true;}
     const result=await branchAccess(access,session);result.billingPlan=billing.plan;result.entitlement=billing.ent;result.internalTestPlan=internalTest?billing.plan.id:null;
     const ownedRows=await client.select({id:companies.id}).from(companies).where(and(eq(companies.ownerEmail,company.ownerEmail),isNull(companies.archivedAt))).orderBy(sql`coalesce((select min(${auditEvents.createdAt}) from ${auditEvents} where ${auditEvents.companyId}=${companies.id} and ${auditEvents.action}='Empresa creada'), (select min(${auditEvents.createdAt}) from ${auditEvents} where ${auditEvents.companyId}=${companies.id}), ${companies.updatedAt})`,companies.id);
     const limit=billing.plan?.limits?.companies;result.readOnlyLimit=!(ownerUser?.platformAdmin===true&&company.ownerEmail===adminEmail())&&!company.isPlatformCompany&&!internalTest&&limit!=null&&ownedRows.findIndex(c=>c.id===company.id)>=limit;
@@ -128,7 +132,14 @@ export async function companyAccess(client, companyId, session, lock = false, lo
     return finish({company,owner:false,support:true,supportExpiresAt:grant.expiresAt,permissions:Object.fromEntries(MODULES.map(m=>[m,'lectura'])),member:{role:'contador'}});
   }
   if (lock && loadAccounting === true) company.data = await readAccounting(client, company);
-  return finish({ company, owner: false, permissions: member.permissions, member });
+  let rolePolicy = null;
+  if (member.roleId) {
+    const [role] = await client.select().from(companyRoles).where(and(eq(companyRoles.id,member.roleId),eq(companyRoles.companyId,companyId)));
+    if (!role) accessError('El cargo ya no está disponible. Solicita revisar tu acceso.');
+    rolePolicy = member.permissionExceptions || role.policy;
+    member = { ...member, role: role.name, permissions: roleRules.levels(rolePolicy) };
+  }
+  return finish({ company, owner: false, permissions: member.permissions, member, rolePolicy });
 }
 export function entryModule(entry) {
   if(String(entry.type).startsWith('tesoreria-'))return entry.type.slice(10);
@@ -159,7 +170,7 @@ const visibleEntry = (access, entry, data) => {
 const restrictedPlan = access => !!access.billingPlan?.blockedModules?.length;
 
 export function projectData(data, access) {
-  data = scopeBranch(data, access);
+  data = scopeBranch(operationalDocument(data, access.company?.allowNegativeValues), access);
   const serviceEmployeeIds=new Set((data?.employees||[]).map(e=>e.id));
   if (!data) return data;
   if(access.owner&&!restrictedPlan(access)){
@@ -167,7 +178,7 @@ export function projectData(data, access) {
     if(Array.isArray(data.entries))data.entries=data.entries.map(e=>projectServiceEntry(e,true,serviceEmployeeIds));
     return data;
   }
-  const operationalOnly = ['cajero', 'vendedor'].includes(String(access.member?.role).toLowerCase());
+  const operationalOnly = access.rolePolicy ? access.rolePolicy.ownOperations === true : ['cajero', 'vendedor'].includes(String(access.member?.role).toLowerCase());
   const ownId = access.member?.id;
   const ownShiftIds = new Set((data.shifts || []).filter(shift => shift.operatorId === ownId).map(shift => shift.id));
   const ownFundIds = new Set((data.pettyFunds || []).filter(fund => fund.responsible === ownId).map(fund => fund.id));
@@ -302,7 +313,8 @@ function restoreServiceEntryProjections(current,entries,access){
 }
 export function mergeData(current, incoming, access, {restoreServiceConfiguration=false}={}) {
   if (!incoming || !['accounts', 'entries', 'products'].every(name => Array.isArray(incoming[name]))) accessError('Datos contables inválidos.', 400);
-  incoming.cfg||={};incoming.cfg.allowNegativeValues=access.company?.allowNegativeValues===true;
+  current = operationalDocument(current, access.company?.allowNegativeValues);
+  incoming = operationalDocument(incoming, access.company?.allowNegativeValues);
   const goals=incoming.cfg?.operatingDailyGoals;
   if(goals!==undefined){
     if(!Array.isArray(goals)||goals.length>500)accessError('Metas diarias inválidas.',400);
@@ -451,7 +463,6 @@ export async function updateCompany(companyId, session, revision, mutate, action
       }
     }
     access.company.data = await readAccounting(client, access.company);
-    if(access.company.data){access.company.data.cfg||={};access.company.data.cfg.allowNegativeValues=access.company.allowNegativeValues===true;}
     timings.readMs = Math.round(performance.now() - started);
     const remember = async result => {
       if (operation) await client.insert(saveOperations).values({companyId, operationId: operation.id, actor: operationActor, payloadHash: operation.hash, revision: result.revision, resultId: operation.resultId?.() || null});
@@ -459,16 +470,17 @@ export async function updateCompany(companyId, session, revision, mutate, action
     };
     const fullCompany = access.company;
     if(fullCompany.data?.cfg?.profilePending && !['Operación: completeProfile','Reparación de campos iniciales'].includes(action))accessError('Completa primero el perfil de tu empresa.',409);
-    const company = { ...fullCompany, data: scopeBranch(fullCompany.data, access) };
+    const company = { ...fullCompany, data: scopeBranch(operationalDocument(fullCompany.data, fullCompany.allowNegativeValues), access) };
     if (!Number.isInteger(revision) || company.revision !== revision) accessError('Los datos cambiaron en otra pestaña. Descarga un respaldo y recarga antes de continuar.', 409);
     let phase = performance.now();
-    const patch = await mutate(company, access, client);
+    const operationAccess = { ...access, company: { ...fullCompany, data: operationalDocument(fullCompany.data, fullCompany.allowNegativeValues) } };
+    const patch = await mutate(company, operationAccess, client);
     timings.validateMs = Math.round(performance.now() - phase);
     const crossBranch=patch.crossBranch;delete patch.crossBranch;
     if(crossBranch && !(action==='Operación: costingMethod'&&access.owner) && !CROSS_BRANCH_OPS.some(op=>action==='Operación: '+op)) accessError('Operación entre sucursales no autorizada.');
     if(Object.hasOwn(patch,'allowNegativeValues')&&!(action==='Operación: settings'&&access.owner&&!access.support))accessError('Solo el dueño cambia esta configuración.');
     if (patch.data) {
-      patch.data.cfg||={};patch.data.cfg.allowNegativeValues=patch.allowNegativeValues??fullCompany.allowNegativeValues??false;
+      patch.data = accountingDocument(patch.data);
       const auditOnly=REVIEW_OPS.some(op=>action==='Operación: '+op);
       if(auditOnly)patch.data=mergeAuditReviewPatch(fullCompany.data,company.data,patch.data,access,action);
       else {if(!crossBranch) patch.data = mergeBranch(fullCompany.data, company.data, patch.data, access, action === 'Operación: branch' && access.owner);materializeBranches(patch.data);}
@@ -480,8 +492,10 @@ export async function updateCompany(companyId, session, revision, mutate, action
       guardServicePayroll(fullCompany.data,patch.data,(ok,message)=>{if(!ok)accessError(message,400)});
       guardPeriods(fullCompany.data, patch.data, action);
       guardWorkflows(fullCompany.data,patch.data,action);
+      guardRoleChanges(fullCompany.data, patch.data, access, action);
       await syncBarcodes(client, fullCompany, patch.data);
     }
+    fullCompany.data = accountingDocument(fullCompany.data);
     if (Object.entries(patch).every(([name, value]) => equal(fullCompany[name], value))) return remember({ revision: company.revision, data: projectData(fullCompany.data, access) });
     phase = performance.now();
     obsoleteKeys = await checkpoint(client, fullCompany);
@@ -493,7 +507,7 @@ export async function updateCompany(companyId, session, revision, mutate, action
     const changes = dataChanges(fullCompany.data, updated.data);
     for (const field of ['name', 'description', 'businessType', 'businessCustomization', 'onboardingDone']) if (!equal(company[field],updated[field])) changes.push({ area: field, before: company[field], after: updated[field] });
     await audit(client, companyId, { ...session, auditBranchId: access.branchId }, action, changes, updated.revision);
-    return remember({ revision: updated.revision, data: projectData(updated.data, access), timings });
+    return remember({ revision: updated.revision, data: projectData(updated.data, { ...access, company: updated }), timings });
   });
   if (obsoleteKeys.length) {
     try {
@@ -554,10 +568,22 @@ export async function manageMember(companyId, session, body) {
       const count = await client.select({ id: companyMembers.id }).from(companyMembers).where(eq(companyMembers.companyId, companyId)).limit(100);
       if (count.length >= 100) accessError('Límite de 100 accesos por empresa.', 400);
     }
+    if (previous && !access.owner) validateRolePolicy(previous.roleId ? previous.permissionExceptions || (await client.select().from(companyRoles).where(and(eq(companyRoles.id,previous.roleId),eq(companyRoles.companyId,companyId))))[0]?.policy : roleRules.legacyPolicy(previous.role,previous.permissions,MODULES),access);
     const branchIds = body.branchIds ?? previous?.branchIds ?? ['principal'];
     if (!Array.isArray(branchIds) || !branchIds.length || branchIds.some(id => !companyBranches(access.company.data).some(b => b.id === id && b.active !== false))) accessError('Selecciona sucursales válidas.', 400);
     if (!access.owner && branchIds.some(id => !access.branches.some(b => b.id === id))) accessError('No puedes asignar otra sucursal.');
-    const values = { branchIds, name, role, email, username, permissions: validatePermissions(body.permissions, access, role), active: body.active !== false, passwordHash: username ? passwordHash || previous?.passwordHash : null };
+    let roleId = previous?.roleId || null, permissionExceptions = previous?.permissionExceptions || null;
+    let permissions = previous?.permissions, assignedName = role;
+    if (body.roleId) {
+      const [assigned] = await client.select().from(companyRoles).where(and(eq(companyRoles.id,body.roleId),eq(companyRoles.companyId,companyId)));
+      if (!assigned) accessError('Selecciona un cargo de esta empresa.',400);
+      const policy = body.permissionExceptions || assigned.policy;
+      validateRolePolicy(policy,access);
+      roleId = assigned.id; assignedName = assigned.name; permissionExceptions = body.permissionExceptions || null;
+      permissions = roleRules.levels(policy);
+    } else if (!previous || body.applyRole === true) accessError('Selecciona un cargo de esta empresa.',400);
+    else { assignedName = previous.role; if (body.permissions && !equal(body.permissions,previous.permissions)) permissions = validatePermissions(body.permissions,access,previous.role); }
+    const values = { roleId, permissionExceptions, branchIds, name, role: assignedName, email, username, permissions, active: body.active !== false, passwordHash: username ? passwordHash || previous?.passwordHash : null };
     const [member] = previous ? await client.update(companyMembers).set({ ...values, version: previous.version + 1 }).where(eq(companyMembers.id, previous.id)).returning() : await client.insert(companyMembers).values({ ...values, companyId }).returning();
     if (previous) await client.delete(sessions).where(or(eq(sessions.memberId, previous.id), ...(previous.email ? [eq(sessions.email, previous.email)] : [])));
     await audit(client, companyId, session, previous ? 'Acceso modificado' : 'Acceso creado', [{ area: 'accesibilidad', id: member.id, before: previous ? safeMember(previous) : null, after: safeMember(member), passwordChanged: !!passwordHash }]);
@@ -589,6 +615,55 @@ export async function migrateAccountingStorage(companyId, session, body) {
     await audit(client, companyId, session, mode === 'apply' ? 'Almacenamiento relacional activado y verificado' : 'Lectura JSON recuperada sin borrar tablas', [{ area: 'almacenamiento', after: result }], company.revision);
     return { ...result, verified: true, persisted: true };
   });
+}
+
+export function validateRolePolicy(policy, access) {
+  if (!policy || typeof policy !== 'object' || Array.isArray(policy) || !policy.modules || !policy.specials) accessError('Permisos del cargo inválidos.',400);
+  if (Object.keys(policy).some(k=>!['modules','specials','ownOperations'].includes(k)) || typeof policy.ownOperations !== 'boolean') accessError('Alcance del cargo inválido.',400);
+  for (const [module,grants] of Object.entries(policy.modules)) {
+    if (!MODULES.includes(module) || !grants || typeof grants !== 'object' || Object.keys(grants).some(a=>!roleRules.actions.includes(a)) || roleRules.actions.some(a=>typeof grants[a]!=='boolean')) accessError('Permisos del módulo inválidos.',400);
+    if (!grants.view && ['create','edit','delete'].some(a=>grants[a])) accessError('Crear, editar y borrar requieren permiso de ver.',400);
+    if (!access.owner && roleRules.actions.some(action=>grants[action]&&!allowed(access,module,action!=='view',action))) accessError('No puedes conceder permisos que no tienes.');
+  }
+  if (Object.keys(policy.specials).some(k=>!roleRules.specials.includes(k)) || roleRules.specials.some(k=>typeof policy.specials[k]!=='boolean')) accessError('Permisos especiales inválidos.',400);
+  const admin = policy.modules.accesibilidad;
+  if (admin && (admin.view !== admin.edit || admin.create !== admin.edit || admin.delete !== admin.edit)) accessError('Administrar accesos se concede como un único permiso.',400);
+  if (!access.owner) {
+    const ceiling = access.rolePolicy || roleRules.legacyPolicy(access.member?.role,access.permissions,MODULES);
+    if (!roleRules.within(policy,ceiling)) accessError('No puedes conceder ni modificar permisos superiores a los tuyos.');
+  }
+  return structuredClone(policy);
+}
+
+function guardRoleChanges(previous, next, access, operation) {
+  if (access.owner || !access.rolePolicy || !next) return;
+  const serverOperation = operation.startsWith('Operación: ');
+  const previousCfg = accountingDocument(scopeBranch(previous,access))?.cfg, nextCfg = accountingDocument(next)?.cfg;
+  if (!equal(previousCfg,nextCfg) && !serverOperation) {
+    const oldCfg = {...previousCfg}, proposedCfg = {...nextCfg};
+    const fiscalChanged = !equal(oldCfg.fiscal,proposedCfg.fiscal); delete oldCfg.fiscal; delete proposedCfg.fiscal;
+    if ((fiscalChanged && !allowed(access,'fiscal',true,'edit')) || (!equal(oldCfg,proposedCfg) && !allowed(access,'ajustes',true,'edit'))) accessError('No tienes permiso para editar la configuración.');
+  }
+  const modules = {...ADVANCED_ARRAYS,...TRADE_ARRAYS,accounts:'contabilidad',customers:'ventas',products:'inventario',suppliers:'proveedores',shifts:'facturacion',cashMovements:'cajas',pettyFunds:'cajas',pettyVouchers:'cajas',cashCounts:'cajas',costCatalog:'costos',costs:'costos',employees:'personal',payrolls:'personal',settlements:'personal',taxes:'fiscal',properties:'fiscal',stockTransfers:'inventario',branches:'ajustes',entries:null,businessRecords:null,fiscalWorkflows:null};
+  for (const [collection,module] of Object.entries(modules)) {
+    if (serverOperation && collection === 'accounts') continue;
+    if (collection === 'branches' && equal(companyBranches(previous),companyBranches(next))) continue;
+    if (!Array.isArray(next[collection]) && !Array.isArray(previous?.[collection])) continue;
+    const key = row => row.id || row.code;
+    const before = new Map((previous?.[collection]||[]).map(row=>[key(row),row]));
+    const after = new Map((next[collection]||[]).map(row=>[key(row),row]));
+    for (const id of new Set([...before.keys(),...after.keys()])) {
+      let old = before.get(id), row = after.get(id);
+      if (serverOperation && operation !== 'Operación: product' && collection==='products' && old && row) {
+        old={...old};row={...row};for(const k of ['stock','cost']){delete old[k];delete row[k]}
+      }
+      if (equal(old,row)) continue;
+      const target=module || (collection==='entries'?entryAccessModule(row||old,next):(row||old).module);
+      if (!target) accessError('No se pudo determinar el permiso del registro.');
+      const action=!old?'create':!row?'delete':'edit';
+      if (!allowed(access,target,true,action)) accessError('No tienes permiso para '+({create:'crear',edit:'editar',delete:'borrar'})[action]+' en '+target+'.');
+    }
+  }
 }
 
 // Shared creation path: caller supplies the server-resolved limit, never browser authority.

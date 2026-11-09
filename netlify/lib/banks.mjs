@@ -104,7 +104,7 @@ export function bankOperation(data,access,session,body,ctx){
  check(date>=statement.to,'La confirmación no puede ser anterior al cierre del extracto.');
  if(body.operation==='bankClose'){
   check(data.cfg.bankControls?.closingEnabled===true,'El dueño debe habilitar expresamente los cierres bancarios de esta empresa.');
-  check(access.owner||String(access.member?.role).toLowerCase()==='contador','Solo dueño o contador cierra la conciliación.');
+  check(access.owner||(access.rolePolicy?access.rolePolicy.modules?.bancos?.edit===true:String(access.member?.role).toLowerCase()==='contador'),'Solo dueño o contador cierra la conciliación.');
   const report=bankReport(data,bank.id,statement.id);check(!report.pendingBank.length&&report.totals.differenceCents===0,'Resuelve las partidas del banco y la diferencia antes de cerrar.');
   statement.status='Cerrada';statement.closedAt=event.at;statement.events.push(event);report.statement.status='Cerrada';report.statement.closedAt=event.at;report.statement.events=structuredClone(statement.events);statement.snapshot=report;return statement.id;
  }

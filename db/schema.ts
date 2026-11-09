@@ -89,6 +89,17 @@ export const sessions = pgTable('acontec_sessions', {
   expiresAt: timestamp('expires_at').notNull(),
 }, table => [serverAccess(), index('acontec_sessions_expires_at_idx').on(table.expiresAt)]).enableRLS();
 
+export const companyRoles = pgTable('acontec_company_roles', {
+  id: uuid().defaultRandom().primaryKey(),
+  companyId: uuid('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  key: text(),
+  name: text().notNull(),
+  description: text().default('').notNull(),
+  policy: jsonb().notNull(),
+  version: integer().default(0).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, table => [serverAccess(), uniqueIndex('acontec_role_company_id_idx').on(table.companyId, table.id), uniqueIndex('acontec_role_company_key_idx').on(table.companyId, table.key), uniqueIndex('acontec_role_company_name_idx').on(table.companyId, table.name)]).enableRLS();
+
 export const companyMembers = pgTable('acontec_company_members', {
   id: uuid().defaultRandom().primaryKey(),
   companyId: uuid('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
@@ -97,12 +108,14 @@ export const companyMembers = pgTable('acontec_company_members', {
   passwordHash: text('password_hash'),
   name: text().notNull(),
   role: text().notNull(),
+  roleId: uuid('role_id'),
+  permissionExceptions: jsonb('permission_exceptions'),
   branchIds: jsonb('branch_ids').default(['principal']).notNull(),
   permissions: jsonb().notNull(),
   active: boolean().default(true).notNull(),
   version: integer().default(0).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-}, table => [serverAccess(), uniqueIndex('acontec_member_company_email_idx').on(table.companyId, table.email)]).enableRLS();
+}, table => [serverAccess(), uniqueIndex('acontec_member_company_email_idx').on(table.companyId, table.email), foreignKey({columns:[table.companyId,table.roleId],foreignColumns:[companyRoles.companyId,companyRoles.id],name:'acontec_member_company_role_fk'})]).enableRLS();
 
 export const auditEvents = pgTable('acontec_audit_events', {
   id: uuid().defaultRandom().primaryKey(),

@@ -137,6 +137,7 @@ V.panel=function(){
 
 function billingSpecialPermission(module,permissionModule,write=false){
  if(!CO||!billingCan(module))return false;if(CO.owner)return true;
+ if(CO.rolePolicy)return permission(permissionModule,write);
  const role=String(CO.role||'').toLowerCase();if(['cajero','vendedor','supervisor'].includes(role))return false;
  return CO.permissions?.[permissionModule]==='escritura'||(!write&&CO.permissions?.[permissionModule]==='lectura');
 }

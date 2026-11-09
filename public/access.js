@@ -4,6 +4,9 @@ const ACCESS_MODULES=[['ventas','Ventas'],['compras','Compras'],['gastos','Gasto
 const ROUTE_MODULE={ventas:'ventas',compras:'compras',gastos:'gastos',productos:'inventario',kardex:'inventario',apertura:'contabilidad',diario:'contabilidad',mayor:'contabilidad',cuentas:'contabilidad',cobrar:'contabilidad',pagar:'contabilidad',balanza:'finanzas',resultados:'finanzas',balance:'finanzas',flujo:'finanzas',personal:'personal',nomina:'personal',liquidaciones:'personal',provisiones:'personal',fiscal:'fiscal',impuestos:'fiscal',propiedades:'fiscal',reglas:'fiscal',ajustes:'ajustes',accesibilidad:'accesibilidad',auditoria:'auditoria'};
 const permission=(module,write=false)=>{
   if(!CO)return false;if(CO.support&&write)return false;if(CO.readOnlyLimit&&write)return false;if(CO.billingPlan?.blockedModules?.includes(module))return false;if(CO.owner)return true;
+  if(module==='accesibilidad'){if(CO.rolePolicy)return AcontecRoles.permits(CO.rolePolicy,module,'edit');if(CO.permissions?.accesibilidad!=='escritura')return false;}
+  if(CO.rolePolicy)module=({control_personal:'personal',decisiones:'finanzas',sucursales:'ajustes'})[module]||module;
+  if(CO.rolePolicy)return write?['create','edit','delete'].some(action=>AcontecRoles.permits(CO.rolePolicy,module,action)):AcontecRoles.permits(CO.rolePolicy,module);
   if(module==='diseno_factura'){const level=CO.permissions?.[module];return level==='escritura'||(!write&&level==='lectura')}
   const role=String(CO.role||'').trim().toLowerCase();
   if(module==='auditoria_revision'){if(CO.support)return false;const level=CO.permissions?.[module]??(role==='contador'?'escritura':'ninguno');return level==='escritura'||(!write&&level==='lectura')}
@@ -15,7 +18,7 @@ const permission=(module,write=false)=>{
 };
 ROUTE_MODULE.clientes='ventas';
 const completeAccess=(write=false)=>ACCESS_MODULES.slice(0,8).every(([module])=>permission(module,write));
-function routeAllowed(route){if(route==='panel')return !!CO;if(route==='pagina')return !!U?.editor&&isAcontecCompany();if(route==='administracion')return !!U?.admin;return !!ROUTE_MODULE[route]&&permission(ROUTE_MODULE[route])}
+function routeAllowed(route){if(route==='panel')return !!CO&&(!CO.rolePolicy||permission('panel'));if(route==='pagina')return !!U?.editor&&isAcontecCompany();if(route==='administracion')return !!U?.admin;return !!ROUTE_MODULE[route]&&permission(ROUTE_MODULE[route])}
 function firstAllowedRoute(){return MENU.flatMap(([,items])=>items).find(([route])=>routeAllowed(route))?.[0]||'sinacceso'}
 function canSave(){return !!CO&&!CO.support&&!CO.readOnlyLimit&&(CO.owner||ACCESS_MODULES.some(([module])=>permission(module,true)))}
 const READ_ACTIONS=new Set(['nav','menu','close','switch','opencomp','logout','per','print','printEntry','printSale','backup','backupAll','companyPdf','downloadSnapshot','auditPrev','auditNext','auditDetails','taxDetails','invoiceHistory','payrollDetail','exportTaxes','exportTaxReport','downloadReceipt']);
@@ -36,7 +39,9 @@ function actionAllowed(action,data={}){
   if(['editCustomer','customerHistory','customerStatementPrint','customerStatementExport'].includes(action))return permission('ventas');
   if(READ_ACTIONS.has(action))return true;
   if(action==='delentry'){const entry=S.entries.find(record=>record.id===data.id);return !!entry&&permission(clientEntryModule(entry),true)}
-  return permission(ACTION_MODULE[action]||ROUTE_MODULE[R],true);
+  const module=ACTION_MODULE[action]||ROUTE_MODULE[R];
+  if(CO.rolePolicy&&!CO.owner){const kind=/^(del|delete|remove|reverse|void)/i.test(action)?'delete':/^(edit|update|close|toggle|replenish|restore|adjust|adj)/i.test(action)?'edit':'create';if(!AcontecRoles.permits(CO.rolePolicy,module,module==='accesibilidad'?'edit':kind))return false;}
+  return permission(module,true);
 }
 function clientEntryModule(entry){if(entry.type==='venta')return 'ventas';if(entry.type==='compra')return 'compras';if(entry.type==='gasto')return 'gastos';if(['invini','ajuste'].includes(entry.type))return 'inventario';if(['nomina','liquidacion'].includes(entry.type))return 'personal';if(entry.type.startsWith('fiscal'))return 'fiscal';return 'contabilidad'}
 function enforceAccessUI(){
@@ -58,57 +63,54 @@ authView=function(){
 };
 ACT.workerLogin=()=>modal(uiT("access.extra.2","Acceso de colaborador"),`<p class="mut">${esc(uiT("access.7","Usa el usuario y la contraseña que te asignó el responsable. Solo verás los módulos autorizados."))}</p><label>${esc(uiT("access.8","Nombre de usuario"))}<input name="username" minlength="4" maxlength="40" autocomplete="username" required autocapitalize="none"></label><label>${esc(uiT("access.9","Contraseña"))}<input name="password" type="password" maxlength="128" autocomplete="current-password" required></label>`,async form=>{await session(await api('worker-login','POST',{username:v(form,'username'),password:v(form,'password')}))},'Ingresar');
 
-let memberList=[],memberOwner='',auditPage=0,auditRows=[],auditMore=false,accessRequest=0,auditSearchRequest=0;
+let companyRoleList=[],roleModuleList=[],memberList=[],memberOwner='',auditPage=0,auditRows=[],auditMore=false,accessRequest=0,auditSearchRequest=0;
 const originalNav=ACT.nav;
 ACT.nav=data=>{if(data.r==='auditoria')auditPage=0;originalNav(data)};
 const levelLabel=level=>level==='escritura'?'Lectura y escritura':level==='lectura'?'Solo lectura':'Sin acceso';
 const permissionSummary=permissions=>ACCESS_MODULES.filter(([module])=>permissions[module]&&permissions[module]!=='ninguno').map(([module,label])=>`${label}: ${levelLabel(permissions[module])}`).join(' · ');
 const loadingCard=text=>`<div class="card access-loading" aria-busy="true"><p>${esc(text)}</p><span></span><span></span><span></span></div>`;
 V.accesibilidad=async()=>{
+  if(!permission('accesibilidad',true)){V.sinacceso();return;}
   const request=++accessRequest,companyId=CO.id;
   main(`<div class="ph"><h2>${esc(uiT("access.10","Accesibilidad"))}</h2></div>`+loadingCard(uiT("access.11","Consultando los accesos de la empresa…")));
   try{
-    const result=await api('members?c='+companyId);
+    const result=await api('roles?c='+companyId);
     if(R!=='accesibilidad'||CO.id!==companyId||request!==accessRequest)return;
-    memberList=result.members;memberOwner=result.owner;
-    main(`<div class="ph"><div><h2>${esc(uiT("access.16","Accesibilidad"))}</h2><p class="mut">Personas, cargos y permisos de ${esc(CO.name)}</p></div>${permission('accesibilidad',true)?`<button class="btn" data-a="newMember">${esc(uiT("access.12","Crear acceso"))}</button>`:''}</div><div class="card owner-access"><span class="access-avatar">${esc(memberOwner.charAt(0).toUpperCase())}</span><div><b>${esc(uiT("access.17","Dueño de la empresa"))}</b><p>${esc(memberOwner)}</p></div><span class="ledger-badge paid">${esc(uiT("access.18","Acceso completo · protegido"))}</span></div><p class="accounting-notice">${esc(uiT("access.19","Los permisos se aplican también en la API. Un colaborador no puede abrir módulos ocultos ni crear otra empresa con su usuario. Los accesos por correo usan el registro habitual y la confirmación del correo; los usuarios asignados ingresan desde «Ingresar como colaborador»."))}</p>${memberList.length?`<div class="member-grid">${memberList.map(member=>`<article class="card member-card"><div class="member-heading"><span class="access-avatar">${esc(member.name.charAt(0).toUpperCase())}</span><div><h3>${esc(member.name)}</h3><p class="mut">${esc(member.role)}</p></div><span class="ledger-badge ${member.active?'paid':'pending'}">${member.active?'Activo':'Desactivado'}</span></div><p class="member-login">${member.username?`Usuario: <b>${esc(member.username)}</b><br>`:''}${member.email?`Correo: ${esc(member.email)}`:''}</p><p class="member-scopes">${esc(permissionSummary(member.permissions))}</p>${permission('accesibilidad',true)?`<div class="accounting-actions"><button class="btn ghost" data-a="editMember" data-id="${member.id}">${esc(uiT("access.13","Editar permisos"))}</button><button class="lk" data-a="toggleMember" data-id="${member.id}">${member.active?'Desactivar':'Reactivar'}</button></div>`:''}</article>`).join('')}</div>`:`<div class="card empty-access"><h3>${esc(uiT("access.14","Tu equipo todavía no tiene accesos"))}</h3><p>${esc(uiT("access.15","Crea un usuario para ventas, un acceso para tu contador o una cuenta de solo lectura."))}</p></div>`}`);
+    memberList=result.members;memberOwner=result.owner;companyRoleList=result.roles;roleModuleList=result.modules;
+    main(`<div class="ph"><div><h2>${esc(uiT("access.16","Accesibilidad"))}</h2><p class="mut">Personas, cargos y permisos de ${esc(CO.name)}</p></div>${permission('accesibilidad',true)?`<button class="btn" data-a="newMember">${esc(uiT("access.12","Crear acceso"))}</button>`:''}</div><div class="card owner-access"><span class="access-avatar">${esc(memberOwner.charAt(0).toUpperCase())}</span><div><b>${esc(uiT("access.17","Dueño de la empresa"))}</b><p>${esc(memberOwner)}</p></div><span class="ledger-badge paid">${esc(uiT("access.18","Acceso completo · protegido"))}</span></div><p class="accounting-notice">${esc(uiT("access.19","Los permisos se aplican también en la API. Un colaborador no puede abrir módulos ocultos ni crear otra empresa con su usuario. Los accesos por correo usan el registro habitual y la confirmación del correo; los usuarios asignados ingresan desde «Ingresar como colaborador»."))}</p>${roleCards()}${memberList.length?`<div class="member-grid">${memberList.map(member=>`<article class="card member-card"><div class="member-heading"><span class="access-avatar">${esc(member.name.charAt(0).toUpperCase())}</span><div><h3>${esc(member.name)}</h3><p class="mut">${esc(member.role)}</p></div><span class="ledger-badge ${member.active?'paid':'pending'}">${member.active?'Activo':'Desactivado'}</span></div><p class="member-login">${member.username?`Usuario: <b>${esc(member.username)}</b><br>`:''}${member.email?`Correo: ${esc(member.email)}`:''}</p><p class="member-scopes">${esc(permissionSummary(AcontecRoles.levels(member.effectivePolicy)))}</p><p class="mut">${member.hasExceptions?'Excepciones individuales conservadas':'Usa los permisos del cargo'}</p>${permission('accesibilidad',true)?`<div class="accounting-actions"><button class="btn ghost" data-a="editMember" data-id="${member.id}">${esc(uiT("access.13","Editar permisos"))}</button><button class="lk" data-a="toggleMember" data-id="${member.id}">${member.active?'Desactivar':'Reactivar'}</button></div>`:''}</article>`).join('')}</div>`:`<div class="card empty-access"><h3>${esc(uiT("access.14","Tu equipo todavía no tiene accesos"))}</h3><p>${esc(uiT("access.15","Crea un usuario para ventas, un acceso para tu contador o una cuenta de solo lectura."))}</p></div>`}`);
     installSearch();enforceAccessUI();
   }catch(error){if(R==='accesibilidad'&&CO.id===companyId)main(`<div class="card"><p class="bad">${esc(error.message)}</p><button class="btn ghost" data-a="nav" data-r="accesibilidad">${esc(uiT("access.20","Reintentar"))}</button></div>`)}
 };
 function memberForm(member){
-  const existing=member?.permissions||{};
-  const form=modal(member?'Editar acceso':'Crear acceso',`<div class="permission-intro">${esc(uiT("access.21","El rol limita el acceso además de la matriz: solo dueño y contador ven Ventas. Cajero y vendedor trabajan en Facturación; el supervisor autoriza correcciones."))}</div><div class="member-form-grid"><label>${esc(uiT("access.22","Nombre de la persona"))}<input name="name" required maxlength="100" value="${esc(member?.name||'')}"></label><label>${esc(uiT("access.23","Rol"))}<select name="role">${['cajero','vendedor','supervisor','contador','observador',...(member&&!(['cajero','vendedor','supervisor','contador','observador'].includes(member.role))?[member.role]:[])].map(role=>`<option value="${esc(role)}" ${role===(member?.role||'cajero')?'selected':''}>${esc(role)}</option>`).join('')}</select></label><label>${esc(uiT("access.24","Correo (opcional)"))}<input name="email" type="email" value="${esc(member?.email||'')}"></label><label>${esc(uiT("access.25","Nombre de usuario (opcional)"))}<input name="username" pattern="[a-zA-Z][a-zA-Z0-9._-]{3,39}" maxlength="40" value="${esc(member?.username||'')}" autocapitalize="none"></label></div><label>${member?'Nueva contraseña (vacío = conservar)':'Contraseña del usuario'}<input name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password"></label><p class="mut">${esc(uiT("access.26","Elige correo, usuario o ambos. El nombre de usuario es único en toda la plataforma y requiere una contraseña de al menos 8 caracteres. Las contraseñas no se muestran ni se incluyen en respaldos."))}</p><fieldset><legend>${esc(uiT("access.27","Sucursales asignadas"))}</legend>${(CO.branches||[{id:'principal',name:'Principal'}]).map(branch=>`<label class="ck"><input type="checkbox" name="branchIds" value="${esc(branch.id)}" ${(member?.branchIds||['principal']).includes(branch.id)?'checked':''}>${esc(branch.name)}</label>`).join('')}<small>${esc(uiT("access.28","El dueño y el contador acceden a todas. Cambiar asignaciones revoca las sesiones anteriores."))}</small></fieldset><label>${esc(uiT("access.29","Plantilla de permisos"))}<select name="preset"><option value="custom">${esc(uiT("access.30","Personalizar"))}</option><option value="sales">${esc(uiT("access.31","Cajero"))}</option><option value="seller">${esc(uiT("access.32","Vendedor"))}</option><option value="supervisor">${esc(uiT("access.33","Supervisor"))}</option><option value="accountant">${esc(uiT("access.34","Contador"))}</option><option value="reader">${esc(uiT("access.35","Solo lectura de todos los datos"))}</option></select></label><div class="permission-matrix">${ACCESS_MODULES.map(([module,label])=>`<label><span>${esc(label)}</span><select name="perm_${module}" aria-label="Permiso para ${esc(label)}">${['ninguno','lectura','escritura'].map(level=>`<option value="${level}" ${(existing[module]||(module==='auditoria_revision'&&member?.role==='contador'?'escritura':member?'ninguno':module==='facturacion'?'escritura':module==='inventario'?'lectura':'ninguno'))===level?'selected':''} ${level!=='ninguno'&&!permission(module,level==='escritura')?'disabled':''}>${levelLabel(level)}</option>`).join('')}</select></label>`).join('')}</div><p class="mut">${esc(uiT("access.36","Los estados financieros y la contabilidad consultan los movimientos contables completos. Ajustes y bitácora requieren lectura de todos los módulos; restaurar requiere escritura en todos ellos. Los comprobantes fiscales privados siguen reservados al dueño."))}</p><label class="ck"><input name="active" type="checkbox" ${member?.active!==false?'checked':''}> ${esc(uiT("access.37","Acceso activo"))}</label>`,async fields=>{
-    prepareAccounting();
-    if(CO.owner)save();
+  if(!permission('accesibilidad',true))return;
+  const selectedRole=companyRoleList.find(role=>role.id===member?.roleId)||companyRoleList.find(role=>role.key===member?.role?.toLowerCase())||companyRoleList.find(role=>role.key==='cajero');
+  const initial=member?.effectivePolicy||selectedRole?.policy||emptyRolePolicy();
+  const form=modal(member?'Editar acceso':'Crear acceso',`<p class="mut">El cargo define los permisos. Los accesos existentes conservan sus excepciones individuales hasta que confirmes reemplazarlas.</p><div class="member-form-grid"><label>Nombre de la persona<input name="name" required maxlength="100" value="${esc(member?.name||'')}"></label><label>Cargo<select name="roleId" required>${companyRoleList.map(role=>`<option value="${esc(role.id)}" ${role.id===selectedRole?.id?'selected':''} ${!canManageRole(role.policy)?'disabled':''}>${esc(role.name)}</option>`).join('')}</select></label><label>Correo (opcional)<input name="email" type="email" value="${esc(member?.email||'')}"></label><label>Nombre de usuario (opcional)<input name="username" pattern="[a-zA-Z][a-zA-Z0-9._-]{3,39}" maxlength="40" autocapitalize="none" value="${esc(member?.username||'')}"></label></div><label>${member?'Nueva contraseña (vacío = conservar)':'Contraseña del usuario'}<input name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password"></label><p class="mut">Indica correo, usuario o ambos. El usuario requiere contraseña y es único en la plataforma. Las contraseñas no se muestran.</p><fieldset><legend>Sucursales asignadas</legend>${(CO.branches||[{id:'principal',name:'Principal'}]).map(branch=>`<label class="ck"><input type="checkbox" name="branchIds" value="${esc(branch.id)}" ${(member?.branchIds||['principal']).includes(branch.id)?'checked':''}>${esc(branch.name)}</label>`).join('')}</fieldset><label>Permisos de este acceso<select name="policyMode">${member?'<option value="preserve">Conservar permisos y excepciones actuales</option>':''}<option value="role">Usar los permisos del cargo</option><option value="custom">Definir excepciones individuales</option></select></label><div data-role-policy ${member?'hidden':''}>${rolePolicyFields(initial)}</div><label class="ck"><input name="active" type="checkbox" ${member?.active!==false?'checked':''}>Acceso activo</label>`,async fields=>{
     if(!await flush())return 'Guarda primero los cambios pendientes.';
-    const permissions=Object.fromEntries(ACCESS_MODULES.map(([module])=>[module,v(fields,'perm_'+module)]));
-    await api('members?c='+CO.id,member?'PUT':'POST',{id:member?.id,version:member?.version,name:v(fields,'name'),role:v(fields,'role'),email:v(fields,'email'),username:v(fields,'username'),password:v(fields,'password'),permissions,branchIds:[...fields.querySelectorAll('[name=branchIds]:checked')].map(input=>input.value),active:fields.elements.active.checked});
-    V.accesibilidad();
+    const mode=v(fields,'policyMode'),role=companyRoleList.find(r=>r.id===v(fields,'roleId'));
+    if(!role)return 'Selecciona un cargo.';
+    if(member&&mode!=='preserve'&&!confirm('¿Reemplazar los permisos actuales de este acceso? Sus sesiones anteriores se cierran.'))return 'Cambio sin confirmar.';
+    const assigned=mode==='preserve'?member?.roleId:role.id;
+    const exceptions=mode==='preserve'?member?.permissionExceptions:mode==='custom'?readRolePolicy(fields):null;
+    await api('members?c='+CO.id,member?'PUT':'POST',{id:member?.id,version:member?.version,name:v(fields,'name'),role:mode==='preserve'?member.role:role.name,roleId:assigned,permissionExceptions:exceptions,applyRole:mode!=='preserve',email:v(fields,'email'),username:v(fields,'username'),password:v(fields,'password'),branchIds:[...fields.querySelectorAll('[name=branchIds]:checked')].map(input=>input.value),active:fields.elements.active.checked});
+    await V.accesibilidad();
   },member?'Guardar cambios':'Crear acceso');
-  form.elements.preset.onchange=()=>{
-    const preset=form.elements.preset.value;
-    if(preset==='custom')return;
-    if(preset==='sales')form.elements.role.value='cajero';if(preset==='seller')form.elements.role.value='vendedor';if(preset==='supervisor')form.elements.role.value='supervisor';
-    if(preset==='accountant')form.elements.role.value='contador';
-    if(preset==='reader')form.elements.role.value='contador';
-
-    for(const [module] of ACCESS_MODULES){
-      let level='ninguno';
-      if(['sales','seller','supervisor'].includes(preset)&&module==='facturacion')level='escritura';if(['sales','seller'].includes(preset)&&module==='inventario')level='lectura';if(['sales','seller'].includes(preset)&&module==='cajas')level='escritura';if(preset==='supervisor'&&['cajas','inventario','costos','proveedores','compras','gastos'].includes(module))level='escritura';
-
-      if(preset==='reader'&&!['accesibilidad','diseno_factura'].includes(module))level='lectura';
-      if(preset==='accountant'&&!['accesibilidad','diseno_factura'].includes(module))level=module==='auditoria'?'lectura':'escritura';
-      const select=form.elements['perm_'+module];
-      select.value=level!=='ninguno'&&!permission(module,level==='escritura')?'ninguno':level;
-    }
+  const showPolicy=()=>{
+    const mode=form.elements.policyMode.value,box=form.querySelector('[data-role-policy]'),role=companyRoleList.find(r=>r.id===form.elements.roleId.value);
+    box.hidden=mode==='preserve';
+    if(mode!=='preserve')box.innerHTML=rolePolicyFields(mode==='custom'&&member?member.effectivePolicy:role?.policy||emptyRolePolicy());
+    box.querySelectorAll('input').forEach(input=>{if(mode==='role')input.disabled=true;});
   };
+  form.elements.policyMode.onchange=showPolicy;
+  form.elements.roleId.onchange=()=>{form.elements.policyMode.value='role';showPolicy()};
+  showPolicy();
 }
 ACT.newMember=()=>memberForm();
 ACT.editMember=data=>{const member=memberList.find(record=>record.id===data.id);if(member)memberForm(member)};
 ACT.toggleMember=async data=>{
   const member=memberList.find(record=>record.id===data.id);if(!member)return;
   if(!confirm(`${member.active?'Desactivar':'Reactivar'} el acceso de ${member.name}? Los cambios cierran sus sesiones anteriores.`))return;
-  await api('members?c='+CO.id,'PUT',{...member,active:!member.active});await V.accesibilidad();
+  await api('members?c='+CO.id,'PUT',{id:member.id,version:member.version,name:member.name,role:member.role,roleId:member.roleId,permissionExceptions:member.permissionExceptions,email:member.email,username:member.username,branchIds:member.branchIds,active:!member.active});await V.accesibilidad();
 };
 const auditDate=value=>new Date(value).toLocaleString('es',{dateStyle:'medium',timeStyle:'medium'});
 const auditArea={entries:'Asientos y documentos',products:'Inventario',accounts:'Cuentas',cfg:'Configuración',employees:'Empleados',payrolls:'Nóminas',settlements:'Liquidaciones',taxes:'Obligaciones fiscales',properties:'Propiedades',name:'Nombre de empresa',description:'Descripción',accesibilidad:'Accesos'};
@@ -300,3 +302,43 @@ async function createCompanyPdf(company,state,revision){
   return documentPdf;
 }
 ACT.companyPdf=()=>runExport(async(companyId,current)=>{const company=structuredClone(current.company),state=structuredClone(current.data),revision=current.revision;exportStatus('Generando estados financieros y documentos…');const documentPdf=await createCompanyPdf(company,state,revision);documentPdf.save(`informe-${safeFilename(company.name)}-${today()}.pdf`)});
+
+Object.assign(ACTION_MODULE,{newRole:'accesibilidad',editRole:'accesibilidad',deleteRole:'accesibilidad'});
+const roleModuleLabel=module=>module==='panel'?'Panel':ACCESS_MODULES.find(([id])=>id===module)?.[1]||AcontecProfiles.capabilities?.[module]?.name||module.replaceAll('_',' ');
+function emptyRolePolicy(){return {modules:Object.fromEntries(roleModuleList.map(module=>[module,{view:false,create:false,edit:false,delete:false}])),specials:Object.fromEntries(AcontecRoles.specials.map(key=>[key,false])),ownOperations:false}}
+function roleCeiling(){return CO.rolePolicy||AcontecRoles.legacyPolicy(CO.role,CO.permissions,roleModuleList)}
+function canManageRole(policy){return CO.owner||AcontecRoles.within(policy,roleCeiling())}
+function rolePolicyFields(policy){
+  const ceiling=roleCeiling(),labels={view:'Ver',create:'Crear',edit:'Editar',delete:'Borrar'};
+  const groups=[['Operación',['panel','ventas','facturacion','compras','gastos','inventario','costos','proveedores','cajas']],['Contabilidad y reportes',['contabilidad','finanzas','personal','fiscal','auditoria','auditoria_revision']],['Administración',['ajustes','accesibilidad','diseno_factura']],['Otros módulos',roleModuleList.filter(m=>!['panel','ventas','facturacion','compras','gastos','inventario','costos','proveedores','cajas','contabilidad','finanzas','personal','fiscal','auditoria','auditoria_revision','ajustes','accesibilidad','diseno_factura'].includes(m))]];
+  return groups.map(([group,modules])=>`<fieldset class="role-permission-group"><legend>${esc(group)}</legend>${modules.filter(m=>roleModuleList.includes(m)&&!['control_personal','decisiones'].includes(m)).map(module=>`<div class="role-permission-row"><b>${esc(roleModuleLabel(module))}</b><div class="role-permission-checks">${module==='accesibilidad'?`<label class="ck"><input type="checkbox" name="role_admin" ${policy.modules?.accesibilidad?.edit?'checked':''} ${!CO.owner&&!AcontecRoles.permits(ceiling,'accesibilidad','edit')?'disabled':''}>Administrar accesos</label>`:AcontecRoles.actions.filter(action=>module!=='panel'||action==='view').map(action=>`<label class="ck"><input type="checkbox" name="role_${module}_${action}" ${policy.modules?.[module]?.[action]?'checked':''} ${!CO.owner&&!AcontecRoles.permits(ceiling,module,action)?'disabled':''}>${labels[action]}</label>`).join('')}</div></div>`).join('')}</fieldset>`).join('')+`<fieldset class="role-permission-group"><legend>Permisos especiales y alcance</legend>${[['discounts','Autorizar descuentos (conserva la contraseña y los controles actuales)'],['corrections','Autorizar correcciones'],['salesAdmin','Administrar ventas y operar sin turno'],['cashAdmin','Administrar caja y fondos'],['allBranches','Acceder a todas las sucursales']].map(([key,label])=>`<label class="ck"><input type="checkbox" name="role_special_${key}" ${policy.specials?.[key]?'checked':''} ${!CO.owner&&!ceiling.specials?.[key]?'disabled':''}>${esc(label)}</label>`).join('')}<label class="ck"><input type="checkbox" name="role_ownOperations" ${policy.ownOperations?'checked':''} ${!CO.owner&&ceiling.ownOperations?'disabled':''}>Limitar las operaciones a los turnos y movimientos propios</label></fieldset><p class="mut">Crear, editar y borrar requieren Ver. Los permisos respetan el plan y las protecciones contables existentes. Borrar no habilita eliminar documentos protegidos ni cambia sus reglas de reversión. El dueño mantiene acceso completo.</p>`;
+}
+function readRolePolicy(form){
+  const policy=emptyRolePolicy();
+  for(const module of roleModuleList)for(const action of AcontecRoles.actions)policy.modules[module][action]=module==='accesibilidad'?form.elements.role_admin.checked:form.elements[`role_${module}_${action}`]?.checked===true;
+  for(const [alias,module] of Object.entries({control_personal:'personal',decisiones:'finanzas'}))if(roleModuleList.includes(alias))policy.modules[alias]={...policy.modules[module]};
+  for(const key of AcontecRoles.specials)policy.specials[key]=form.elements['role_special_'+key]?.checked===true;
+  policy.ownOperations=form.elements.role_ownOperations.checked;
+  return policy;
+}
+function roleCards(){return `<section class="card role-directory"><div class="ph"><div><h3>Cargos y permisos</h3><p class="mut">Configuración exclusiva de esta empresa. Las excepciones individuales se conservan.</p></div><button class="btn ghost" data-a="newRole">+ Nuevo cargo</button></div><div class="member-grid">${companyRoleList.map(role=>{
+  const count=memberList.filter(m=>m.roleId===role.id||!m.roleId&&m.role.toLowerCase()===(role.key||role.name.toLowerCase())).length;
+  return `<article class="member-card role-card"><h4>${esc(role.name)}</h4><p>${esc(role.description||'Sin descripción')}</p><p class="mut">${count} acceso${count===1?'':'s'} asignado${count===1?'':'s'}${role.key?' · Cargo inicial':''}</p>${canManageRole(role.policy)?`<div class="accounting-actions"><button class="btn ghost" data-a="editRole" data-id="${esc(role.id)}">Editar cargo</button>${!role.key?`<button class="lk" data-a="deleteRole" data-id="${esc(role.id)}">Borrar cargo</button>`:''}</div>`:''}</article>`;
+}).join('')}</div></section>`}
+function roleForm(role){
+  if(!permission('accesibilidad',true))return;
+  modal(role?'Editar cargo':'Nuevo cargo',`<label>Nombre del cargo<input name="name" required maxlength="80" value="${esc(role?.name||'')}"></label><label>Descripción corta<textarea name="description" maxlength="300" rows="2">${esc(role?.description||'')}</textarea></label>${rolePolicyFields(role?.policy||emptyRolePolicy())}`,async form=>{
+    if(!confirm(role?'¿Guardar los cambios de este cargo? Se aplican a quienes usan sus permisos; se conservan las excepciones individuales.':'¿Crear este cargo con los permisos seleccionados?'))return 'Cambio sin confirmar.';
+    await api('roles?c='+CO.id,role?'PUT':'POST',{id:role?.id,version:role?.version,name:v(form,'name'),description:v(form,'description'),policy:readRolePolicy(form),confirmed:true});await V.accesibilidad();
+  },role?'Guardar cargo':'Crear cargo');
+}
+ACT.newRole=()=>roleForm();
+ACT.editRole=data=>{const role=companyRoleList.find(r=>r.id===data.id);if(role)roleForm(role)};
+ACT.deleteRole=data=>{
+  const role=companyRoleList.find(r=>r.id===data.id);if(!role||role.key)return;
+  const assigned=memberList.filter(m=>m.roleId===role.id||!m.roleId&&m.role.toLowerCase()===(role.key||role.name.toLowerCase())),alternatives=companyRoleList.filter(r=>r.id!==role.id&&canManageRole(r.policy));
+  modal('Borrar cargo',`<p>¿Borrar el cargo <b>${esc(role.name)}</b>?</p>${assigned.length?`<p>${assigned.length} acceso(s) requieren reasignación. La reasignación aplica los permisos del nuevo cargo y cierra sus sesiones.</p><label>Reasignar a<select name="target" required><option value="">Selecciona otro cargo</option>${alternatives.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('')}</select></label>`:'<p>No tiene accesos asignados.</p>'}`,async form=>{
+    if(!confirm('¿Confirmar el borrado del cargo y la reasignación indicada?'))return 'Cambio sin confirmar.';
+    await api('roles?c='+CO.id,'DELETE',{id:role.id,version:role.version,reassignRoleId:form.elements.target?.value||null,confirmed:true});await V.accesibilidad();
+  },'Confirmar borrado');
+};

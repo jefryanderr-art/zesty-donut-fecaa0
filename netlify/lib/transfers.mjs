@@ -8,7 +8,7 @@ export function transferOperation(data,access,session,body,h){
  const source=access.branchId;check(source,'Selecciona una sucursal.');
  const posting=(branchId,record)=>append(data,session,{branchId,...record});
  if(body.operation==='moneyTransfer'){
-  permit(access,'cajas');check(access.owner||['contador','supervisor'].includes(String(access.member?.role).toLowerCase()),'Solo responsables de caja autorizados transfieren dinero.');
+  permit(access,'cajas');check(access.owner||(access.rolePolicy?access.rolePolicy.specials?.cashAdmin===true:['contador','supervisor'].includes(String(access.member?.role).toLowerCase())),'Solo responsables de caja autorizados transfieren dinero.');
   const destination=access.branches.find(b=>b.id===body.destinationId&&b.id!==source);check(destination,'Selecciona una sucursal de destino autorizada distinta.');const total=amount(body.total);check(['1101','1102'].includes(body.account),'Selecciona caja o banco.');
   const local=scopeBranch(data,access);check(data.cfg?.allowNegativeValues===true || ledgerBalance(local,body.account,when)>=total,'Saldo insuficiente en la sucursal de origen.');
   if(!data.accounts.some(a=>a.code==='1199'))data.accounts.push({code:'1199',name:'Transferencias entre sucursales',tipo:'activo',nat:'D',sub:''});

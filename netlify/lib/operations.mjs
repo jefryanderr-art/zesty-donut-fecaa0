@@ -1,3 +1,4 @@
+import { operationalDocument } from './accounting-codec.mjs';
 import {operationalType} from './business-profile.mjs';
 import {organizationReport} from './organizations.mjs';
 import {COMMERCE_PROFILES,COMMERCE_OPS,commerceRecord,commerceOperation,commerceReport,commercePrice,commerceSaleGuard,commerceSnapshot,commerceReservationsValid,commerceLoadSale} from './commerce.mjs';
@@ -203,7 +204,8 @@ export function guardCash(previous, next) {
   }
 }
 export function guardLedgerMutation(previous, next, access, {restoreServiceConfiguration=false}={}) {
-  requireValue((next.cfg?.allowNegativeValues===true)===(access.company?.allowNegativeValues===true),'Cambia los valores negativos desde Ajustes.');
+  previous = operationalDocument(previous, access.company?.allowNegativeValues);
+  next = operationalDocument(next, access.company?.allowNegativeValues);
   requireValue(equal((previous?.businessRecords||[]).filter(commerceRecord),(next.businessRecords||[]).filter(commerceRecord)),'Usa las operaciones de comercio.');
   requireValue(equal((previous?.businessRecords||[]).filter(r=>r.foodSettings).map(r=>({id:r.id,foodSettings:r.foodSettings})),(next.businessRecords||[]).filter(r=>r.foodSettings).map(r=>({id:r.id,foodSettings:r.foodSettings}))),'Usa la configuración de recetas.');
   requireValue(equal((previous?.businessRecords||[]).filter(workflowRecord),(next.businessRecords||[]).filter(workflowRecord)),'Usa las operaciones de eventos y encargos.');
@@ -695,6 +697,10 @@ export async function runOperation(companyId, session, body) {
   const receipt=body.operationId?{id:body.operationId,actor:session.email+':'+(session.memberId||''),hash:createHash('sha256').update(JSON.stringify(body)).digest('hex'),resultId:()=>typeof output==='string'?output:null}:null;
   try {
     const result = await updateCompany(companyId, session, body.revision, async (company, access, client) => {
+      if(access.rolePolicy){
+        if(/^(reverse|void|remove|delete)/i.test(body.operation))access.permissionAction='delete';
+        else if(['printSettings','settings'].includes(body.operation)||['product','supplier','costCatalog'].includes(body.operation)&&body.id)access.permissionAction='edit';
+      }
       const crossBranch=CROSS_BRANCH_OPS.includes(body.operation)||body.operation==='costingMethod';
       const data = body.operation==='completeProfile'?structuredClone(company.data):initializeOperations(structuredClone(crossBranch?access.company.data:company.data));
       guardFifoOperation(data,body);

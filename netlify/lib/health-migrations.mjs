@@ -99,5 +99,9 @@ export const EXPECTED_MIGRATIONS=[
   {
     "name": "20261109201603_add_company_negative_values",
     "hash": "35771dc40b2d8f833f6ace9098e87ead5a2976c8b8d0e9871e3e3833975e3c32"
+  },
+  {
+    "name": "20261109203628_add_company_access_roles",
+    "hash": "b679e3ae1915be652cfea03b506506667a10e24e3be7dc4a2a89b0a600fb19b0"
   }
 ];

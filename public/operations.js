@@ -10,8 +10,8 @@ for(const action of ['searchApply','searchClear','shiftDetails','downloadOperati
 MENU[0][1].splice(1,0,['facturacion','▤',uiT("operations.extra.1","Facturación")]);
 MENU[0][1].push(['proveedores','🏢',uiT("operations.extra.2","Cartera de proveedores")],['costos','◫',uiT("operations.extra.3","Costos")]);
 MENU.splice(1,0,['Tesorería',[['caja','↔',uiT("operations.extra.4","Caja general")],['cajachica','▣',uiT("operations.extra.5","Caja chica")],['reportescaja','▥',uiT("operations.extra.6","Reportes de caja")]]]);
-const isSupervisor=()=>CO.owner||String(CO.role).toLowerCase()==='supervisor';
-const isCashManager=()=>CO.owner||['contador','supervisor'].includes(String(CO.role).toLowerCase());
+const isSupervisor=()=>CO.owner||(CO.rolePolicy?CO.rolePolicy.specials?.corrections===true:String(CO.role).toLowerCase()==='supervisor');
+const isCashManager=()=>CO.owner||(CO.rolePolicy?CO.rolePolicy.specials?.cashAdmin===true:['contador','supervisor'].includes(String(CO.role).toLowerCase()));
 const operatorIdentity=()=>CO.memberId||U.email;
 const operationalRouteAllowed=routeAllowed;
 routeAllowed=function(route){if(['caja','reportescaja'].includes(route)&&!isCashManager())return false;return operationalRouteAllowed(route)};
@@ -460,7 +460,7 @@ ACT.nextTax=data=>{const tax=S.taxes.find(record=>record.id===data.id);if(tax?.s
 const finalOperationalActions=actionAllowed;
 actionAllowed=function(action,data={}){if(action==='removeTax'&&S?.taxes.find(tax=>tax.id===data.id)?.source==='anticipo')return false;return finalOperationalActions(action,data)};
 const productsForOperations=V.productos;
-V.productos=()=>{productsForOperations();if(!CO.owner&&['cajero','vendedor'].includes(String(CO.role).toLowerCase())){for(const row of $$('#main table tr')){if(row.parentElement.tagName==='TFOOT'){row.hidden=true;continue}for(const index of [2,5])if(row.cells[index])row.cells[index].hidden=true}}};
+V.productos=()=>{productsForOperations();if(!CO.owner&&(CO.rolePolicy?CO.rolePolicy.ownOperations:['cajero','vendedor'].includes(String(CO.role).toLowerCase()))){for(const row of $$('#main table tr')){if(row.parentElement.tagName==='TFOOT'){row.hidden=true;continue}for(const index of [2,5])if(row.cells[index])row.cells[index].hidden=true}}};
 const protectedOpeningView=V.apertura;
 V.apertura=()=>{protectedOpeningView();if(S.entries.some(entry=>entry.type==='apertura'&&entry.lines.some(line=>['1101','1102'].includes(line.a)))){$('#main [data-a="apertura"]')?.remove();$('#main').insertAdjacentHTML('beforeend',notice(uiT("operations.207","La apertura con saldos de dinero se conserva. Registra las correcciones posteriores como nuevos asientos documentados, sin borrar ni sobrescribir el original.")))}};
 

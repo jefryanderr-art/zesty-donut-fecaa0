@@ -9,7 +9,25 @@ export function storageError(message) {
 }
 export const canonical = value => JSON.stringify(value, (key, item) => item && typeof item === 'object' && !Array.isArray(item)
   ? Object.fromEntries(Object.keys(item).sort().map(name => [name, item[name]])) : item);
-export const documentHash = data => createHash('sha256').update(canonical(data)).digest('hex');
+// Company policy is metadata, never part of the accounting source.
+export function accountingDocument(data) {
+  const copy = structuredClone(data);
+  if (copy?.cfg && typeof copy.cfg === 'object') delete copy.cfg.allowNegativeValues;
+  return copy;
+}
+export function operationalDocument(data, allowNegativeValues) {
+  const copy = accountingDocument(data);
+  if (copy) { copy.cfg ||= {}; copy.cfg.allowNegativeValues = allowNegativeValues === true; }
+  return copy;
+}
+// Raw hashes are used only to verify historical sources that contained the flag.
+export const historicalDocumentHash = data => createHash('sha256').update(canonical(data)).digest('hex');
+export const documentHash = data => historicalDocumentHash(accountingDocument(data));
+export function verifySourceDocuments(data, source, sourceHash) {
+  const anchored = [data, source].some(doc => historicalDocumentHash(doc) === sourceHash || documentHash(doc) === sourceHash);
+  if (!anchored || documentHash(data) !== documentHash(source)) storageError('La verificación de integridad no coincide con el origen. Se conservó el documento JSON.');
+}
+
 export function cents(value) {
   if (typeof value !== 'number' || !Number.isFinite(value)) storageError('La conversión requiere importes numéricos finitos.');
   const result = Math.round(value * 100);
@@ -86,6 +104,7 @@ function unpack(row, definition) {
   return record;
 }
 export function normalizeDocument(companyId, data) {
+  data = accountingDocument(data);
   const rows = Object.fromEntries([...Object.keys(collections), ...Object.keys(children), 'invoices'].map(name => [name, []]));
   if (data === null) return { rows, extra: {}, manifest: { version: 1, empty: true, arrays: [], counts: Object.fromEntries(Object.keys(rows).map(name => [name, 0])), debitCents: 0, creditCents: 0 }, hash: documentHash(null) };
   if (!data || typeof data !== 'object' || Array.isArray(data)) storageError('El documento contable no es válido.');

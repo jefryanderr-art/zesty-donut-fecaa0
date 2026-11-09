@@ -56,14 +56,14 @@ export async function workflowOperation(data,access,session,body,ctx){
  }
  check(workflowEnabled(data,module),'El dueño debe activar este módulo.');
  if(op==='workflowLoss'){
-  check(access.owner||String(access.member?.role).toLowerCase()==='contador','Solo el dueño o contador configura pérdidas.');ctx.permit(access,'fiscal',true);ctx.permit(access,'contabilidad',false);
+  check(access.owner||(access.rolePolicy?access.rolePolicy.modules?.[body.operation==='workflowClose'?'cierre_anual':'fiscal']?.edit===true:String(access.member?.role).toLowerCase()==='contador'),'Solo el dueño o contador configura pérdidas.');ctx.permit(access,'fiscal',true);ctx.permit(access,'contabilidad',false);
   check(/^20\d{2}$/.test(body.period||'')&&body.period<now.slice(0,4)&&Number.isSafeInteger(body.amountCents)&&body.amountCents>0&&text(body.source,501).length>=3&&validDate(body.effectiveFrom),'Pérdida sin año anterior, centavos, fuente o vigencia válidos.');
   check(!records.some(r=>r.kind==='lossBalance'&&r.period===body.period),'Ya existe un saldo registrado para ese año; conserva su origen y revisa ajustes con el contador.');
   check(Array.isArray(body.entryIds)&&body.entryIds.length>0&&body.entryIds.length<=100&&body.entryIds.every(id=>data.entries.some(e=>e.id===id&&e.date.startsWith(body.period))),'Vincula asientos del año de origen.');
   return add('lossBalance',{period:body.period,amountCents:body.amountCents,source:text(body.source,500),effectiveFrom:body.effectiveFrom,entryIds:body.entryIds}).id;
  }
  if(op==='workflowTemplate'){
-  check(access.owner||String(access.member?.role).toLowerCase()==='contador','Solo el dueño o contador configura plantillas.');ctx.permit(access,'fiscal',true);
+  check(access.owner||(access.rolePolicy?access.rolePolicy.modules?.[body.operation==='workflowClose'?'cierre_anual':'fiscal']?.edit===true:String(access.member?.role).toLowerCase()==='contador'),'Solo el dueño o contador configura plantillas.');ctx.permit(access,'fiscal',true);
   const template=validateTemplate(body.template),old=body.id?get(body.id):null;check(!old||old.kind==='template','Plantilla inválida.');
   check(!old||!records.some(r=>r.kind==='template'&&r.parentId===old.id),'La plantilla cambió. Recarga la versión actual.');
   return add('template',{family:old?.family||randomUUID(),version:(old?.version||0)+1,parentId:old?.id||null,template}).id;
@@ -72,7 +72,7 @@ export async function workflowOperation(data,access,session,body,ctx){
  const meta={company:access.company.name,companyId:ctx.companyId,branchId:access.branchId,generatedAt:now,generatedBy:actor,revision:access.company.revision};
  if(op==='workflowPackage'){periodRange(body.period);return makeJob(body.period,workflowPacket(data,body.period,meta));}
  if(op==='workflowClose'){
-  check(access.owner||String(access.member?.role).toLowerCase()==='contador','Solo el dueño o contador cierra el ejercicio.');ctx.permit(access,'contabilidad',true);
+  check(access.owner||(access.rolePolicy?access.rolePolicy.modules?.[body.operation==='workflowClose'?'cierre_anual':'fiscal']?.edit===true:String(access.member?.role).toLowerCase()==='contador'),'Solo el dueño o contador cierra el ejercicio.');ctx.permit(access,'contabilidad',true);
   const preview=annualPreview(data,body.period);check(preview.hash===body.previewHash,'La vista previa cambió. Revísala antes de confirmar.');check(!preview.pending.length,'Pendientes: '+preview.pending.join(' '));
   // Respaldo íntegro del documento de empresa, además del checkpoint transaccional existente.
   const backup=await put(gzipSync(Buffer.from(JSON.stringify({format:'acontec-before-annual-close-v1',data:access.company.data,revision:access.company.revision,meta}))), 'respaldo-antes-cierre-'+body.period+'.json.gz','application/gzip');
