@@ -32,7 +32,7 @@ export function validateFifo(data){
  const ids=new Set(),layers=activeLayers(data),branches=companyBranches(data);
  for(const l of layers){
   check(!ids.has(l.id)&&typeof l.id==='string'&&data.products.some(p=>p.id===l.productId&&p.kind!=='service')&&branches.some(b=>b.id===l.branchId),'Referencia de capa PEPS inválida.');ids.add(l.id);
-  check(validQty(l.q)&&validQty(l.originalQuantity)&&l.q<=l.originalQuantity&&safe(l.valueCents)&&safe(l.originalValueCents)&&safe(l.unitCostCents)&&l.valueCents<=l.originalValueCents&&(l.q!==0||l.valueCents===0),'Cantidad o valor de capa PEPS inválido.');
+  check((validQty(l.q)||(l.negativeAdvance===true&&l.q<0&&validQty(-l.q)))&&validQty(l.originalQuantity)&&l.q<=l.originalQuantity&&(safe(l.valueCents)||(l.negativeAdvance===true&&Number.isSafeInteger(l.valueCents)&&l.valueCents<=0))&&safe(l.originalValueCents)&&safe(l.unitCostCents)&&l.valueCents<=l.originalValueCents&&(l.q!==0||l.valueCents===0),'Cantidad o valor de capa PEPS inválido.');
  }
  const byId=new Map(layers.map(l=>[l.id,l])),used=new Map();
  for(const e of data.entries||[])for(const row of e.stock||[]){
@@ -49,7 +49,7 @@ export function validateFifo(data){
    check(q===branchStock(data,p,b.id),'PEPS: las capas no coinciden con las existencias de la sucursal. No se guardó la operación.');
   }
   const value=layers.filter(l=>l.branchId===b.id).reduce((s,l)=>s+l.valueCents,0);
-  check(safe(value)&&value===inventoryCents(data,b.id),'PEPS: las capas no coinciden con la cuenta 1301 de la sucursal. No se guardó la operación.');
+  check(Number.isSafeInteger(value)&&value===inventoryCents(data,b.id),'PEPS: las capas no coinciden con la cuenta 1301 de la sucursal. No se guardó la operación.');
  }
 }
 export function guardFifoOperation(data,body){
@@ -88,13 +88,18 @@ export function configureCosting(data,access,session,body,permit){
  (data.cfg.costingHistory||=[]).push({previous,method:body.method,at,reason,actor:session.email});
  return data.cfg.costing.epoch||at;
 }
-function consume(data,pid,branchId,q){
+function consume(data,pid,branchId,q,entry){
  let remaining=q;const allocations=[];
  for(const l of activeLayers(data).filter(l=>l.productId===pid&&l.branchId===branchId&&l.q>0).sort((a,b)=>a.date.localeCompare(b.date)||(data.inventoryLayers.indexOf(a)-data.inventoryLayers.indexOf(b)))){
   const used=Math.min(remaining,l.q);if(!used)break;
   const costCents=used===l.q?l.valueCents:inventoryShareCents(l.valueCents,used,l.q);
   allocations.push({layerId:l.id,q:used,costCents,unitCostCents:l.unitCostCents});
   l.q=qty(l.q-used);l.valueCents-=costCents;remaining=qty(remaining-used);
+ }
+ if(remaining>0&&data.cfg?.allowNegativeValues===true){
+  const p=data.products.find(p=>p.id===pid),unitCostCents=moneyCents(p.cost),costCents=inventoryLineCostCents(remaining,p.cost);
+  const l={id:randomUUID(),epoch:data.cfg.costing.epoch,productId:pid,branchId,date:entry.date,q:-remaining,originalQuantity:0,unitCostCents,valueCents:-costCents,originalValueCents:0,entryId:entry.id,negativeAdvance:true};
+  data.inventoryLayers.push(l);allocations.push({layerId:l.id,q:remaining,costCents,unitCostCents});remaining=0;
  }
  check(remaining===0,'Capas PEPS insuficientes en la sucursal.');return allocations;
 }
@@ -134,7 +139,7 @@ export function applyFifo(previous,data){
    check(validQty(Math.abs(row.q))&&row.q!==0,'Cantidad PEPS inválida.');
    const p=data.products.find(p=>p.id===row.pid);check(p&&p.kind!=='service','Producto PEPS inválido.');
    let allocations;
-   if(row.q<0)allocations=consume(data,row.pid,branch,-row.q);
+   if(row.q<0)allocations=consume(data,row.pid,branch,-row.q,entry);
    else if(entry.type==='nota-credito')allocations=restoreSale(data,entry,row);
    else{
     const unitCostCents=moneyCents(row.unitCost??p.cost),valueCents=inventoryLineCostCents(row.q,row.unitCost??p.cost);
@@ -168,7 +173,7 @@ export function applyFifo(previous,data){
  const affected=new Set(fresh.flatMap(e=>(e.stock||[]).map(r=>r.pid)));
  for(const p of data.products.filter(p=>p.kind!=='service'&&affected.has(p.id))){
   const ls=activeLayers(data).filter(l=>l.productId===p.id),q=ls.reduce((s,l)=>s+l.q,0),value=ls.reduce((s,l)=>s+l.valueCents,0);
-  if(q)p.cost=Math.round(value/q)/100;
+  if(q&&value/q>=0)p.cost=Math.round(value/q)/100;
  }
 }
 export function guardFifoMutation(previous,next,action){
@@ -181,5 +186,5 @@ export function guardFifoMutation(previous,next,action){
   check(same(inventoryHistory(previous),inventoryHistory(next))&&previous.products.every(p=>next.products.some(n=>n.id===p.id&&n.stock===p.stock&&n.cost===p.cost))&&next.products.every(p=>previous.products.some(o=>o.id===p.id)||p.stock===0),'PEPS exige compras y ajustes desde sus operaciones; no admite edición, borrado, inventario inicial ni restauración de históricos. Crea productos sin existencias y usa Ajustar.');
  }
  validateFifo(next);
- if(operation&&fifoEnabled(next)&&!configure)for(const p of next.products){const ls=activeLayers(next).filter(l=>l.productId===p.id);if(p.stock>0)p.cost=Math.round(ls.reduce((s,l)=>s+l.valueCents,0)/p.stock)/100;}
+ if(operation&&fifoEnabled(next)&&!configure)for(const p of next.products){const ls=activeLayers(next).filter(l=>l.productId===p.id);const value=ls.reduce((s,l)=>s+l.valueCents,0);if(p.stock>0&&value>=0)p.cost=Math.round(value/p.stock)/100;}
 }

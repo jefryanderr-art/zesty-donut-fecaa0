@@ -187,6 +187,7 @@ const shiftPayments = (data, shift) => {
   return result;
 };
 export function guardCash(previous, next) {
+  if(next?.cfg?.allowNegativeValues===true)return;
   for (const code of cashAccounts(next)) {
     const minimum = data => {
       let balance = 0, lowest = 0;
@@ -202,6 +203,7 @@ export function guardCash(previous, next) {
   }
 }
 export function guardLedgerMutation(previous, next, access, {restoreServiceConfiguration=false}={}) {
+  requireValue((next.cfg?.allowNegativeValues===true)===(access.company?.allowNegativeValues===true),'Cambia los valores negativos desde Ajustes.');
   requireValue(equal((previous?.businessRecords||[]).filter(commerceRecord),(next.businessRecords||[]).filter(commerceRecord)),'Usa las operaciones de comercio.');
   requireValue(equal((previous?.businessRecords||[]).filter(r=>r.foodSettings).map(r=>({id:r.id,foodSettings:r.foodSettings})),(next.businessRecords||[]).filter(r=>r.foodSettings).map(r=>({id:r.id,foodSettings:r.foodSettings}))),'Usa la configuración de recetas.');
   requireValue(equal((previous?.businessRecords||[]).filter(workflowRecord),(next.businessRecords||[]).filter(workflowRecord)),'Usa las operaciones de eventos y encargos.');
@@ -247,7 +249,7 @@ export function guardLedgerMutation(previous, next, access, {restoreServiceConfi
       const credit = invoice.pay === '1201' ? entry.lines.find(line => line.a === '1201' && line.c === entry.total && line.d === 0) : entry.lines.find(line => ['1101', '1102'].includes(line.a) && line.c === entry.total && line.d === 0);
       requireValue(debit && credit, 'El asiento del abono no coincide con el pago.');
       const remaining = invoiceLinkedEntries(next.entries,invoice.id).reduce((total, record) => total + record.lines.filter(line => line.a === invoice.pay).reduce((sum, line) => sum + (invoice.pay === '1201' ? line.d - line.c : line.c - line.d), 0), 0);
-      requireValue(remaining >= -0.01, 'El abono supera la deuda pendiente de la factura.');
+      requireValue(next.cfg?.allowNegativeValues===true || remaining >= -0.01, 'El abono supera la deuda pendiente de la factura.');
     }
     if (entry.supplierId) {
       const supplier = next.suppliers?.find(record => record.id === entry.supplierId);
@@ -291,7 +293,7 @@ export function guardLedgerMutation(previous, next, access, {restoreServiceConfi
   if (!access.owner) {
     for (const name of OPERATION_ARRAYS) if (!equal(previous?.[name] || [], next[name] || [])) requireValue(name === 'suppliers' && allowed(access, 'proveedores', true), 'Sin permiso para modificar datos operativos.');
   }
-  for (const product of next.products || []) requireValue(Number.isFinite(product.stock) && product.stock >= 0 && Number.isFinite(product.cost) && product.cost >= 0, 'Existencia o costo inválido.');
+  for (const product of next.products || []) requireValue(Number.isFinite(product.stock) && (next.cfg?.allowNegativeValues===true || product.stock >= 0) && Number.isFinite(product.cost) && product.cost >= 0, 'Existencia o costo inválido.');
   guardCash(previous, next);
 }
 function movement(data, session, body, debit, credit, total, extra = {}) {
@@ -319,7 +321,7 @@ function createVoucher(data, access, session, body, accruedEntryId = null) {
   const base = amount(body.base), vatRate = Number(body.vatRate || 0);
   requireValue(Number.isFinite(vatRate) && vatRate >= 0 && vatRate <= 100, 'IVA inválido.');
   const vat = round(base * vatRate / 100), total = round(base + vat);
-  requireValue(total <= fund.limit && total <= round(fund.fixedAmount - spentVouchers(data, fund.id)), 'El vale supera el límite por gasto o el disponible del fondo.');
+  requireValue(total <= fund.limit && (data.cfg.allowNegativeValues===true || total <= round(fund.fixedAmount - spentVouchers(data, fund.id))), 'El vale supera el límite por gasto o el disponible del fondo.');
   requireValue(text(body.reference) && text(body.concept) && text(body.beneficiary), 'El vale requiere comprobante, concepto y beneficiario.');
   accountExists(data, body.account, ['gasto', 'costo']);
   const date = dateValue(body.date);
@@ -395,7 +397,7 @@ async function makeSale(data, access, session, body, client, companyId, trustedS
   if(body.serviceEmployeeId)requireModule(access,'personal');
   const serviceSnapshots=serviceSaleSnapshot(data,items,body.serviceEmployeeId);
   requireValue(!serviceSnapshots.length||body.operationId,'Las ventas de servicios configurados requieren un identificador único.');
-  for (const [id, quantity] of quantities) requireValue(data.products.find(product => product.id === id).stock >= quantity, 'Existencia insuficiente.');
+  for (const [id, quantity] of quantities) requireValue(data.cfg.allowNegativeValues===true || data.products.find(product => product.id === id).stock >= quantity, 'Existencia insuficiente.');
   const {subtotal,vat,total}=invoiceTotals(items);
   requireValue(total > 0 && cents(payments.reduce((sum, payment) => sum + payment.amount, 0)) === cents(total), 'La suma de los pagos debe coincidir exactamente con el total.');
   let cashTender;
@@ -784,6 +786,10 @@ export async function runOperation(companyId, session, body) {
         if(body.cash)requirePermission(access,'cajas');
         if(body.advance)requirePermission(access,'fiscal');
         if (!access.owner) accessError('Solo el dueño configura cajas, series, descuentos y anticipos.');
+        if(Object.hasOwn(body,'allowNegativeValues')){
+          requireValue(typeof body.allowNegativeValues==='boolean','Configuración inválida.');
+          data.cfg.allowNegativeValues=body.allowNegativeValues;businessPatch.allowNegativeValues=body.allowNegativeValues;
+        }
         if (body.pos) {
           if(Object.hasOwn(body.pos,'useDimensions'))requireValue(typeof body.pos.useDimensions==='boolean','Configuración avanzada inválida.');
           const series = body.pos.series;
@@ -837,7 +843,7 @@ export async function runOperation(companyId, session, body) {
         const date = dateValue(body.date);
         requireValue(!data.entries.some(entry => entry.date > date && entry.stock?.some(row => row.pid === product.id)), 'El ajuste no puede preceder a movimientos posteriores del producto.');
         const stock = Math.round((product.stock + quantity) * 1e6) / 1e6;
-        requireValue(stock >= 0, 'No puede quedar existencia negativa.');
+        requireValue(data.cfg.allowNegativeValues===true || stock >= 0, 'No puede quedar existencia negativa.');
         const total = round(Math.abs(quantity) * product.cost);
         const correction = ['error', 'conteo-inicial'].includes(reason);
         const counterpart = correction ? '3191' : quantity < 0 ? '6107' : '4102';
@@ -1010,7 +1016,7 @@ export async function runOperation(companyId, session, body) {
         }
         for (const [id, change] of changes) {
           const product = data.products.find(record => record.id === id), quantity = Math.round((product.stock + change.quantity) * 1e6) / 1e6, value = product.stock * product.cost + change.value;
-          requireValue(quantity >= 0 && value >= -0.01, 'La anulación dejaría inventario negativo; registra un ajuste documentado.');
+          requireValue(data.cfg.allowNegativeValues===true || quantity >= 0 && value >= -0.01, 'La anulación dejaría inventario negativo; registra un ajuste documentado.');
           product.stock = quantity;
           if (quantity > 0) product.cost = round(Math.max(0, value) / quantity);
         }
@@ -1062,7 +1068,7 @@ export async function runOperation(companyId, session, body) {
       if(fifoEnabled(fifoBefore)&&!crossBranch)for(const e of data.entries.filter(e=>!beforeIds.has(e.id))){requireValue(access.branchId||!e.stock?.length,'Selecciona una sucursal para mover inventario PEPS.');if(e.stock?.length)e.branchId=access.branchId;}
       if(operation!=='costingMethod')applyFifo(fifoBefore,data);
       guardCash(crossBranch?access.company.data:company.data, data);
-      if(crossBranch){for(const branch of data.branches||[])commerceReservationsValid(scopeBranch(data,{...access,branchId:branch.id}),requireValue);}else commerceReservationsValid(data,requireValue);
+      if(operation==='settings'&&Object.hasOwn(body,'allowNegativeValues')){/* Changing policy preserves existing balances. */}else if(crossBranch){for(const branch of data.branches||[])commerceReservationsValid(scopeBranch(data,{...access,branchId:branch.id}),requireValue);}else commerceReservationsValid(data,requireValue);
       validateBusinessRecords(data,requireValue);
       validateConfiguredServices(data,serviceEmployees(access.company.data,company.data,data));
       validateEconomicSector(data);

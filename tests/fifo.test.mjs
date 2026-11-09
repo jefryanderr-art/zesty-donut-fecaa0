@@ -119,3 +119,15 @@ test('no vuelve a promedio si el redondeo alteraría el valor por producto',()=>
  const n=purchase(d,1,0.02,'expensive');
  assert.throws(()=>configureCosting(clone(n),access,session,{...confirmed,method:'average'},permit),/diferencias de centavos/);
 });
+
+test('negativos por empresa: venta PEPS sin capas suficientes conserva Kardex, costo y asiento',()=>{
+ const strict=activate();assert.throws(()=>sale(strict,7),/insuficientes/);
+ const flexible=clone(strict);flexible.cfg.allowNegativeValues=true;
+ const sold=sale(flexible,7);assert.equal(sold.products[0].stock,-2);assert.equal(value(sold),-400);validateFifo(sold);
+ const e=sold.entries.at(-1);assert.equal(e.lines.reduce((s,l)=>s+Math.round(l.d*100)-Math.round(l.c*100),0),0);
+ assert.equal(e.stock[0].costCents,1400);
+ const replenished=purchase(sold,3,2);assert.equal(replenished.products[0].stock,1);assert.equal(value(replenished),200);validateFifo(replenished);
+ const restored=returned(sold,7);assert.equal(restored.products[0].stock,5);assert.equal(value(restored),1000);validateFifo(restored);
+ assert.equal(strict.cfg.allowNegativeValues,undefined);assert.equal(strict.products[0].stock,5);
+ const restoredDocument=restoreDocument(normalizeDocument('00000000-0000-4000-8000-000000000001',sold));assert.equal(restoredDocument.inventoryLayers.some(l=>l.negativeAdvance===true),true);
+});

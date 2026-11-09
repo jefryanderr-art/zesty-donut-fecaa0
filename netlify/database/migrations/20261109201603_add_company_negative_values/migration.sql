@@ -1,0 +1,1 @@
+ALTER TABLE "acontec_companies" ADD COLUMN "allow_negative_values" boolean DEFAULT false NOT NULL;

@@ -10,7 +10,7 @@ export function transferOperation(data,access,session,body,h){
  if(body.operation==='moneyTransfer'){
   permit(access,'cajas');check(access.owner||['contador','supervisor'].includes(String(access.member?.role).toLowerCase()),'Solo responsables de caja autorizados transfieren dinero.');
   const destination=access.branches.find(b=>b.id===body.destinationId&&b.id!==source);check(destination,'Selecciona una sucursal de destino autorizada distinta.');const total=amount(body.total);check(['1101','1102'].includes(body.account),'Selecciona caja o banco.');
-  const local=scopeBranch(data,access);check(ledgerBalance(local,body.account,when)>=total,'Saldo insuficiente en la sucursal de origen.');
+  const local=scopeBranch(data,access);check(data.cfg?.allowNegativeValues===true || ledgerBalance(local,body.account,when)>=total,'Saldo insuficiente en la sucursal de origen.');
   if(!data.accounts.some(a=>a.code==='1199'))data.accounts.push({code:'1199',name:'Transferencias entre sucursales',tipo:'activo',nat:'D',sub:''});
   const reference=String(body.reference||'').trim().slice(0,200);check(reference,'Escribe la referencia del traslado.');const id=randomUUID();
   posting(source,{date:when,type:'transferencia-dinero',transferId:id,desc:'Envío a sucursal '+destination.name,reference,total,lines:[{a:'1199',d:total,c:0},{a:body.account,d:0,c:total}]});
@@ -20,7 +20,7 @@ export function transferOperation(data,access,session,body,h){
  if(!data.accounts.some(a=>a.code==='1302'))data.accounts.push({code:'1302',name:'Inventario en tránsito entre sucursales',tipo:'activo',nat:'D',sub:''});
  if(body.operation==='stockTransfer'){
   const destination=access.branches.find(b=>b.id===body.destinationId&&b.id!==source);check(destination,'Selecciona una sucursal de destino autorizada distinta.');check(Array.isArray(body.items)&&body.items.length&&body.items.length<=200,'Agrega productos al traslado.');
-  const used=new Set(),items=body.items.map(row=>{const p=data.products.find(p=>p.id===row.p),q=normalizeItemQuantity(row.q);check(p&&!used.has(p.id)&&Number.isFinite(q)&&q>0&&q<=1e6,'Producto duplicado o cantidad inválida.');used.add(p.id);check(branchStock(data,p,source)>=q,'Existencias insuficientes en origen.');return {p:p.id,name:p.name,q,cost:p.cost,unit:p.unit||'unidad'}}),total=round(items.reduce((s,i)=>s+round(i.q*i.cost),0)),id=randomUUID();
+  const used=new Set(),items=body.items.map(row=>{const p=data.products.find(p=>p.id===row.p),q=normalizeItemQuantity(row.q);check(p&&!used.has(p.id)&&Number.isFinite(q)&&q>0&&q<=1e6,'Producto duplicado o cantidad inválida.');used.add(p.id);check(data.cfg?.allowNegativeValues===true || branchStock(data,p,source)>=q,'Existencias insuficientes en origen.');return {p:p.id,name:p.name,q,cost:p.cost,unit:p.unit||'unidad'}}),total=round(items.reduce((s,i)=>s+round(i.q*i.cost),0)),id=randomUUID();
   const e=posting(source,{date:when,type:'traslado-enviado',transferId:id,desc:'Traslado enviado a '+destination.name,total,stock:items.map(i=>({pid:i.p,q:-i.q,unit:i.unit,unitCost:i.cost})),lines:total?[{a:'1302',d:total,c:0},{a:'1301',d:0,c:total}]:[]});
   for(const i of items){const p=data.products.find(p=>p.id===i.p);p.stock=Math.round((p.stock-i.q)*1e6)/1e6}
   data.stockTransfers.push({id,date:when,branchId:source,sourceId:source,destinationId:destination.id,items,total,status:'enviado',entryId:e.id});return id;
