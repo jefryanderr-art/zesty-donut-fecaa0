@@ -82,12 +82,12 @@ export function treasuryOperation(data,access,session,body,ctx){
   if(bank&&bank.currency!==bankBaseCurrency(data)){
    check(foreignPayment&&data.cfg.bankControls?.enabled===true&&date>=bank.date,'El banco extranjero requiere activación e importe original confirmado.');
    check(bankConvertCents(foreignPayment.originalCents,foreignPayment.rateMicros)===Math.abs(amountCents)||amountCents===0,'La conversión original no coincide con el pago base.');
-   if(amountCents>0)for(const day of [...new Set([date,...data.entries.filter(e=>e.date>=date).map(e=>e.date)])])check(treasurySum([bank.openingCents,...bankLedger(data,bank,day).map(m=>m.amountCents)])>=foreignPayment.originalCents,'El pago deja saldo original negativo.');
+   if(amountCents>0&&data.cfg?.allowNegativeValues!==true)for(const day of [...new Set([date,...data.entries.filter(e=>e.date>=date).map(e=>e.date)])])check(treasurySum([bank.openingCents,...bankLedger(data,bank,day).map(m=>m.amountCents)])>=foreignPayment.originalCents,'El pago deja saldo original negativo.');
   }
   if(fund){check(actor===fund.responsible||access.owner,'Sin permiso sobre el fondo.');check(amountCents<=moneyCents(fund.limit),'El pago supera el límite por movimiento del fondo.');check(date>=(fund.lastCountDate||fund.date),'La fecha precede al último arqueo.');}
   else ctx.financialCash(access);
   if(fund&&amountCents<0)fund.fixedAmount=(moneyCents(fund.fixedAmount)-amountCents)/100;
-  if(amountCents>0){for(const day of [...new Set([date,...data.entries.filter(e=>e.date>=date).map(e=>e.date)])])check(balance(data,account,day)>=amountCents,'El pago deja saldo negativo en la fecha elegida o una posterior.');if(fund){check(moneyCents(fund.fixedAmount)-amountCents>=moneyCents((data.pettyVouchers||[]).filter(v=>v.fundId===fund.id&&!v.replenishmentId&&!v.reversalId).reduce((s,v)=>s+v.total,0)),'El fondo conserva vales pendientes.');fund.fixedAmount=(moneyCents(fund.fixedAmount)-amountCents)/100;}}
+  if(amountCents>0){for(const day of [...new Set([date,...data.entries.filter(e=>e.date>=date).map(e=>e.date)])])check(data.cfg?.allowNegativeValues===true || balance(data,account,day)>=amountCents,'El pago deja saldo negativo en la fecha elegida o una posterior.');if(fund){check(data.cfg?.allowNegativeValues===true || moneyCents(fund.fixedAmount)-amountCents>=moneyCents((data.pettyVouchers||[]).filter(v=>v.fundId===fund.id&&!v.replenishmentId&&!v.reversalId).reduce((s,v)=>s+v.total,0)),'El fondo conserva vales pendientes.');fund.fixedAmount=(moneyCents(fund.fixedAmount)-amountCents)/100;}}
   return account;
  };
  const originalMovement=(batch,e,sign)=>{
@@ -105,7 +105,7 @@ export function treasuryOperation(data,access,session,body,ctx){
   check(Array.isArray(body.allocations)&&body.allocations.length>0&&body.allocations.length<=200,'Selecciona de 1 a 200 facturas.');const ids=new Set(),allocations=body.allocations.map(a=>{
    const invoice=documentInvoices(data).find(e=>e.id===a.invoiceId&&e.pay==='2101');check(invoice&&!ids.has(invoice.id)&&invoice.date<=date&&integer(a.amountCents),'Factura o importe inválido.');ids.add(invoice.id);
    const discountCents=a.discountCents||0,d=invoice.earlyPaymentDiscount;check(Number.isSafeInteger(discountCents)&&discountCents>=0,'Descuento inválido.');if(discountCents)check(d&&date<=d.until&&discountCents<=d.amountCents-treasuryDiscountUsed(data.entries,invoice.id),'El descuento requiere condiciones documentadas vigentes.');
-   check(a.amountCents+discountCents<=treasuryDebt(data.entries,invoice),'El pago supera la deuda.');return {invoiceId:invoice.id,reference:invoice.reference||invoice.id,party:invoice.party,amountCents:a.amountCents,discountCents};
+   check(data.cfg?.allowNegativeValues===true||a.amountCents+discountCents<=treasuryDebt(data.entries,invoice),'El pago supera la deuda.');return {invoiceId:invoice.id,reference:invoice.reference||invoice.id,party:invoice.party,amountCents:a.amountCents,discountCents};
   });
   const totalCents=treasurySum(allocations.map(a=>a.amountCents)),r={...newRecord(module,'batch',date,access.branchId,txt(body.name)||'Lote '+date),allocations,totalCents,preparedBy:actor,preparedName:event.actorName,policy:structuredClone(policy),account:body.account,events:[event]};check(totalCents>0,'Lote vacío.');const bank=rows(data,'bancos').find(b=>b.kind==='bank'&&b.account===body.account);
   if(bank&&bank.currency!==bankBaseCurrency(data)){
@@ -120,7 +120,7 @@ export function treasuryOperation(data,access,session,body,ctx){
   else if(op==='batchReject'){check(['Abierta','Aprobada'].includes(rec.status)&&(actor===rec.preparedBy||rec.policy.approvers.includes(actor)),'No se puede rechazar este lote.');rec.status='Rechazada';}
   else if(op==='batchPay'){
    ctx.permit(access,'proveedores',true);check(rec.policy.preparers.includes(actor)||rec.policy.approvers.includes(actor),'Responsable no autorizado.');check(rec.status==='Aprobada'||!approval&&rec.status==='Abierta','El lote requiere aprobación o ya fue pagado.');
-   for(const a of rec.allocations){const invoice=data.entries.find(e=>e.id===a.invoiceId);check(date>=invoice.date&&a.amountCents+a.discountCents<=treasuryDebt(data.entries,invoice),'Una factura ya fue pagada. Actualiza el lote.');if(a.discountCents)check(date<=invoice.earlyPaymentDiscount.until&&a.discountCents<=invoice.earlyPaymentDiscount.amountCents-treasuryDiscountUsed(data.entries,invoice.id),'Venció o ya se aplicó el descuento.');}
+   for(const a of rec.allocations){const invoice=data.entries.find(e=>e.id===a.invoiceId);check(date>=invoice.date&&(data.cfg?.allowNegativeValues===true||a.amountCents+a.discountCents<=treasuryDebt(data.entries,invoice)),'Una factura ya fue pagada. Actualiza el lote.');if(a.discountCents)check(date<=invoice.earlyPaymentDiscount.until&&a.discountCents<=invoice.earlyPaymentDiscount.amountCents-treasuryDiscountUsed(data.entries,invoice.id),'Venció o ya se aplicó el descuento.');}
    const account=cash(rec.account,rec.totalCents,rec.foreignPayment),lines=rec.allocations.flatMap(a=>[line('2101',a.amountCents+a.discountCents,a.invoiceId),...(a.discountCents?[line(ensure('4192','Descuentos financieros obtenidos','ingreso'),-a.discountCents,a.invoiceId)]:[])]);lines.push(line(account,-rec.totalCents));
    const e=post(lines,rec.totalCents,{allocationJournal:true,treasuryId:rec.id});rec.entryId=e.id;originalMovement(rec,e,-1);rec.status='Pagada';rec.paidDate=date;rec.paidByName=event.actorName;
   }else if(op==='batchReverse'){

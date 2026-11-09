@@ -102,6 +102,7 @@ export async function companyAccess(client, companyId, session, lock = false, lo
       if(!plan)accessError('Plan no disponible.',403);
       billing={ent,plan:{...plan,limits:ownerUser?.platformAdmin?plan.limits:planLimits(plan,sub)}};
     } else billing=await requireBilling(company.ownerEmail,ownerUser?.platformAdmin===true,client);
+    if(company.data&&loadAccounting!=='guide'){company.data.cfg||={};company.data.cfg.allowNegativeValues=company.allowNegativeValues===true;}
     const result=await branchAccess(access,session);result.billingPlan=billing.plan;result.entitlement=billing.ent;result.internalTestPlan=internalTest?billing.plan.id:null;
     const ownedRows=await client.select({id:companies.id}).from(companies).where(and(eq(companies.ownerEmail,company.ownerEmail),isNull(companies.archivedAt))).orderBy(sql`coalesce((select min(${auditEvents.createdAt}) from ${auditEvents} where ${auditEvents.companyId}=${companies.id} and ${auditEvents.action}='Empresa creada'), (select min(${auditEvents.createdAt}) from ${auditEvents} where ${auditEvents.companyId}=${companies.id}), ${companies.updatedAt})`,companies.id);
     const limit=billing.plan?.limits?.companies;result.readOnlyLimit=!(ownerUser?.platformAdmin===true&&company.ownerEmail===adminEmail())&&!company.isPlatformCompany&&!internalTest&&limit!=null&&ownedRows.findIndex(c=>c.id===company.id)>=limit;
@@ -301,6 +302,7 @@ function restoreServiceEntryProjections(current,entries,access){
 }
 export function mergeData(current, incoming, access, {restoreServiceConfiguration=false}={}) {
   if (!incoming || !['accounts', 'entries', 'products'].every(name => Array.isArray(incoming[name]))) accessError('Datos contables inválidos.', 400);
+  incoming.cfg||={};incoming.cfg.allowNegativeValues=access.company?.allowNegativeValues===true;
   const goals=incoming.cfg?.operatingDailyGoals;
   if(goals!==undefined){
     if(!Array.isArray(goals)||goals.length>500)accessError('Metas diarias inválidas.',400);
@@ -382,14 +384,14 @@ export function mergeData(current, incoming, access, {restoreServiceConfiguratio
     const quantity = Math.round((product.stock + change.quantity) * 1e6) / 1e6;
     if (change.purchase) {
       const value = product.stock * product.cost + change.value;
-      if (value < -0.011) accessError('La valoración del inventario sería negativa.', 400);
+      if (current?.cfg?.allowNegativeValues!==true && value < -0.011) accessError('La valoración del inventario sería negativa.', 400);
       product.cost = quantity > 0 ? round(Math.max(0, value) / quantity) : product.cost;
     }
     product.stock = quantity;
   }
-  if (products.some(product => product.stock < 0)) accessError('Existencias insuficientes.', 400);
+  if (current?.cfg?.allowNegativeValues!==true && products.some(product => product.stock < 0)) accessError('Existencias insuficientes.', 400);
   merged.products = allowed(access, 'inventario', true) ? incoming.products : products;
-  if (merged.products.some(product => !Number.isFinite(product.stock) || product.stock < 0 || !Number.isFinite(product.cost) || product.cost < 0)) accessError('Existencias o costo de producto inválidos.', 400);
+  if (merged.products.some(product => !Number.isFinite(product.stock) || (current?.cfg?.allowNegativeValues!==true && product.stock < 0) || !Number.isFinite(product.cost) || product.cost < 0)) accessError('Existencias o costo de producto inválidos.', 400);
   if (!allowed(access, 'inventario', true) && projected.products.length) {
     const proposed = structuredClone(incoming.products);
     for (const product of proposed) if (allowed(access, 'compras', true) && stockChanges.get(product.id)?.purchase) {
@@ -449,6 +451,7 @@ export async function updateCompany(companyId, session, revision, mutate, action
       }
     }
     access.company.data = await readAccounting(client, access.company);
+    if(access.company.data){access.company.data.cfg||={};access.company.data.cfg.allowNegativeValues=access.company.allowNegativeValues===true;}
     timings.readMs = Math.round(performance.now() - started);
     const remember = async result => {
       if (operation) await client.insert(saveOperations).values({companyId, operationId: operation.id, actor: operationActor, payloadHash: operation.hash, revision: result.revision, resultId: operation.resultId?.() || null});
@@ -463,7 +466,9 @@ export async function updateCompany(companyId, session, revision, mutate, action
     timings.validateMs = Math.round(performance.now() - phase);
     const crossBranch=patch.crossBranch;delete patch.crossBranch;
     if(crossBranch && !(action==='Operación: costingMethod'&&access.owner) && !CROSS_BRANCH_OPS.some(op=>action==='Operación: '+op)) accessError('Operación entre sucursales no autorizada.');
+    if(Object.hasOwn(patch,'allowNegativeValues')&&!(action==='Operación: settings'&&access.owner&&!access.support))accessError('Solo el dueño cambia esta configuración.');
     if (patch.data) {
+      patch.data.cfg||={};patch.data.cfg.allowNegativeValues=patch.allowNegativeValues??fullCompany.allowNegativeValues??false;
       const auditOnly=REVIEW_OPS.some(op=>action==='Operación: '+op);
       if(auditOnly)patch.data=mergeAuditReviewPatch(fullCompany.data,company.data,patch.data,access,action);
       else {if(!crossBranch) patch.data = mergeBranch(fullCompany.data, company.data, patch.data, access, action === 'Operación: branch' && access.owner);materializeBranches(patch.data);}

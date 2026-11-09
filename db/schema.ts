@@ -58,6 +58,7 @@ export const companies = pgTable('acontec_companies', {
   businessType: text('business_type').default('comercio').notNull(),
   businessCustomization: jsonb('business_customization').default({}).notNull(),
   onboardingDone: boolean('onboarding_done').default(true).notNull(),
+  allowNegativeValues: boolean('allow_negative_values').default(false).notNull(),
   assistantEnabled: boolean('assistant_enabled').default(false).notNull(),
   assistantTimeZone: text('assistant_time_zone').default('America/Managua').notNull(),
   isPlatformCompany: boolean('is_platform_company').default(false).notNull(),

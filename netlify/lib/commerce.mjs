@@ -19,7 +19,7 @@ export function commerceReserved(data,pid,exceptId=''){
 }
 export function commerceCheckStock(data,body,check,exceptId=''){
  const demand=new Map();for(const i of body.items||[])demand.set(i.p,(demand.get(i.p)||0)+i.q);
- for(const [id,q]of demand){const p=data.products.find(p=>p.id===id);if(p?.kind!=='service')check(q+commerceReserved(data,id,exceptId)<=p.stock+1e-9,'Existencia comprometida por pedidos pagados; revisa la sucursal.');}
+ for(const [id,q]of demand){const p=data.products.find(p=>p.id===id);if(p?.kind!=='service')check(data.cfg?.allowNegativeValues===true || q+commerceReserved(data,id,exceptId)<=p.stock+1e-9,'Existencia comprometida por pedidos pagados; revisa la sucursal.');}
 }
 export function commerceReserve(data,r,check){if(r.kind!=='commerce-order')return;if(moneyCents(r.deposit||0)>=moneyCents(r.total)&&r.total>0){commerceCheckStock(data,r,check,r.id);r.reserved=true;r.paymentState='Anticipo completo';}else {r.reserved=false;r.paymentState=r.deposit?'Anticipo parcial':'Pendiente';}}
 export function commerceSaleGuard(data,body,check,trustedSourceId,permit){
@@ -164,7 +164,7 @@ export function commerceCanRead(r,can){
  return true;
 }
 export function commerceReservationsValid(data,check){
- for(const p of data.products||[])if(p.kind!=='service')check(commerceReserved(data,p.id)<=p.stock+1e-9,'La operación invade existencias reservadas por pedidos pagados.');
+ for(const p of data.products||[])if(p.kind!=='service')check(data.cfg?.allowNegativeValues===true || commerceReserved(data,p.id)<=p.stock+1e-9,'La operación invade existencias reservadas por pedidos pagados.');
 }
 
 export function commerceLoadSale(data,body,entry,check,permit){

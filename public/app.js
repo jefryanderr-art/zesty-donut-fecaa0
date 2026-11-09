@@ -26,7 +26,7 @@ localStorage.removeItem('tk');
 const isAcontecCompany=()=>!!CO?.owner&&CO.name.trim().toLowerCase()==='acontec';
 const P={k:'mes',from:today().slice(0,8)+'01',to:today()};
 const money=n=>(S?.cfg?.cur||'C$')+' '+(+n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-const money2=n=>n<0?'('+money(-n)+')':money(n);
+const money2=n=>n<0&&S?.cfg?.allowNegativeValues!==true?'('+money(-n)+')':money(n);
 const tshow=t=>t>'9000'?today():t;
 
 async function api(path,method='GET',body){

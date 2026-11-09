@@ -7,7 +7,7 @@ export const effectiveFoodPrice=(data,p,date)=>businessSeasonPrice(p,data.busine
 export function foodAvailability(data,items,check){
  // Opt-in: historical recipes retain their existing behavior.
  const needs=new Map();for(const i of items||[]){const r=(data.businessRecords||[]).find(r=>r.module==='produccion'&&r.productId===i.p&&r.status==='Activa'&&r.foodSettings?.blockMissing);if(r)for(const x of businessRecipePlan(r,i.q,data.products))needs.set(x.p,(needs.get(x.p)||0)+x.q);}
- for(const [id,q]of needs){const p=data.products.find(p=>p.id===id);check(p&&p.stock>=q,'Plato agotado: falta un insumo de la receta.');}
+ for(const [id,q]of needs){const p=data.products.find(p=>p.id===id);check(p&&(data.cfg?.allowNegativeValues===true||p.stock>=q),'Plato agotado: falta un insumo de la receta.');}
 }
 export async function foodWorkflow(data,access,session,b,ctx){
  const {check}=ctx,rows=data.businessRecords||=[],permit=m=>ctx.permit(access,m,true),now=new Date().toISOString();
@@ -55,7 +55,7 @@ export async function foodWorkflow(data,access,session,b,ctx){
   check(Array.isArray(b.shares)&&b.shares.length>0&&b.shares.length<=6,'Indica el reparto.');const seen=new Set();r.tipShares=b.shares.map(s=>{const name=text(s.name,100),weight=Number(s.weight);check(name&&!seen.has(name)&&Number.isInteger(weight)&&weight>0&&weight<=10000,'Mesero o peso inválido.');seen.add(name);return {name,weight};});event(r,'Propina acordada y reparto propuesto');return r.id;
  }
  if(b.operation==='foodWaste'){
-  permit('produccion');permit('inventario');permit('contabilidad');check(['merma','consumo-interno'].includes(b.kind)&&text(b.reason,500),'Indica tipo y motivo.');const p=product(b.productId),q=quantity(b.q);check(p.kind!=='service'&&p.stock>=q,'Existencia insuficiente.');check(data.accounts.some(a=>a.code===b.expenseAccount&&['gasto','costo'].includes(a.tipo)),'Selecciona cuenta de gasto o costo.');
+  permit('produccion');permit('inventario');permit('contabilidad');check(['merma','consumo-interno'].includes(b.kind)&&text(b.reason,500),'Indica tipo y motivo.');const p=product(b.productId),q=quantity(b.q);check(p.kind!=='service'&&(data.cfg?.allowNegativeValues===true||p.stock>=q),'Existencia insuficiente.');check(data.accounts.some(a=>a.code===b.expenseAccount&&['gasto','costo'].includes(a.tipo)),'Selecciona cuenta de gasto o costo.');
   const lots=rows.filter(r=>r.module==='lotes'&&r.productId===p.id);if(lots.length){permit('lotes');const lot=lots.find(r=>r.id===b.lotId);check(lot&&lot.q>=q,'Selecciona un lote con cantidad suficiente.');lot.q=normalizeItemQuantity(lot.q-q);if(!lot.q)lot.status='Agotado';event(lot,b.kind,{q,reason:text(b.reason,500)});}
   check(!rows.some(r=>r.module==='variantes'&&r.productId===p.id&&r.serial),'Usa el ajuste individual de series.');const total=invoiceTotals([{q,u:p.cost}]).total;p.stock=normalizeItemQuantity(p.stock-q);const e=ctx.entry(data,session,{date:ctx.date(b.date),type:b.kind,desc:b.kind+' · '+p.name,total,reason:text(b.reason,500),zone:text(b.zone,80),lotId:b.lotId||'',stock:[{pid:p.id,q:-q,unit:p.unit||'unidad',unitCost:p.cost}],lines:total?[{a:b.expenseAccount,d:total,c:0},{a:'1301',d:0,c:total}]:[]});return e.id;
  }
