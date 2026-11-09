@@ -35,7 +35,7 @@ export async function discountRoute(id,session,method,body={}){
    return {events:await client.select().from(auditEvents).where(and(eq(auditEvents.companyId,id),eq(auditEvents.action,'Descuentos'))).orderBy(desc(auditEvents.createdAt)).limit(200)};
   }
   if(body.action!=='authorize'||!allowed(access,'facturacion',true))accessError('Sin permiso para aplicar descuentos.');
-  if(!access.owner&&!policy.roles?.includes(operationalRole(access)))accessError('Tu rol no tiene autorización para descuentos.');
+  if(!access.owner&&(access.rolePolicy?access.rolePolicy.specials?.discounts!==true:!policy.roles?.includes(operationalRole(access))))accessError('Tu rol no tiene autorización para descuentos.');
   const discount=Number(body.discount);
   if(!Number.isFinite(discount)||discount<=0||discount>(policy.maximum??99))accessError(`El descuento máximo es ${policy.maximum??99}%.`,400);
   const actor=operatorId(access,session), attemptKey='discount-attempt:'+id+':'+actor;
@@ -62,7 +62,7 @@ export async function consumeDiscount(client,id,access,session,body){
  const attemptKey='discount-attempt:'+id+':'+operatorId(access,session);
  const attempt=(await client.select().from(siteContent).where(eq(siteContent.id,attemptKey)))[0]?.content;
  if(attempt?.until>Date.now())accessError('Descuentos bloqueados durante 5 minutos. Intenta más tarde.',429);
- if(!access.owner&&!policy.roles?.includes(operationalRole(access)))accessError('Tu rol no tiene autorización para descuentos.');
+ if(!access.owner&&(access.rolePolicy?access.rolePolicy.specials?.discounts!==true:!policy.roles?.includes(operationalRole(access))))accessError('Tu rol no tiene autorización para descuentos.');
  if(Number(body.discount)>(policy.maximum??99))accessError(`El descuento máximo es ${policy.maximum??99}%.`,400);
  const grantId='discount-grant:'+createHash('sha256').update(String(body.discountAuthorization||'')).digest('hex');
  const grant=(await client.select().from(siteContent).where(eq(siteContent.id,grantId)))[0]?.content;

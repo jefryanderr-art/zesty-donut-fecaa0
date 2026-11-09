@@ -68,8 +68,8 @@ export function analysisReport(data,access,body,canRead){
  }else if(m==='costeo_abc'){
   check(['ventas','inventario','personal','costos'].every(canRead),'Se requiere lectura de Ventas, Inventario, Personal y Costos.');result.settings={pools:r.pools||[]};result.rows=abcReport({...data,entries},r.pools||[]);
  }else{
-  const role=access.owner?'dueño':String(access.member?.role||access.role||'').toLowerCase();check(['dueño','contador','cajero','vendedor'].includes(role),'Rol sin tablero.');result.role=role;
-  const operational=['cajero','vendedor'].includes(role),own=operational?entries.filter(e=>e.operatorId===access.member?.id):entries;
+  const role=access.owner?'dueño':String(access.member?.role||access.role||'').toLowerCase();if(!access.rolePolicy)check(['dueño','contador','cajero','vendedor'].includes(role),'Rol sin tablero.');result.role=role;
+  const operational=access.rolePolicy?access.rolePolicy.ownOperations===true:['cajero','vendedor'].includes(role),own=operational?entries.filter(e=>e.operatorId===access.member?.id):entries;
   if(canRead('facturacion'))result.rows.push({key:'sales',value:sum(own.filter(e=>['venta','nota-credito'].includes(e.type)).map(e=>(e.type==='nota-credito'?-1:1)*cents(e.subtotal??e.total??0))),unit:'money'});
   if(canRead('cajas')&&role!=='vendedor')result.rows.push({key:'cashCounts',value:(data.cashCounts||[]).filter(c=>c.date>=body.from&&c.date<=body.to&&(!operational||c.responsible===access.member?.id)).length,unit:'count'});
   if(!operational&&canRead('contabilidad')&&canRead('finanzas'))for(const [key,value]of Object.entries(financialSnapshot(data,body.from,body.to).statement))result.rows.push({key,value,unit:'money'});

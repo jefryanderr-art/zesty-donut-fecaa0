@@ -1,3 +1,4 @@
+import {listCompanyRoles,manageCompanyRole,requireAccessAdmin} from '../lib/company-roles.mjs';
 import {rentalPortal} from '../lib/rental-portal.mjs';
 import {sharedCalendar} from '../lib/lodging-calendar.mjs';
 import {completeCompanyDocument} from '../../db/accounting-model.mjs';
@@ -499,14 +500,15 @@ const handleRequest = async (request, context, metrics) => {
       if (!file) return fail('Comprobante no encontrado.', 404);
       return new Response(file, { headers: { 'content-type': 'application/octet-stream', 'content-disposition': "attachment; filename=comprobante; filename*=UTF-8''" + encodeURIComponent(record.receipt.name), 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox" } });
     }
+    if (path === 'roles' && ['GET','POST','PUT','DELETE'].includes(method)) {
+      const companyId = url.searchParams.get('c');
+      return json(method === 'GET' ? await listCompanyRoles(companyId,session) : await manageCompanyRole(companyId,session,body,method));
+    }
     if (path === 'members') {
       const companyId = url.searchParams.get('c');
       const access = await companyAccess(db, companyId, session);
-      requireModule(access,'accesibilidad');
-      if (method === 'GET') {
-        const members = await db.select().from(companyMembers).where(eq(companyMembers.companyId, companyId)).orderBy(companyMembers.createdAt);
-        return json({ owner: access.company.ownerEmail, members: members.map(safeMember), modules: MODULES });
-      }
+      requireAccessAdmin(access);
+      if (method === 'GET') return json(await listCompanyRoles(companyId,session));
       if (['POST', 'PUT'].includes(method)) {
         if (!allowed(access, 'accesibilidad', true)) return fail('Sin permiso para administrar los accesos.', 403);
         return json({ member: await manageMember(companyId, session, body) });
@@ -738,7 +740,7 @@ const handleRequest = async (request, context, metrics) => {
           const access = await companyAccess(client, companyId, session, true);
           const { id, name, description } = access.company;
           await client.update(sessions).set({activeCompanyId:id}).where(eq(sessions.tokenHash,hashToken(sessionToken(request))));
-          const company = { allowNegativeValues:access.company.allowNegativeValues===true, canChangeBusinessProfile:canChangeTestBusinessProfile(access.company,session,isAdmin), businessType:access.company.businessType, businessCustomization:access.company.businessCustomization, onboardingDone:access.company.onboardingDone, assistantAvailable:assistantAvailable(access), assistantGlobalEnabled:assistantOn()&&!access.support, assistantEnabled:access.company.assistantEnabled, assistantTimeZone:access.company.assistantTimeZone, testPlan:access.company.testPlan, internalTestPlan:access.internalTestPlan, isPlatformCompany:access.company.isPlatformCompany, billingPlan:access.billingPlan, entitlement:access.entitlement, readOnlyLimit:access.readOnlyLimit, support:access.support||false,supportExpiresAt:access.supportExpiresAt, id, name, description, owner: access.owner, permissions: access.permissions, memberId: access.member?.id, role: access.owner ? 'Dueño' : access.member?.role, branches: access.branches, branchId: access.branchId, unrestrictedBranches: access.unrestrictedBranches };
+          const company = { allowNegativeValues:access.company.allowNegativeValues===true, canChangeBusinessProfile:canChangeTestBusinessProfile(access.company,session,isAdmin), businessType:access.company.businessType, businessCustomization:access.company.businessCustomization, onboardingDone:access.company.onboardingDone, assistantAvailable:assistantAvailable(access), assistantGlobalEnabled:assistantOn()&&!access.support, assistantEnabled:access.company.assistantEnabled, assistantTimeZone:access.company.assistantTimeZone, testPlan:access.company.testPlan, internalTestPlan:access.internalTestPlan, isPlatformCompany:access.company.isPlatformCompany, billingPlan:access.billingPlan, entitlement:access.entitlement, readOnlyLimit:access.readOnlyLimit, support:access.support||false,supportExpiresAt:access.supportExpiresAt, id, name, description, owner: access.owner, permissions: access.permissions, rolePolicy: access.rolePolicy || null, memberId: access.member?.id, role: access.owner ? 'Dueño' : access.member?.role, branches: access.branches, branchId: access.branchId, unrestrictedBranches: access.unrestrictedBranches };
           return json({ data: projectData(access.company.data, access), revision: access.company.revision, company });
         });}catch(error){
           // companyAccess checks ownership/membership before checking the owner's plan.

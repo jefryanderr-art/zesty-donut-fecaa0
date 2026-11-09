@@ -1,7 +1,7 @@
 import { and, eq, getTableColumns, getTableName, inArray, sql } from 'drizzle-orm';
 import * as schema from '../../db/schema.ts';
 import { collections, children } from '../../db/accounting-model.mjs';
-import { canonical, documentHash, normalizeDocument, restoreDocument, storageError } from './accounting-codec.mjs';
+import { accountingDocument, verifySourceDocuments, canonical, documentHash, historicalDocumentHash, normalizeDocument, restoreDocument, storageError } from './accounting-codec.mjs';
 
 const tables = {
   fiscalWorkflows: schema.fiscalWorkflows,
@@ -33,14 +33,14 @@ export async function verifyStored(client, company, state) {
   const rows = await storedRows(client, company.id);
   for (const [name, count] of Object.entries(state.manifest.counts)) if (rows[name].length !== count) storageError('Los conteos relacionales no coinciden. Se conservó el origen; no continúes hasta revisar la migración.');
   const data = restoreDocument({ rows, extra: state.documentExtra, manifest: state.manifest });
-  if (documentHash(data) !== state.sourceHash || documentHash(company.data) !== state.sourceHash) storageError('La verificación de integridad no coincide con el origen. Se conservó el documento JSON.');
+  verifySourceDocuments(data, company.data, state.sourceHash);
   const verification = normalizeDocument(company.id, data);
   const compatibleManifest={...state.manifest,counts:{...Object.fromEntries(Object.keys(tables).map(name=>[name,0])),...state.manifest.counts}};
   if (canonical(verification.manifest) !== canonical(compatibleManifest)) storageError('Los totales contables no coinciden después de la conversión.');
   // Verifica también claves, índices de fecha y relaciones, no solo el JSON reconstruido.
   const byId = (a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   for (const name of Object.keys(tables)) if (canonical([...rows[name]].sort(byId)) !== canonical([...verification.rows[name]].sort(byId))) storageError('Una tabla relacional no coincide con el documento verificado.');
-  return data;
+  return accountingDocument(data);
 }
 // Caller holds the company row lock in the same transaction. Repair only the
 // known platform test-company incident; ordinary accounting reads stay strict.
@@ -61,7 +61,7 @@ export async function repairTestPlanRevision(client, company, actor) {
 }
 export async function readAccounting(client, company) {
   const state = await storageState(client, company.id);
-  if (!state || state.mode === 'legacy') return company.data;
+  if (!state || state.mode === 'legacy') return accountingDocument(company.data);
   if (state.revision !== company.revision) storageError('Las revisiones de almacenamiento no coinciden. El origen sigue disponible para recuperación.');
   return verifyStored(client, company, state);
 }
@@ -86,6 +86,7 @@ async function writeRows(client, company, converted, previous) {
   }
 }
 export async function convertAccounting(client, company, { mode = 'relational', verify = true } = {}) {
+  company = { ...company, data: accountingDocument(company.data) };
   const converted = normalizeDocument(company.id, company.data);
   const existing = await storageState(client, company.id);
   await client.insert(schema.accountingOrigins).values({ companyId: company.id, revision: company.revision, data: company.data, sourceHash: converted.hash }).onConflictDoNothing();
@@ -97,6 +98,8 @@ export async function convertAccounting(client, company, { mode = 'relational', 
   return { mode, revision: company.revision, counts: converted.manifest.counts, debitCents: converted.manifest.debitCents, creditCents: converted.manifest.creditCents, alreadyConverted: !!existing };
 }
 export async function syncAccounting(client, previousCompany, company) {
+  previousCompany = { ...previousCompany, data: accountingDocument(previousCompany.data) };
+  company = { ...company, data: accountingDocument(company.data) };
   const state = await storageState(client, company.id);
   // Las empresas no convertidas siguen funcionando hasta su migración explícita.
   if (!state) {
@@ -114,7 +117,7 @@ export async function returnToLegacy(client, company) {
   const state = await storageState(client, company.id);
   if (!state) storageError('Esta empresa aún no tiene una migración de almacenamiento.');
   // Se conserva la copia JSON vigente y todas las tablas; no se restaura una versión antigua.
-  if (state.revision !== company.revision || documentHash(company.data) !== state.sourceHash) storageError('Verifica la copia de origen antes de revertir el modo de lectura.');
+  if (state.revision !== company.revision || ![documentHash(company.data), historicalDocumentHash(company.data)].includes(state.sourceHash)) storageError('Verifica la copia de origen antes de revertir el modo de lectura.');
   await client.update(schema.accountingStorage).set({ mode: 'legacy' }).where(eq(schema.accountingStorage.companyId, company.id));
   return { mode: 'legacy', revision: company.revision };
 }

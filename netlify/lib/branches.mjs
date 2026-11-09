@@ -5,7 +5,7 @@ export const companyBranches=data=>data?.branches?.length?data.branches:[{id:PRI
 const fail=(message,status=403)=>{const error=new Error(message);error.publicMessage=message;error.status=status;throw error};
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 export function branchAccess(access,session){
- const branches=companyBranches(access.company.data),unrestricted=access.owner||String(access.member?.role).toLowerCase()==='contador';
+ const branches=companyBranches(access.company.data),unrestricted=access.owner||(access.rolePolicy?access.rolePolicy.specials?.allBranches===true:String(access.member?.role).toLowerCase()==='contador');
  const ids=unrestricted?branches.map(b=>b.id):(access.member?.branchIds||[PRIMARY_BRANCH]);
  const visible=branches.filter(b=>ids.includes(b.id)&&b.active!==false);
  const selected=session.activeBranchId;

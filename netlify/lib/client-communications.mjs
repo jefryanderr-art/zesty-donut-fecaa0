@@ -93,7 +93,7 @@ export async function clientOperation(data,access,session,body,ctx){
  }
  if(op==='clientReverseCollect'){
   ctx.permit(access,'facturacion',true);ctx.permit(access,'contabilidad',true);ctx.financialCash(access);
-  check(access.owner||['contador','supervisor'].includes(access.member?.role),'Solo el dueño o responsable contable autorizado revierte cobros.');
+  check(access.owner||(access.rolePolicy?access.rolePolicy.specials?.corrections===true:['contador','supervisor'].includes(access.member?.role)),'Solo el dueño o responsable contable autorizado revierte cobros.');
   const original=data.entries.find(e=>e.id===body.id&&e.clientCollection===true);
   check(original&&!data.entries.some(e=>e.reversalOf===original.id),'Cobro no encontrado o ya revertido.');
   check(date>=original.date&&!data.entries.some(e=>e.invoiceId===original.invoiceId&&e.date>date),'La reversa debe respetar la cronología de la factura.');
