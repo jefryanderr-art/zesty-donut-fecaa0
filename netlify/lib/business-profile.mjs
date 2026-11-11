@@ -17,9 +17,21 @@ export function validateProfile(type='comercio',custom={}) {
  return {businessType:type,businessCustomization:result};
 }
 
+export const PROFILE_SPACE_SWITCH=Symbol.for('acontec.profileSpaceSwitch');
 export function fixedBusinessProfile(company,body,isAdmin) {
- if(!isAdmin&&body.businessType!==company.businessType)throw Object.assign(new Error('El tipo de negocio queda fijo. Para cambiarlo, contacta a Acontec.'),{status:403,publicMessage:'El tipo de negocio queda fijo. Para cambiarlo, contacta a Acontec.'});
- return validateProfile(body.businessType,{...body.businessCustomization,invoiceCountry:company.businessCustomization?.invoiceCountry||'Nicaragua'});
+ if((!isAdmin||!company.testPlan)&&body.businessType!==company.businessType)throw Object.assign(new Error('El tipo de negocio queda fijo. Para cambiarlo, contacta a Acontec.'),{status:403,publicMessage:'El tipo de negocio queda fijo. Para cambiarlo, contacta a Acontec.'});
+ const profile=validateProfile(body.businessType,{...body.businessCustomization,invoiceCountry:company.businessCustomization?.invoiceCountry||'Nicaragua'});
+ if(!isAdmin||!company.testPlan||profile.businessType===company.businessType||!company.data)return profile;
+ const current=structuredClone(company.data),spaces=structuredClone(current.profileSpaces||{});
+ delete current.profileSpaces;
+ if(current.cfg)delete current.cfg.allowNegativeValues;
+ spaces[company.businessType]={data:current,businessCustomization:structuredClone(company.businessCustomization||{})};
+ const saved=spaces[profile.businessType];
+ const data=saved?structuredClone(saved.data):initialCompanyDocument({name:company.name,businessType:profile.businessType,country:profile.businessCustomization.invoiceCountry,cur:current.cfg?.cur||'C$',ruc:current.cfg?.ruc||''});
+ data.branches=structuredClone(current.branches);
+ data.cfg={...data.cfg,name:company.name};
+ data.profileSpaces=spaces;
+ return {...profile,businessCustomization:saved?structuredClone(saved.businessCustomization):validateProfile(profile.businessType,{invoiceCountry:profile.businessCustomization.invoiceCountry}).businessCustomization,data,[PROFILE_SPACE_SWITCH]:true};
 }
 export function restoredBusinessProfile(company,backup,isAdmin) {
  return validateProfile(isAdmin?backup.businessType:company.businessType,backup.businessCustomization);

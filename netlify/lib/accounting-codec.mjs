@@ -148,14 +148,23 @@ export function normalizeDocument(companyId, data) {
       rows[name].push(row);
     }
   }
-  const result = { rows, extra: encode(extra), manifest: { version: 1, arrays, counts: Object.fromEntries(Object.entries(rows).map(([name, list]) => [name, list.length])), debitCents, creditCents }, hash: documentHash(data) };
+  const spaces=extra.profileSpaces;
+  delete extra.profileSpaces;
+  const encodedExtra=encode(extra);
+  if(spaces)encodedExtra.profileSpaces=Object.fromEntries(Object.entries(spaces).map(([type,space])=>{
+    if(space.data?.profileSpaces)storageError('Los espacios de perfil no pueden anidarse.');
+    return [type,{businessCustomization:encode(space.businessCustomization),document:normalizeDocument(companyId,space.data)}];
+  }));
+  const result = { rows, extra: encodedExtra, manifest: { version: 1, arrays, counts: Object.fromEntries(Object.entries(rows).map(([name, list]) => [name, list.length])), debitCents, creditCents }, hash: documentHash(data) };
   if (documentHash(restoreDocument(result)) !== result.hash) storageError('La conversión no conservó todos los campos del origen.');
   return result;
 }
 export const invoiceDefinition = { text: ['type', 'reference', 'due', 'customerId', 'supplierId', 'pay'], money: ['subtotal', 'vat', 'total'] };
 export function restoreDocument({ rows, extra, manifest }) {
   if (manifest.empty) return null;
-  const data = decode(extra);
+  const {profileSpaces,...fields}=extra;
+  const data = decode(fields);
+  if(profileSpaces)data.profileSpaces=Object.fromEntries(Object.entries(profileSpaces).map(([type,space])=>[type,{businessCustomization:decode(space.businessCustomization),data:restoreDocument(space.document)}]));
   const grouped = Object.fromEntries(Object.keys(children).map(name => [name, new Map()]));
   for (const name of Object.keys(children)) for (const child of rows[name]) {
     if (!grouped[name].has(child.entryId)) grouped[name].set(child.entryId, []);

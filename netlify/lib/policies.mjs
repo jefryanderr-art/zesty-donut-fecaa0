@@ -8,7 +8,7 @@ export const salesAdministrator = access => access.owner || (access.rolePolicy ?
 export const supervisor = access => access.owner || (access.rolePolicy ? access.rolePolicy.specials?.corrections === true : operationalRole(access) === 'supervisor');
 export const cashAdministrator = access => access.owner || (access.rolePolicy ? access.rolePolicy.specials?.cashAdmin === true : ['contador', 'supervisor'].includes(operationalRole(access)));
 export const operatorId = (access, session) => access.member?.id || session.email;
-export const receiptRecords = data => [...['taxes', 'pettyVouchers', 'cashMovements', 'costs'].flatMap(name => (data?.[name] || []).filter(record => record.receipt)),...(data?.fiscalWorkflows||[]).flatMap(r=>['filing','payment','package'].filter(k=>r[k]?.receipt).map(k=>({id:r.id+':'+k,receipt:r[k].receipt})).concat(['receipt','snapshot','backup'].filter(k=>r[k]?.key).map(k=>({id:r.id+':'+k,receipt:r[k]}))))];
+export const receiptRecords = data => [...Object.values(data?.profileSpaces||{}).flatMap(space=>receiptRecords(space.data)),...['taxes', 'pettyVouchers', 'cashMovements', 'costs'].flatMap(name => (data?.[name] || []).filter(record => record.receipt)),...(data?.fiscalWorkflows||[]).flatMap(r=>['filing','payment','package'].filter(k=>r[k]?.receipt).map(k=>({id:r.id+':'+k,receipt:r[k].receipt})).concat(['receipt','snapshot','backup'].filter(k=>r[k]?.key).map(k=>({id:r.id+':'+k,receipt:r[k]}))))];
 export function roleAllows(access, module) {
   if (access.owner || access.rolePolicy) return true;
   if (module === 'diseno_factura'||module==='auditoria_revision') return true;

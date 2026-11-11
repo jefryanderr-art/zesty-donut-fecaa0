@@ -9,7 +9,7 @@ import {backupRoute,storageStats,downloadPrivateExport} from '../lib/private-bac
 import {publishedEditor,editorRoute,publicPlans,trialSettings} from '../lib/platform-editor.mjs';
 import {transferMe,requestTransfer,transferAdmin,guardPagaditoChannel,transferStatusSummary} from '../lib/transfer-billing.mjs';
 import { UNCONFIRMED_MESSAGE, RESEND_MESSAGE, identityStatus, loginFailure, resendConfirmation, RECOVERY_ERROR, RESET_ERROR, missingIdentityUser, accessMailError, attemptScopes } from '../lib/email-auth.mjs';
-import { validateCompanyDetails, validateProfile, fixedBusinessProfile, restoredBusinessProfile } from '../lib/business-profile.mjs';
+import { validateCompanyDetails, validateProfile, PROFILE_SPACE_SWITCH, fixedBusinessProfile, restoredBusinessProfile } from '../lib/business-profile.mjs';
 import { assistantAnswer, assistantSettings, assistantOn, assistantAvailable } from '../lib/assistant.mjs';
 import { discountRoute } from '../lib/discounts.mjs';
 import '../../public/cloud-sync.js';
@@ -543,7 +543,7 @@ const handleRequest = async (request, context, metrics) => {
         if (id) {
           if (!/^[a-f0-9-]{36}$/.test(id)) return fail('Respaldo no encontrado.', 404);
           const [backup] = await db.select().from(companyBackups).where(and(eq(companyBackups.id, id), eq(companyBackups.companyId, companyId)));
-          return backup ? json({ backup: { ...backup, data: projectData(backup.data, access) } }) : fail('Respaldo no encontrado.', 404);
+          return backup ? json({ backup: { ...backup, data: projectData(backup.data, access, {includeSpaces:true}) } }) : fail('Respaldo no encontrado.', 404);
         }
         const backups = await db.select({ id: companyBackups.id, revision: companyBackups.revision, name: companyBackups.name, createdAt: companyBackups.createdAt }).from(companyBackups).where(eq(companyBackups.companyId, companyId)).orderBy(desc(companyBackups.revision)).limit(30);
         return json({ backups });
@@ -560,8 +560,20 @@ const handleRequest = async (request, context, metrics) => {
             data = scopeBranch(backup.data, currentAccess); name = backup.name; description = backup.description;
             if(currentAccess.owner)profilePatch=restoredBusinessProfile(company,backup,isAdmin);
           }
-          mergeData(company.data, data, { owner: true }, {restoreServiceConfiguration:true});
-          guardLedgerMutation(company.data, data, currentAccess, {restoreServiceConfiguration:true});
+          const restoreProfileSpace=!!(body.id&&currentAccess.owner&&company.testPlan&&!company.isPlatformCompany);
+          if(!restoreProfileSpace){
+            mergeData(company.data, data, { owner: true }, {restoreServiceConfiguration:true});
+            guardLedgerMutation(company.data, data, currentAccess, {restoreServiceConfiguration:true});
+          }
+          // Restoring a historical version never discards spaces created since it.
+          if(company.data?.profileSpaces||data?.profileSpaces){
+            const spaces={...structuredClone(company.data?.profileSpaces||{}),...structuredClone(data.profileSpaces||{})};
+            if(restoreProfileSpace&&profilePatch.businessType!==company.businessType){
+              const active=structuredClone(currentAccess.company.data);delete active.profileSpaces;if(active.cfg)delete active.cfg.allowNegativeValues;
+              spaces[company.businessType]={data:active,businessCustomization:structuredClone(company.businessCustomization||{})};
+            }
+            data={...data,profileSpaces:spaces};
+          }
           if (!currentAccess.owner && ((company.data?.taxes || []).some(tax => tax.receipt) || (data.taxes || []).some(tax => tax.receipt))) accessError('Cuando hay comprobantes privados, solo el dueño puede restaurar la empresa.');
           const historical = await retainedCompanyData(client, companyId);
           const trustedReceipts = new Map([company.data, ...historical.map(backup => backup.data)].flatMap(document => receiptRecords(document).map(tax => [tax.receipt.key, { id: tax.id, receipt: tax.receipt }])));
@@ -572,7 +584,7 @@ const handleRequest = async (request, context, metrics) => {
             const file = await getStore({ name: 'acontec-private-receipts', consistency: 'strong' }).getMetadata(tax.receipt.key);
             if (!file) accessError('Falta un comprobante del respaldo. No se modificaron los datos.', 400);
           }
-          return { data, name, description, ...profilePatch };
+          return { data, name, description, ...profilePatch, ...(restoreProfileSpace?{[PROFILE_SPACE_SWITCH]:true}:{}) };
         }, 'Respaldo restaurado');
         return json({ ...result, companies: await accessibleCompanies(session) });
       }
@@ -661,7 +673,7 @@ const handleRequest = async (request, context, metrics) => {
       const result=await updateCompany(url.searchParams.get('c'),session,body.revision,(company,access)=>{
         if(!access.owner)accessError('Solo el dueño personaliza el sistema.');
         requireModule(access,'ajustes',true);
-        return fixedBusinessProfile(company,body,canChangeTestBusinessProfile(company,session,isAdmin));
+        return fixedBusinessProfile({...company,data:access.company.data},body,canChangeTestBusinessProfile(company,session,isAdmin));
       },'Perfil de negocio actualizado');
       return json(result);
     }
@@ -741,7 +753,7 @@ const handleRequest = async (request, context, metrics) => {
           const { id, name, description } = access.company;
           await client.update(sessions).set({activeCompanyId:id}).where(eq(sessions.tokenHash,hashToken(sessionToken(request))));
           const company = { allowNegativeValues:access.company.allowNegativeValues===true, canChangeBusinessProfile:canChangeTestBusinessProfile(access.company,session,isAdmin), businessType:access.company.businessType, businessCustomization:access.company.businessCustomization, onboardingDone:access.company.onboardingDone, assistantAvailable:assistantAvailable(access), assistantGlobalEnabled:assistantOn()&&!access.support, assistantEnabled:access.company.assistantEnabled, assistantTimeZone:access.company.assistantTimeZone, testPlan:access.company.testPlan, internalTestPlan:access.internalTestPlan, isPlatformCompany:access.company.isPlatformCompany, billingPlan:access.billingPlan, entitlement:access.entitlement, readOnlyLimit:access.readOnlyLimit, support:access.support||false,supportExpiresAt:access.supportExpiresAt, id, name, description, owner: access.owner, permissions: access.permissions, rolePolicy: access.rolePolicy || null, memberId: access.member?.id, role: access.owner ? 'Dueño' : access.member?.role, branches: access.branches, branchId: access.branchId, unrestrictedBranches: access.unrestrictedBranches };
-          return json({ data: projectData(access.company.data, access), revision: access.company.revision, company });
+          return json({ data: projectData(access.company.data, access, {includeSpaces:url.searchParams.get('backupSpaces')==='1'}), revision: access.company.revision, company });
         });}catch(error){
           // companyAccess checks ownership/membership before checking the owner's plan.
           // Preserve that selection even when expired access rolls back the data transaction.

@@ -103,7 +103,7 @@ export function planTestCompanyId(email){
  return [hash.slice(0,8),hash.slice(8,12),hash.slice(12,16),hash.slice(16,20),hash.slice(20,32)].join('-');
 }
 export function canChangeTestBusinessProfile(company,session,isAdmin){
- return isAdmin===true&&!session.member&&company.ownerEmail===session.email&&!company.isPlatformCompany&&!company.archivedAt&&company.id===planTestCompanyId(session.email);
+ return !!company.testPlan&&isAdmin===true&&!session.member&&company.ownerEmail===session.email&&!company.isPlatformCompany&&!company.archivedAt&&company.id===planTestCompanyId(session.email);
 }
 
 export async function ensurePlanTestCompany(session){

@@ -162,7 +162,7 @@ const safeFilename=value=>String(value).replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓ
 function downloadBackup(envelope,name){downloadFile(new Blob([JSON.stringify(envelope,null,2)],{type:'application/json'}),name)}
 ACT.backup=async()=>{
   const saved=await flush();
-  const current=saved?await api('data?c='+CO.id):null;
+  const current=saved?await api('data?c='+CO.id+'&backupSpaces=1'):null;
   downloadBackup({...(current?backupEnvelope(current.data,current.company,current.revision):backupEnvelope()),pendingChanges:!saved},`respaldo-${safeFilename(CO.name)}-${today()}${saved?'':'-pendiente'}.json`);
   if(!saved)alert(uiT("access.extra.5","Se descargó una copia de recuperación con tus cambios pendientes. Esos cambios todavía no se han guardado en la nube."));
 };
@@ -206,6 +206,7 @@ async function collectAudit(companyId){
   return events;
 }
 ACT.backupAll=()=>runExport(async(companyId,current)=>{
+  current=await api('data?c='+companyId+'&backupSpaces=1');
   const company=structuredClone(current.company),state=structuredClone(current.data),revision=current.revision;
   await loadExportScript('/vendor/fflate.js?v=86d12f1b80ed5c94');
   const files={'empresa.json':fflate.strToU8(JSON.stringify(backupEnvelope(state,company,revision),null,2))};
@@ -240,13 +241,12 @@ function readableValue(value){if(value===null||value===undefined)return '';if(ty
 async function createCompanyPdf(company,state,revision){
   await loadExportScript('/vendor/jspdf.js?v=0f6fe797a6df06bd');await loadExportScript('/vendor/autotable.js?v=31884888608c7aab');
   const documentPdf=new jspdf.jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const money=value=>(state.cfg.cur||'C$')+' '+(+value||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const money2=value=>value<0?'('+money(-value)+')':money(value);
+  const reportMoney=value=>money(value,state.cfg.cur||'C$');
   const accName=code=>{const account=state.accounts.find(record=>record.code===code);return account?`${account.code} · ${account.name}`:code};
   documentPdf.setProperties({title:'Informe completo - '+company.name,author:'Acontec'});
   let cursor=18;
   const heading=(text,newPage=false)=>{if(newPage){documentPdf.addPage();cursor=18}documentPdf.setFontSize(16);documentPdf.setTextColor(35,78,64);const lines=documentPdf.splitTextToSize(String(text),175);documentPdf.text(lines,16,cursor);cursor+=lines.length*7+5};
-  const table=(headers,rows)=>{documentPdf.autoTable({startY:cursor,head:[headers],body:rows.length?rows:[headers.map((_,index)=>index===0?'Sin registros':'')],margin:{left:16,right:16,top:18,bottom:18},styles:{fontSize:8,cellPadding:2,overflow:'linebreak'},headStyles:{fillColor:[35,78,64]},didDrawPage:()=>{documentPdf.setFontSize(8);documentPdf.setTextColor(100);documentPdf.text(company.name,16,10)}});cursor=documentPdf.lastAutoTable.finalY+10};
+  const table=(headers,rows)=>{documentPdf.autoTable({startY:cursor,head:[headers],body:rows.length?rows:[headers.map((_,index)=>index===0?'Sin registros':'')],margin:{left:16,right:16,top:18,bottom:18},styles:{fontSize:8,cellPadding:2,overflow:'linebreak'},headStyles:{fillColor:[35,78,64]},didParseCell:financialPdfCell,didDrawPage:()=>{documentPdf.setFontSize(8);documentPdf.setTextColor(100);documentPdf.text(company.name,16,10)}});cursor=documentPdf.lastAutoTable.finalY+10};
   heading(company.name);
   table(['Datos de la empresa','Valor'],[['Descripción',company.description||''],['RUC / identificación',state.cfg.ruc||''],['Moneda',state.cfg.cur||'C$'],['Emitido',new Date().toLocaleString('es')],['Sucursal',company.branchId?(company.branches||[]).find(b=>b.id===company.branchId)?.name||'Principal':'Consolidado'],['Periodo','Todo el historial'],['Versión',String(revision)]]);
   heading('Estados financieros',true);
@@ -254,37 +254,38 @@ async function createCompanyPdf(company,state,revision){
   for(const entry of state.entries)for(const line of entry.lines){const account=balances[line.a];if(account){account.d+=line.d;account.c+=line.c}}
   for(const account of Object.values(balances))account.s=account.nat==='D'?account.d-account.c:account.c-account.d;
   const income=tot(balances,'ingreso'),cost=tot(balances,'costo'),expenses=tot(balances,'gasto'),profit=income-cost-expenses;
-  table(['Estado de resultados','Importe'],[['Ingresos',money(income)],['Costo de ventas',money(cost)],['Gastos',money(expenses)],['Resultado neto',money(profit)]]);
+  table(['Estado de resultados','Importe'],[['Ingresos',reportMoney(income)],['Costo de ventas',reportMoney(cost)],['Gastos',reportMoney(expenses)],['Resultado neto',reportMoney(profit)]]);
   const assets=tot(balances,'activo'),liabilities=tot(balances,'pasivo'),equity=tot(balances,'patrimonio');
-  table(['Balance general','Importe'],[['Activos',money(assets)],['Pasivos',money(liabilities)],['Patrimonio registrado',money(equity)],['Resultado del ejercicio',money(profit)],['Pasivos + patrimonio + resultado',money(liabilities+equity+profit)],['Diferencia de cuadre',money(assets-liabilities-equity-profit)]]);
+  table(['Balance general','Importe'],[['Activos',reportMoney(assets)],['Pasivos',reportMoney(liabilities)],['Patrimonio registrado',reportMoney(equity)],['Resultado del ejercicio',reportMoney(profit)],['Pasivos + patrimonio + resultado',reportMoney(liabilities+equity+profit)],['Diferencia de cuadre',reportMoney(assets-liabilities-equity-profit)]]);
   const cash={ini:0,sec:{op:{},inv:{},fin:{}}},cashCodes=new Set(state.accounts.filter(account=>account.sub==='ef').map(account=>account.code));
   for(const entry of state.entries){
     const cashLines=entry.lines.filter(line=>cashCodes.has(line.a));if(!cashLines.length)continue;
     if(['apertura','apertura-importada','anula-apertura'].includes(entry.type)){cash.ini+=cashLines.reduce((total,line)=>total+line.d-line.c,0);continue}
     for(const line of entry.lines.filter(record=>!cashCodes.has(record.a))){const account=state.accounts.find(record=>record.code===line.a);if(!account)continue;const section=account.sub==='fijo'?'inv':account.sub==='fin'||account.tipo==='patrimonio'?'fin':'op';cash.sec[section][account.name]=(cash.sec[section][account.name]||0)+line.c-line.d}
   }
-  table(['Flujo de efectivo','Importe'],[['Efectivo inicial',money(cash.ini)],...Object.entries(cash.sec).map(([key,values])=>[{op:'Operación',inv:'Inversión',fin:'Financiamiento'}[key],money(Object.values(values).reduce((total,value)=>total+value,0))])]);
+  table(['Flujo de efectivo','Importe'],[['Efectivo inicial',reportMoney(cash.ini)],...Object.entries(cash.sec).map(([key,values])=>[{op:'Operación',inv:'Inversión',fin:'Financiamiento'}[key],reportMoney(Object.values(values).reduce((total,value)=>total+value,0))])]);
   const netCash=Object.values(cash.sec).reduce((total,values)=>total+Object.values(values).reduce((sum,value)=>sum+value,0),0);
-  table(['Resumen de efectivo','Importe'],[['Aumento / disminución neta',money(netCash)],['Efectivo final',money(cash.ini+netCash)]]);
+  table(['Resumen de efectivo','Importe'],[['Aumento / disminución neta',reportMoney(netCash)],['Efectivo final',reportMoney(cash.ini+netCash)]]);
   heading('Balanza de comprobación',true);
-  table(['Cuenta','Nombre','Debe','Haber','Saldo'],Object.values(balances).sort(byCode).map(account=>[account.code,account.name,money(account.d),money(account.c),money2(account.s)]));
+  table(['Cuenta','Nombre','Debe','Haber','Saldo'],Object.values(balances).sort(byCode).map(account=>[account.code,account.name,reportMoney(account.d),reportMoney(account.c),reportMoney(account.s)]));
   heading('Libro mayor',true);
+  const showDimensions=state.cfg.pos?.useDimensions===true||state.entries.some(e=>e.costCenter||e.project);
   for(const account of [...state.accounts].sort(byCode)){
     const movements=state.entries.flatMap(entry=>entry.lines.filter(line=>line.a===account.code).map(line=>({entry,line}))).sort((first,second)=>first.entry.date.localeCompare(second.entry.date));
     if(!movements.length)continue;
     if(cursor>230){documentPdf.addPage();cursor=18}
     heading(`${account.code} · ${account.name}`);
     let balance=0;
-    table(['Fecha','Documento / detalle','Debe','Haber','Saldo'],movements.map(({entry,line})=>{balance+=account.nat==='D'?line.d-line.c:line.c-line.d;return[entry.date,entry.reference||entry.desc||entry.id,money(line.d),money(line.c),money2(balance)]}));
+    table(['Fecha','Documento / detalle',...(showDimensions?['Centro / proyecto']:[]),'Debe','Haber','Saldo'],movements.map(({entry,line})=>{balance+=account.nat==='D'?line.d-line.c:line.c-line.d;return[entry.date,entry.reference||entry.desc||entry.id,...(showDimensions?[[entry.costCenter,entry.project].filter(Boolean).join(' / ')||'—']:[]),reportMoney(line.d),reportMoney(line.c),reportMoney(balance)]}));
   }
   heading('Libro diario y documentos contables',true);
   for(const entry of [...state.entries].sort((first,second)=>first.date.localeCompare(second.date))){
     if(cursor>230){documentPdf.addPage();cursor=18}
     heading(`${entry.date} · ${entry.reference||entry.id} · ${entry.desc||entry.type}`);
     table(['Campo','Valor'],Object.entries(entry).filter(([key])=>!['lines','items','stock'].includes(key)).map(([key,value])=>[key,readableValue(value)]));
-    if(entry.items?.length)table(['Producto','Cantidad','Precio','IVA %','Costo unitario'],entry.items.map(item=>[state.products.find(product=>product.id===item.p)?.name||item.p,String(item.q),money(item.u),String(item.vatRate||0),money(item.cost||0)]));
-    table(['Cuenta','Debe','Haber'],entry.lines.map(line=>[accName(line.a),money(line.d),money(line.c)]));
-    if(entry.stock?.length)table(['Producto','Movimiento','Costo'],entry.stock.map(movement=>[state.products.find(product=>product.id===movement.pid)?.name||movement.pid,String(movement.q),money(movement.unitCost||0)]));
+    if(entry.items?.length)table(['Producto','Cantidad','Precio','IVA %','Costo unitario'],entry.items.map(item=>[state.products.find(product=>product.id===item.p)?.name||item.p,String(item.q),reportMoney(item.u),String(item.vatRate||0),reportMoney(item.cost||0)]));
+    table(['Cuenta','Debe','Haber'],entry.lines.map(line=>[accName(line.a),reportMoney(line.d),reportMoney(line.c)]));
+    if(entry.stock?.length)table(['Producto','Movimiento','Costo'],entry.stock.map(movement=>[state.products.find(product=>product.id===movement.pid)?.name||movement.pid,String(movement.q),reportMoney(movement.unitCost||0)]));
   }
   for(const [key,label] of [['customers','Cartera de clientes'],['products','Productos e inventario'],['accounts','Catálogo de cuentas'],['employees','Expedientes de empleados'],['payrolls','Nóminas'],['settlements','Liquidaciones'],['taxes','Obligaciones fiscales'],['properties','Propiedades']]){
     heading(label,true);
