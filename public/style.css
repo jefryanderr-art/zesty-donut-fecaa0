@@ -568,3 +568,20 @@ body{font-family:var(--ui-font,'DM Sans',sans-serif)}
  .invoice-products.keyboard-open:has(.product-tools input:focus)>.product-selected{display:none}
  .invoice-products.keyboard-open>.product-catalog{flex:1 1 44px;max-height:none}
 }
+
+input[data-decimal]{text-align:center}
+@media screen and (max-width:640px){
+ .product-choice{grid-template-columns:minmax(0,1fr) auto}
+ .product-choice>b{grid-column:1/-1;grid-row:1}
+ .product-choice>.product-quantity{grid-column:1/-1;grid-row:2;min-width:0}
+ .product-choice .product-quantity button{flex:0 0 48px;width:48px;height:48px}
+ .product-choice .product-quantity input{flex:1;min-width:80px;height:48px;text-align:center}
+ .product-choice>span{grid-column:1;grid-row:3}
+ .product-choice>[data-remove]{grid-column:2;grid-row:3;min-height:44px}
+ .invoice-products>.product-selected{max-height:34dvh;flex-basis:34dvh}
+ .invoice-products.keyboard-open>.product-selected{max-height:96px}
+ .invoice-products.keyboard-open>.product-selected:focus-within{max-height:190px}
+ .pos-item{padding:12px}
+ .pos-item input,.pos-item select{min-height:44px}
+ .pos-item .pos-line-total{grid-column:1;justify-self:start}
+}
