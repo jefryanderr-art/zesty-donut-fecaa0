@@ -103,5 +103,9 @@ export const EXPECTED_MIGRATIONS=[
   {
     "name": "20261109203628_add_company_access_roles",
     "hash": "b679e3ae1915be652cfea03b506506667a10e24e3be7dc4a2a89b0a600fb19b0"
+  },
+  {
+    "name": "20261111145609_add_invoice_drafts",
+    "hash": "e2f94fe652df1f0131b9b83e040f29f5090d758884259ac4f14d8ed3b9f51452"
   }
 ];

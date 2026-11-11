@@ -1,6 +1,14 @@
 // Guía editorial de las vistas y formularios reales; sin datos de clientes.
 export const assistantGuide = [
 {
+ id:'facturas-registradas',modulo:'facturacion',titulo:'Facturas registradas y aplicadas',
+ palabras_clave:['registrar factura','facturas registradas','aplicar factura','borrador factura','lector Bluetooth','teclado productos'],
+ texto:`1. Abre Facturación y pulsa Crear factura. Selecciona cliente y líneas y pulsa Registrar para conservar una factura Registrada. No necesitas completar pagos ni abrir turno para registrarla. El registro no genera asiento, movimiento de inventario, pago, número fiscal ni movimiento de caja. Tampoco reserva existencias: otro usuario puede vender esos productos mientras la factura está registrada.
+2. En Facturación entra en Facturas registradas. Consulta estado, cliente, total y fecha. Editar permite agregar productos y conservar los precios por línea. Eliminar requiere confirmación y solo se admite mientras está Registrada. Revisa siempre la empresa y sucursal activa; los accesos requieren permiso de Facturación y el plan correspondiente.
+3. Aplicar abre el formulario habitual con fecha actual, serie, turno y pagos vigentes. Revisa cliente, cantidades, precios, IVA y total. El servidor vuelve a validar existencias y la configuración de valores negativos, precios, serie y fecha. Autoriza nuevamente todo descuento con la contraseña del dueño. Pulsa Aplicar y emitir para generar la venta y enlazar su asiento a la registrada. Una segunda aplicación no crea otra factura. La Aplicada no admite edición ni eliminación: usa nota de crédito para corregirla, verifica con tu contador.
+4. En Agregar productos el teclado táctil aparece al tocar Buscar producto o una cantidad. Usar lector Bluetooth prepara la búsqueda sin teclado virtual; el botón Escanear código de barras conserva la cámara. Listo confirma la selección y Cancelar la descarta.`,
+},
+{
   "id": "corregir-asiento",
   "modulo": "contabilidad",
   "titulo": "Corregir o anular un asiento",
@@ -811,7 +819,7 @@ export const assistantGuide = [
       "ticket",
       "cajero"
     ],
-    "texto": "1. Abre Facturación y revisa la empresa y la sucursal. Para un pago inmediato, pulsa Abrir turno y completa la apertura antes de emitir.\n2. Pulsa + Crear factura. Revisa Fecha, Turno de caja, Serie / sucursal, cliente y Vencimiento del crédito (visible al marcar Crédito).\n3. Usa + Agregar producto para buscar por nombre, código o código de barras. Toca una fila o escanea; cada repetición suma una unidad. Revisa En la factura (editable) y pulsa Listo. Cancelar descarta la selección provisional. Confirma Cantidad y Precio unitario sin IVA. Revisa la base, el IVA y el total mostrados.\n4. En Formas de pago marca las pastillas de los métodos usados; Efectivo está marcado al empezar. El último método marcado recibe el saldo restante. Revisa Pendiente por asignar, Recibido y Cambio a dar. Exacto completa el efectivo neto; Completar saldo en efectivo ajusta ese reparto. Recibido no aumenta el pago registrado.\n5. Pulsa Emitir factura y registrar asiento. La factura emitida queda inmutable; Imprimir y Detalle permiten revisarla. Una corrección requiere Anular, con motivo y autorización de supervisor."
+    "texto": "1. Abre Facturación y revisa la empresa y la sucursal. Para un pago inmediato, pulsa Abrir turno y completa la apertura antes de emitir.\n2. Pulsa + Crear factura. Revisa Fecha, Turno de caja, Serie / sucursal, cliente y Vencimiento del crédito (visible al marcar Crédito).\n3. Usa + Agregar producto para buscar por nombre, código o código de barras. Toca una fila o escanea; cada repetición suma una unidad. Revisa En la factura (editable) y pulsa Listo. Cancelar descarta la selección provisional. Confirma Cantidad y Precio unitario sin IVA. Revisa la base, el IVA y el total mostrados.\n4. En Formas de pago marca las pastillas de los métodos usados; Efectivo está marcado al empezar. El último método marcado recibe el saldo restante. Revisa Pendiente por asignar, Recibido y Cambio a dar. Exacto completa el efectivo neto; Completar saldo en efectivo ajusta ese reparto. Recibido no aumenta el pago registrado.\n5. Pulsa Aplicar y emitir. La factura emitida queda inmutable; Imprimir y Detalle permiten revisarla. Una corrección requiere Anular, con motivo y autorización de supervisor."
   },
   {
     "id": "cobrar",

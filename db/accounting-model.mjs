@@ -34,6 +34,7 @@ Object.assign(collections, {
   exchangeRates: { table: 'exchange_rates', text: ['currency','source'], numeric: ['rate'] },
   foreignDocuments: { table: 'foreign_documents', text: ['name','currency','side','entryId','branchId'], money: ['foreignAmount','baseTotal'], numeric: ['exchangeRate'] },
   budgets: { table: 'budgets', text: ['month','account','branchId'], money: ['total'] },
+  invoiceDrafts: { table: 'invoice_drafts', text: ['name','status','branchId','customerId','entryId'], money: ['total'] },
   quotations: { table: 'quotations', text: ['name','status','branchId'], money: ['total'] },
   purchaseOrders: { table: 'purchase_orders', text: ['name','status','branchId'], money: ['total'] },
   attendance: { table: 'attendance', text: ['employeeId','status','branchId'] },

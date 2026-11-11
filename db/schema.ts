@@ -223,6 +223,7 @@ export const recurringEntries = recordTable(collections.recurringEntries);
 export const exchangeRates = recordTable(collections.exchangeRates);
 export const foreignDocuments = recordTable(collections.foreignDocuments);
 export const budgets = recordTable(collections.budgets);
+export const invoiceDrafts = recordTable(collections.invoiceDrafts);
 export const quotations = recordTable(collections.quotations);
 export const purchaseOrders = recordTable(collections.purchaseOrders);
 export const attendance = recordTable(collections.attendance);

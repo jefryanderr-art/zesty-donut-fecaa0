@@ -11,7 +11,18 @@ function openInvoiceProducts(form,opener){
  document.body.append(dialog);const input=dialog.querySelector('input'),feedback=dialog.querySelector('.product-feedback');
  const rows=()=>[...draft.querySelectorAll('.pos-item')].filter(r=>r.querySelector('[name=posProduct]').value);
  const find=id=>rows().find(r=>r.querySelector('[name=posProduct]').value===id);
- const focus=()=>input.focus({preventScroll:true});
+ const coarse=matchMedia('(pointer:coarse)').matches;let bluetooth=false;
+ input.inputMode=coarse?'none':'search';
+ const focus=()=>{if(!coarse||bluetooth){if(coarse)input.inputMode='none';input.focus({preventScroll:true});}};
+ input.addEventListener('pointerdown',()=>{input.inputMode='search';});
+ if(coarse){
+  const reader=document.createElement('button');reader.type='button';reader.className='lk';reader.textContent=uiT('invoiceProducts.bluetooth','Usar lector Bluetooth');reader.setAttribute('aria-pressed','false');
+  reader.addEventListener('click',()=>{bluetooth=!bluetooth;reader.setAttribute('aria-pressed',String(bluetooth));if(bluetooth)focus();else reader.focus();});dialog.querySelector('.product-tools').append(reader);
+ }
+ const viewport=window.visualViewport;
+ const fit=()=>{dialog.style.setProperty('--picker-height',(viewport?.height||innerHeight)+'px');dialog.classList.toggle('keyboard-open',!!viewport&&viewport.height<innerHeight-100);if(dialog.contains(document.activeElement))document.activeElement.scrollIntoView({block:'nearest'});};
+ viewport?.addEventListener('resize',fit);viewport?.addEventListener('scroll',fit);
+ dialog.addEventListener('focusin',fit);fit();
  const tell=message=>{feedback.textContent=message;if(SCANNER?.host)SCANNER.host.querySelector('#camera-status').textContent=message;};
  function renderCatalog(){
   const query=normalizeSearch(input.value);visible=S.products.filter(p=>normalizeSearch([p.name,p.code,...p.barcodes||[]].join(' ')).includes(query)).sort((a,b)=>direction*(typeof a[sort]==='number'?a[sort]-b[sort]:String(a[sort]||'').localeCompare(String(b[sort]||''),'es',{numeric:true})));
@@ -34,7 +45,7 @@ function openInvoiceProducts(form,opener){
   row.querySelector('[name=posQuantity]').value=quantityRound(q);renderSelected();tell(product.kind!=='service'&&q>product.stock?'Existencias insuficientes · se permite saldo negativo':product.name+' agregado');input.value='';renderCatalog();focus();
  }
  function scan(code){const p=S.products.find(p=>(p.barcodes||[]).includes(String(code).trim())||p.code===String(code).trim());if(p)add(p);else{tell('El código escaneado no existe.');input.value='';renderCatalog();focus();}}
- function close(){if(SCANNER)closeScanner();dialog.close();dialog.remove();form.inert=false;opener?.focus();}
+ function close(){viewport?.removeEventListener('resize',fit);viewport?.removeEventListener('scroll',fit);if(SCANNER)closeScanner();dialog.close();dialog.remove();form.inert=false;opener?.focus();}
  input.addEventListener('input',()=>{page=0;renderCatalog();});
  dialog.addEventListener('keydown',e=>{
   if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();close();return;}
@@ -46,7 +57,7 @@ function openInvoiceProducts(form,opener){
   if(b.hasAttribute('data-cancel'))close();
   else if(b.hasAttribute('data-done')){
    for(const row of [...draft.children])if(!row.querySelector('[name=posProduct]').value)row.remove();form.querySelector('#pos-items').replaceChildren(...draft.children);form.dispatchEvent(new Event('input',{bubbles:true}));form.discountAuthorization='';form.querySelector('.discount-feedback').textContent='Autoriza el descuento después de revisar productos y precios.';previewPos(form);close();
-  }else if(b.hasAttribute('data-scan')){await openScanner(scan);if(SCANNER){dialog.append(SCANNER.host);SCANNER.host.querySelector('#physical-scan')?.focus();}}
+  }else if(b.hasAttribute('data-scan')){await openScanner(scan);if(SCANNER){dialog.append(SCANNER.host);const physical=SCANNER.host.querySelector('#physical-scan');if(physical){physical.inputMode=coarse?'none':'search';physical.addEventListener('pointerdown',()=>{physical.inputMode='search';});if(!coarse||bluetooth)physical.focus();else SCANNER.host.querySelector('button')?.focus();}}}
   else if(b.hasAttribute('data-direction')){direction=-direction;renderCatalog();focus();}
   else if(b.dataset.sort){direction=sort===b.dataset.sort?-direction:1;sort=b.dataset.sort;renderCatalog();focus();}
   else if(b.hasAttribute('data-prev')||b.hasAttribute('data-next')){page+=b.hasAttribute('data-prev')?-1:1;renderCatalog();focus();}
@@ -62,7 +73,7 @@ function openInvoiceProducts(form,opener){
   const p=prod(choice.dataset.chosen);if(p.kind!=='service'&&q>p.stock)tell('Existencias insuficientes'+(S.cfg.allowNegativeValues===true?' · se permite saldo negativo':''));
  });
  dialog.addEventListener('change',e=>{if(e.target.hasAttribute('data-mobile-sort')){sort=e.target.value;direction=1;renderCatalog();focus();return;}if(!e.target.closest('[data-chosen]'))return;const row=find(e.target.closest('[data-chosen]').dataset.chosen),q=Number(e.target.value);try{if(Number.isFinite(q)&&q>0)row.querySelector('[name=posQuantity]').value=inputQuantity(q);else tell('Indica una cantidad mayor que cero.');}catch(error){tell(error.message);}renderSelected();focus();});
- dialog.addEventListener('cancel',e=>{e.preventDefault();close();});form.inert=true;dialog.showModal();renderCatalog();renderSelected();focus();
+ dialog.addEventListener('cancel',e=>{e.preventDefault();close();});form.inert=true;dialog.querySelector('[data-cancel]').autofocus=true;dialog.showModal();renderCatalog();renderSelected();focus();
 }
 const negativeSettingsView=V.ajustes;
 V.ajustes=async function(){await negativeSettingsView();if(R!=='ajustes'||!CO.owner||CO.support||!permission('ajustes',true))return;

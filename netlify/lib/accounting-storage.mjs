@@ -7,7 +7,7 @@ const tables = {
   fiscalWorkflows: schema.fiscalWorkflows,
   inventoryLayers: schema.inventoryLayers,
   businessRecords: schema.businessRecords,
-  assets: schema.assets, loans: schema.loans, recurringEntries: schema.recurringEntries, exchangeRates: schema.exchangeRates, foreignDocuments: schema.foreignDocuments, budgets: schema.budgets, quotations: schema.quotations, purchaseOrders: schema.purchaseOrders, attendance: schema.attendance, vacationRequests: schema.vacationRequests, employeeAdvances: schema.employeeAdvances,
+  assets: schema.assets, loans: schema.loans, recurringEntries: schema.recurringEntries, exchangeRates: schema.exchangeRates, foreignDocuments: schema.foreignDocuments, budgets: schema.budgets, invoiceDrafts: schema.invoiceDrafts, quotations: schema.quotations, purchaseOrders: schema.purchaseOrders, attendance: schema.attendance, vacationRequests: schema.vacationRequests, employeeAdvances: schema.employeeAdvances,
   withholdings:schema.withholdings,instruments:schema.instruments,partners:schema.partners,stockTransfers: schema.stockTransfers, branches: schema.branches, accounts: schema.ledgerAccounts, products: schema.products, customers: schema.customers,
   suppliers: schema.suppliers, employees: schema.employees, payrolls: schema.payrolls,
   settlements: schema.settlements, taxes: schema.taxObligations, properties: schema.properties,

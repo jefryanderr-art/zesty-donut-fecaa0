@@ -212,7 +212,7 @@ export function guardLedgerMutation(previous, next, access, {restoreServiceConfi
     requireValue(restoreService||equal(product.serviceDefinition,previous?.products?.find(p=>p.id===product.id)?.serviceDefinition),'Usa la configuración del servicio para modificar duración, comisiones, paquetes o consumibles.');
     requireValue(Number.isFinite(product.price) && product.price >= 0 && Number.isFinite(Number(product.min || 0)) && Number(product.min || 0) >= 0 && Number.isFinite(Number(product.vatRate || 0)) && Number(product.vatRate || 0) >= 0 && Number(product.vatRate || 0) <= 100, 'Precio, mínimo o IVA del producto inválido.');
   }
-  for (const name of [...OPERATION_ARRAYS, 'assets','loans','recurringEntries','exchangeRates','foreignDocuments','budgets','quotations','purchaseOrders','attendance','vacationRequests','employeeAdvances','stockTransfers','withholdings','instruments','partners', 'invoiceSequences','inventoryLayers','fiscalWorkflows']) {
+  for (const name of [...OPERATION_ARRAYS, 'assets','loans','recurringEntries','exchangeRates','foreignDocuments','budgets','invoiceDrafts','quotations','purchaseOrders','attendance','vacationRequests','employeeAdvances','stockTransfers','withholdings','instruments','partners', 'invoiceSequences','inventoryLayers','fiscalWorkflows']) {
     const empty = name === 'invoiceSequences' ? {} : [];
     requireValue(equal(previous?.[name] || empty, next[name] || empty), 'Usa la operación específica para modificar facturación, cajas o costos.');
   }
@@ -351,6 +351,8 @@ function registerCost(data, access, session, body) {
 async function makeSale(data, access, session, body, client, companyId, trustedSourceId=null) {
   ensurePrintVersions(data,access.company,session);
   requirePermission(access, 'facturacion');
+  const invoiceDraft=body.sourceInvoiceDraft?data.invoiceDrafts?.find(row=>row.id===body.sourceInvoiceDraft&&row.branchId===access.branchId):null;
+  requireValue(!body.sourceInvoiceDraft||invoiceDraft?.status==='Registrada','La factura registrada no está disponible para aplicar.');
   await consumeDiscount(client,companyId,access,session,body);
   let context = saleContext(body.saleContext, requireValue);
   const date = dateValue(body.date), payments = body.payments;
@@ -455,6 +457,7 @@ async function makeSale(data, access, session, body, client, companyId, trustedS
   for(const a of businessAllocations){const r=data.businessRecords?.find(r=>r.id===a.id);if(r?.module==='variantes'){entry.businessVariants||=[];entry.businessVariants.push({id:r.id,productId:r.productId,serial:r.serial,warranty:r.warranty,size:r.size,color:r.color,model:r.model})}}
   commerceLoadSale(data,body,entry,requireValue,m=>requirePermission(access,m));
   if(quotation){quotation.status='Convertida';quotation.entryId=entry.id;}
+  if(invoiceDraft){invoiceDraft.status='Aplicada';invoiceDraft.entryId=entry.id;entry.sourceInvoiceDraft=invoiceDraft.id;}
   for (const [id, quantity] of quantities) { const product = data.products.find(record => record.id === id); product.stock = Math.round((product.stock - quantity) * 1e6) / 1e6; }
   if (settings.packagingCostId) {
     const catalog = data.costCatalog.find(record => record.id === settings.packagingCostId && record.active);
@@ -688,7 +691,7 @@ export async function runOperation(companyId, session, body) {
     const result = await updateCompany(companyId, session, body.revision, async (company, access, client) => {
       if(access.rolePolicy){
         if(/^(reverse|void|remove|delete)/i.test(body.operation))access.permissionAction='delete';
-        else if(['printSettings','settings'].includes(body.operation)||['product','supplier','costCatalog'].includes(body.operation)&&body.id)access.permissionAction='edit';
+        else if((body.operation==='invoiceDraft'&&body.id)||['printSettings','settings'].includes(body.operation)||['product','supplier','costCatalog'].includes(body.operation)&&body.id)access.permissionAction='edit';
       }
       const crossBranch=CROSS_BRANCH_OPS.includes(body.operation)||body.operation==='costingMethod';
       const data = body.operation==='completeProfile'?structuredClone(company.data):initializeOperations(structuredClone(crossBranch?access.company.data:company.data));
