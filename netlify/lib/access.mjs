@@ -171,8 +171,13 @@ const visibleEntry = (access, entry, data) => {
 };
 const restrictedPlan = access => !!access.billingPlan?.blockedModules?.length;
 
-export function projectData(data, access) {
+export function projectData(data, access, {includeSpaces=false}={}) {
+  if(includeSpaces&&data?.profileSpaces){
+    if(!access.owner||!allData(access)||!Object.values(data.profileSpaces).every(space=>allData({...access,company:{...access.company,data:space.data}})))accessError('El respaldo de perfiles requiere acceso completo a todos sus módulos.');
+    return {...projectData(data,access),profileSpaces:structuredClone(data.profileSpaces)};
+  }
   data = scopeBranch(operationalDocument(data, access.company?.allowNegativeValues), access);
+  if(data)delete data.profileSpaces;
   const serviceEmployeeIds=new Set((data?.employees||[]).map(e=>e.id));
   if (!data) return data;
   if(access.owner&&!restrictedPlan(access)){
@@ -428,6 +433,7 @@ export function dataChanges(previous, next) {
   for (const name of new Set([...Object.keys(previous || {}), ...Object.keys(next || {})])) {
     const before = previous?.[name], after = next?.[name];
     if (equal(before, after)) continue;
+    if(name==='profileSpaces'){changes.push({area:name,profiles:Object.keys(after||{})});continue}
     if (Array.isArray(before) || Array.isArray(after)) {
       const oldRows = new Map((before || []).map(record => [record.id || record.code, record]));
       const newRows = new Map((after || []).map(record => [record.id || record.code, record]));
@@ -478,23 +484,33 @@ export async function updateCompany(companyId, session, revision, mutate, action
     const operationAccess = { ...access, company: { ...fullCompany, data: operationalDocument(fullCompany.data, fullCompany.allowNegativeValues) } };
     const patch = await mutate(company, operationAccess, client);
     timings.validateMs = Math.round(performance.now() - phase);
+    const profileSwitch=patch[Symbol.for('acontec.profileSpaceSwitch')]===true;
+    delete patch[Symbol.for('acontec.profileSpaceSwitch')];
+    if(profileSwitch&&!(['Perfil de negocio actualizado','Respaldo restaurado'].includes(action)&&access.owner&&fullCompany.testPlan&&!fullCompany.isPlatformCompany))accessError('Cambio de espacio no autorizado.');
+    // Spaces are server-owned; ordinary saves and operations never replace them.
+    if(patch.data&&!profileSwitch&&action!=='Respaldo restaurado'){
+      delete patch.data.profileSpaces;
+      if(fullCompany.data?.profileSpaces)patch.data.profileSpaces=structuredClone(fullCompany.data.profileSpaces);
+    }
     const crossBranch=patch.crossBranch;delete patch.crossBranch;
     if(crossBranch && !(action==='Operación: costingMethod'&&access.owner) && !CROSS_BRANCH_OPS.some(op=>action==='Operación: '+op)) accessError('Operación entre sucursales no autorizada.');
     if(Object.hasOwn(patch,'allowNegativeValues')&&!(action==='Operación: settings'&&access.owner&&!access.support))accessError('Solo el dueño cambia esta configuración.');
     if (patch.data) {
       patch.data = accountingDocument(patch.data);
-      const auditOnly=REVIEW_OPS.some(op=>action==='Operación: '+op);
-      if(auditOnly)patch.data=mergeAuditReviewPatch(fullCompany.data,company.data,patch.data,access,action);
-      else {if(!crossBranch) patch.data = mergeBranch(fullCompany.data, company.data, patch.data, access, action === 'Operación: branch' && access.owner);materializeBranches(patch.data);}
-      guardFifoMutation(fullCompany.data,patch.data,action);
-      guardTreasury(fullCompany.data,patch.data,(ok,message)=>{if(!ok)accessError(message,400)},action);
-      guardBankReconciliations(fullCompany.data,patch.data,(ok,message)=>{if(!ok)accessError(message,400)});
-      guardPersonnel(fullCompany.data,patch.data,action);
-      guardAuditHistory(fullCompany.data,patch.data,action);
-      guardServicePayroll(fullCompany.data,patch.data,(ok,message)=>{if(!ok)accessError(message,400)});
-      guardPeriods(fullCompany.data, patch.data, action);
-      guardWorkflows(fullCompany.data,patch.data,action);
-      guardRoleChanges(fullCompany.data, patch.data, access, action);
+      if(!profileSwitch){
+        const auditOnly=REVIEW_OPS.some(op=>action==='Operación: '+op);
+        if(auditOnly)patch.data=mergeAuditReviewPatch(fullCompany.data,company.data,patch.data,access,action);
+        else {if(!crossBranch) patch.data = mergeBranch(fullCompany.data, company.data, patch.data, access, action === 'Operación: branch' && access.owner);materializeBranches(patch.data);}
+        guardFifoMutation(fullCompany.data,patch.data,action);
+        guardTreasury(fullCompany.data,patch.data,(ok,message)=>{if(!ok)accessError(message,400)},action);
+        guardBankReconciliations(fullCompany.data,patch.data,(ok,message)=>{if(!ok)accessError(message,400)});
+        guardPersonnel(fullCompany.data,patch.data,action);
+        guardAuditHistory(fullCompany.data,patch.data,action);
+        guardServicePayroll(fullCompany.data,patch.data,(ok,message)=>{if(!ok)accessError(message,400)});
+        guardPeriods(fullCompany.data, patch.data, action);
+        guardWorkflows(fullCompany.data,patch.data,action);
+        guardRoleChanges(fullCompany.data, patch.data, access, action);
+      }
       await syncBarcodes(client, fullCompany, patch.data);
     }
     fullCompany.data = accountingDocument(fullCompany.data);

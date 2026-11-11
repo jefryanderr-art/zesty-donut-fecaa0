@@ -85,7 +85,7 @@ let negativePaintPending=false;
 function paintNegativeFigures(){
  negativePaintPending=false;
  for(const el of document.querySelectorAll('#main td,#main .kpi b,#main .kpi strong,#main .grid b,#main .grid strong,#modal td,#modal .pos-line-total')){
-  const text=el.textContent.trim();el.classList.toggle('negative-value',S?.cfg?.allowNegativeValues===true&&(/^(?:[^\d−-]{0,12})[-−]\s*\d/.test(text)||/^\([^\d]*\d[\d,. ]*\)$/.test(text)));
+  const text=el.textContent.trim();el.classList.toggle('negative-value',!el.querySelector('[data-money]')&&(/^(?:[-−][^\d]*|[^\d−-]{0,12}[-−]\s*)\d/.test(text)));
  }
  const main=document.querySelector('#main');
  if(main&&CO?.id&&S?.cfg?.allowNegativeValues===true&&!main.querySelector('[data-negative-notice]')){const warning=document.createElement('p');warning.dataset.negativeNotice='';warning.className='negative-warning';warning.textContent='Valores negativos permitidos en esta empresa. Existencias o fondos insuficientes no bloquean los movimientos; revisa los saldos reales.';main.prepend(warning);}

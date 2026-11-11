@@ -20,7 +20,7 @@ V.presupuestos=async()=>{
   const report=await bgFetch();if(CO.id!==companyId||R!==route)return;BG_REPORT=report;
   const write=permission('presupuestos',true);let controls=CO.owner&&write?bgAction('budEnable','enable'):'';
   if(report.enabled&&write)controls+=bgAction('budCreate','create')+bgAction('budRevise','revise')+bgAction('budArchive','archive');
-  const sections=report.enabled?report.budgets.map(b=>'<section class="card"><h3>'+esc(b.name)+' · '+bgE(b.dimension)+' · '+esc(b.year)+' · v'+esc(b.version)+'</h3>'+table([bgT('name'),bgT('budget'),bgT('actual'),bgT('diff'),bgT('pct'),bgT('alert')],b.lines.map(l=>'<tr><td>'+esc(l.key)+'</td><td>'+esc(l.budgetCents)+'</td><td>'+esc(l.actualCents)+'</td><td>'+esc(l.diffCents)+'</td><td>'+esc(l.pct==null?'—':l.pct.toFixed(1))+'</td><td>'+bgE(l.alert?'yes':'no')+'</td></tr>').join(''))+'</section>').join('')+notice(bgT('actualHelp')):'';
+  const sections=report.enabled?report.budgets.map(b=>'<section class="card"><h3>'+esc(b.name)+' · '+bgE(b.dimension)+' · '+esc(b.year)+' · v'+esc(b.version)+'</h3>'+table([bgT('name'),bgT('budget').replace(' (centavos)',''),bgT('actual').replace(' (centavos)',''),bgT('diff').replace(' (centavos)',''),bgT('pct'),bgT('alert')],b.lines.map(l=>'<tr><td>'+esc(l.key)+'</td><td>'+money2(l.budgetCents/100)+'</td><td>'+money2(l.actualCents/100)+'</td><td>'+money2(l.diffCents/100)+'</td><td>'+esc(l.pct==null?'—':l.pct.toFixed(1))+'</td><td>'+bgE(l.alert?'yes':'no')+'</td></tr>').join(''))+'</section>').join('')+notice(bgT('actualHelp')):'';
   main(pageHead(bgT('title'))+notice(bgT('help'))+`<section class="card">${controls}${bgAction('budExport','exportPdf','PDF')}${bgAction('budExport','exportCsv','CSV')}</section>${sections}`);enforceAccessUI();
  }catch(error){main(pageHead(bgT('title'))+notice(error.message||bgT('error')))}
 };
@@ -39,5 +39,5 @@ ACT.budExport=async d=>{
  if(format==='CSV'){const encode=x=>'"'+String(x).replaceAll('"','""').replace(/^\s*[=+@-]/,"'$&")+'"';bgDownload(name+'.csv',new Blob(['﻿'+[...meta,[bgT('notice')],head,...body].map(r=>r.map(encode).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}));return}
  await loadExportScript('/vendor/jspdf.js?v=0f6fe797a6df06bd');await loadExportScript('/vendor/autotable.js?v=31884888608c7aab');
  const pdf=new jspdf.jsPDF({orientation:'landscape'});pdf.text(bgT('title'),14,14);pdf.setFontSize(8);pdf.text(meta.map(([k,x])=>k+': '+x).join('  ·  '),14,20);pdf.text(bgT('notice'),14,25);
- pdf.autoTable({startY:30,head:[head],body:body.map(r=>r.map(String)),styles:{fontSize:7}});pdf.save(name+'.pdf');
+ pdf.autoTable({startY:30,head:[head],body:body.map(r=>r.map(String)),styles:{fontSize:7},didParseCell:financialPdfCell});pdf.save(name+'.pdf');
 };

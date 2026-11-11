@@ -33,7 +33,7 @@ test('corrección administrativa exige plataforma, revisión y tipo anterior, co
 });
 test('API conecta el candado y ambas restauraciones a las políticas de servidor',async()=>{
  const source=await readFile(new URL('../netlify/functions/api.mjs',import.meta.url),'utf8');
- assert.ok(source.includes('return fixedBusinessProfile(company,body,canChangeTestBusinessProfile(company,session,isAdmin))'));
+ assert.ok(source.includes('return fixedBusinessProfile({...company,data:access.company.data},body,canChangeTestBusinessProfile(company,session,isAdmin))'));
  assert.ok(source.includes('profilePatch=restoredBusinessProfile(company,body.profile,isAdmin)'));
  assert.ok(source.includes('profilePatch=restoredBusinessProfile(company,backup,isAdmin)'));
 });
