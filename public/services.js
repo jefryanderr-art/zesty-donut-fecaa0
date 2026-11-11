@@ -1,7 +1,7 @@
 'use strict';
 // Amplía fichas existentes y sus operaciones protegidas. No crea otro libro contable.
 let SV_MODEL,SV_VIEW=0;
-const svReady=()=>SV_MODEL?Promise.resolve(SV_MODEL):import('./service-model.mjs?v=4905d94cef731b64').then(m=>(SV_MODEL=m));
+const svReady=()=>SV_MODEL?Promise.resolve(SV_MODEL):import('./service-model.mjs?v=de7993932b8b2864').then(m=>(SV_MODEL=m));
 const svProfiles=['profesionales','software','freelance','inmobiliaria','seguros','recurrentes','belleza','salud','educacion','gimnasio','taller','lavanderia','transporte'];
 const svActive=()=>svProfiles.includes(businessOperationalType());
 const svModules=['agenda','proyectos','contratos','cuentas_abiertas','documentos_venta','reservas','medidas','despacho'];

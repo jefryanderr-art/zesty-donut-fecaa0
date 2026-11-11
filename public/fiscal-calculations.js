@@ -7,11 +7,12 @@
   let output=0,input=0,baseSales=0,basePurchases=0;
   const origins=[];
   for(const e of data.entries||[]){
-   if(e.date<from||e.date>to||['fiscal','fiscal-pago','apertura-anual'].includes(e.type))continue;
+   if(e.reversalOf&&e.originalType==='fiscal-pago'||e.date<from||e.date>to||['fiscal','fiscal-pago','apertura','apertura-importada','anula-apertura','apertura-anual'].includes(e.type))continue;
    let used=false;
    for(const l of e.lines||[]){if(l.a==='2106'){output+=cents(l.c)-cents(l.d);used=true}if(l.a==='1202'){input+=cents(l.d)-cents(l.c);used=true}}
    if(['venta','nota-credito'].includes(e.type))baseSales+=cents(e.subtotal??e.total)*(e.type==='nota-credito'?-1:1);
    if(['compra','gasto','costo'].includes(e.type)&&!e.reversalOf)basePurchases+=cents(e.subtotal??e.total);
+   if(e.reversalOf&&['compra','gasto'].includes(e.originalType))basePurchases-=cents(e.subtotal??e.total);
    if(used)origins.push(e.id);
   }
   return {from,to,output:output/100,input:input/100,baseSales:baseSales/100,basePurchases:basePurchases/100,net:(output-input)/100,origins};
@@ -19,7 +20,7 @@
  const taxCents=(base,rateBps)=>{const n=Math.round(Math.max(0,base)*rateBps/10000);if(!Number.isSafeInteger(n))throw new Error('Impuesto fuera del rango seguro.');return n;};
  const annual=(data,year)=>{
   const accounts=new Map((data.accounts||[]).map(a=>[a.code,a]));let income=0,cost=0,expense=0;const origins=[];
-  for(const e of data.entries||[]){if(e.date.slice(0,4)!==year||['cierre-anual','traspaso-anual','apertura-anual','reapertura-anual'].includes(e.type))continue;
+  for(const e of data.entries||[]){if(e.date.slice(0,4)!==year||['apertura','apertura-importada','anula-apertura','cierre-anual','traspaso-anual','apertura-anual','reapertura-anual'].includes(e.type))continue;
    for(const l of e.lines||[]){const a=accounts.get(l.a);if(!a)continue;const n=cents(l.d)-cents(l.c);if(a.tipo==='ingreso')income-=n;if(a.tipo==='costo')cost+=n;if(a.tipo==='gasto'&&a.code!=='6108')expense+=n;}origins.push(e.id);
   }
   const profit=income-cost-expense,tax=taxCents(profit,Number(data.cfg?.fiscal?.incomeRate||0)*100);

@@ -22,15 +22,15 @@ export function financialReports(data,from,to){
  for(const e of entries)for(const l of e.lines||[]){const a=accounts.get(l.a);if(!a)continue;const d=cents(l.d),c=cents(l.c);if(e.date<from)a.openingCents+=d-c;else{a.debitCents+=d;a.creditCents+=c;a.movements.push({entryId:e.id,date:e.date,debitCents:d,creditCents:c})}}
  const ledger=[...accounts.values()].map(a=>({...a,closingCents:a.openingCents+a.debitCents-a.creditCents}));
  const balance=type=>sum(ledger.filter(a=>a.type===type).map(a=>a.closingCents))*(type==='activo'?1:-1);
- const activity=type=>sum(journal.filter(l=>data.accounts.find(a=>a.code===l.account)?.tipo===type&&!['cierre','cierre-anual','traspaso-anual','apertura-anual','reapertura-anual'].includes(l.type)).map(l=>l.debitCents-l.creditCents));
+ const activity=type=>sum(journal.filter(l=>data.accounts.find(a=>a.code===l.account)?.tipo===type&&!['apertura','apertura-importada','anula-apertura','cierre','cierre-anual','traspaso-anual','apertura-anual','reapertura-anual'].includes(l.type)).map(l=>l.debitCents-l.creditCents));
  const profitCents=-activity('ingreso')-activity('costo')-activity('gasto'),unclosedCents=-sum(ledger.filter(a=>['ingreso','costo','gasto'].includes(a.type)).map(a=>a.closingCents));
  const assetsCents=balance('activo'),liabilitiesCents=balance('pasivo'),equityCents=balance('patrimonio')+unclosedCents;
  const cashCodes=new Set(data.accounts.filter(a=>a.sub==='ef').map(a=>a.code));
- const cash=ledger.filter(a=>cashCodes.has(a.account)).map(a=>({account:a.account,name:a.name,openingCents:a.openingCents+sum(journal.filter(l=>l.account===a.account&&['apertura','apertura-anual'].includes(l.type)).map(l=>l.debitCents-l.creditCents)),debitCents:a.debitCents-sum(journal.filter(l=>l.account===a.account&&['apertura','apertura-anual'].includes(l.type)).map(l=>l.debitCents)),creditCents:a.creditCents-sum(journal.filter(l=>l.account===a.account&&['apertura','apertura-anual'].includes(l.type)).map(l=>l.creditCents)),closingCents:a.closingCents}));
+ const cash=ledger.filter(a=>cashCodes.has(a.account)).map(a=>({account:a.account,name:a.name,openingCents:a.openingCents+sum(journal.filter(l=>l.account===a.account&&['apertura','apertura-importada','anula-apertura','apertura-anual'].includes(l.type)).map(l=>l.debitCents-l.creditCents)),debitCents:a.debitCents-sum(journal.filter(l=>l.account===a.account&&['apertura','apertura-importada','anula-apertura','apertura-anual'].includes(l.type)).map(l=>l.debitCents)),creditCents:a.creditCents-sum(journal.filter(l=>l.account===a.account&&['apertura','apertura-importada','anula-apertura','apertura-anual'].includes(l.type)).map(l=>l.creditCents)),closingCents:a.closingCents}));
  let openingCents=sum(ledger.filter(a=>cashCodes.has(a.account)).map(a=>a.openingCents)),operatingCents=0,investmentCents=0,financingCents=0;const cashMovements=[];
  for(const e of entries.filter(e=>e.date>=from)){
   const net=sum((e.lines||[]).filter(l=>cashCodes.has(l.a)).map(l=>cents(l.d)-cents(l.c)));if(!net)continue;
-  if(['apertura','apertura-anual'].includes(e.type)){openingCents+=net;continue}
+  if(['apertura','apertura-importada','anula-apertura','apertura-anual'].includes(e.type)){openingCents+=net;continue}
   let op=0,inv=0,fin=0;
   for(const l of (e.lines||[]).filter(l=>!cashCodes.has(l.a))){const a=data.accounts.find(a=>a.code===l.a),n=cents(l.c)-cents(l.d);if(a?.sub==='fijo')inv+=n;else if(a?.sub==='fin'||a?.tipo==='patrimonio')fin+=n;else op+=n;}
   operatingCents+=op;investmentCents+=inv;financingCents+=fin;cashMovements.push({entryId:e.id,date:e.date,description:e.desc,amountCents:net,operatingCents:op,investmentCents:inv,financingCents:fin});

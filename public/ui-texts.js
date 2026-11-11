@@ -2839,3 +2839,89 @@ Object.assign(UI_CATALOG, {
     "max": 200
   }
 });
+
+Object.assign(UI_CATALOG, {
+  "corrections.corrected": {
+    "original": "Corregido / ver asiento relacionado",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.related": {
+    "original": "Anulado / ver asiento relacionado",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.correct": {
+    "original": "Corregir / Anular",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.opening": {
+    "original": "Corregir apertura",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.createOpening": {
+    "original": "Crear apertura",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.reason": {
+    "original": "Motivo de la corrección",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.reference": {
+    "original": "Comprobante o referencia",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.annul": {
+    "original": "Solo anular; registraré el documento nuevo desde su módulo",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.help": {
+    "original": "La corrección conserva el original y registra su inverso. Verifica con tu contador.",
+    "group": "Contabilidad y correcciones",
+    "max": 249
+  },
+  "corrections.use": {
+    "original": "Usa Corregir apertura para conservar el historial.",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.denied": {
+    "original": "Este asiento requiere permiso de Correcciones o su flujo específico de anulación.",
+    "group": "Contabilidad y correcciones",
+    "max": 243
+  },
+  "corrections.detail": {
+    "original": "Asiento relacionado",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.close": {
+    "original": "Cerrar",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.permission": {
+    "original": "Correcciones: autorizar contrasientos de apertura y movimientos de dinero; conserva motivo, referencia e historial",
+    "group": "Contabilidad y correcciones",
+    "max": 342
+  }
+});
+
+Object.assign(UI_CATALOG, {
+  "corrections.date": {
+    "original": "Fecha del contrasiento",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.amount": {
+    "original": "Importe corregido",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  }
+});

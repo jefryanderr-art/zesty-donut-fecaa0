@@ -1,6 +1,8 @@
 'use strict';
 // Cortes por sucursal. Una reapertura aditiva anula el corte, sin editar la apertura.
 (() => {
+ // Las aperturas históricas, anula-apertura y versiones corregidas se acumulan
+ // por sus líneas; solo apertura-anual establece un corte de arrastre.
  const select=(entries=[],through='9999')=>{
   const canceled=new Set(entries.filter(e=>e.type==='anula-apertura-anual'&&e.date<=through).map(e=>e.openingId));
   const cuts=new Map();

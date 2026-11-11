@@ -1,3 +1,6 @@
+import {guardCash} from './cash-guard.mjs';
+export {guardCash} from './cash-guard.mjs';
+import {correctEntry} from './entry-corrections.mjs';
 import { operationalDocument } from './accounting-codec.mjs';
 import {operationalType} from './business-profile.mjs';
 import {organizationReport} from './organizations.mjs';
@@ -187,22 +190,6 @@ const shiftPayments = (data, shift) => {
   for (const entry of data.entries.filter(record => record.shiftId === shift.id && ['venta', 'nota-credito'].includes(record.type))) for (const payment of entry.payments || []) result[payment.method] = round(result[payment.method] + payment.amount * (entry.type === 'nota-credito' ? -1 : 1));
   return result;
 };
-export function guardCash(previous, next) {
-  if(next?.cfg?.allowNegativeValues===true)return;
-  for (const code of cashAccounts(next)) {
-    const minimum = data => {
-      let balance = 0, lowest = 0;
-      const days = new Map();
-      for (const entry of accountingEntries(data?.entries)) days.set(entry.date, (days.get(entry.date) || 0) + (entry.lines || []).filter(line => line.a === code).reduce((total, line) => total + line.d - line.c, 0));
-      for (const [, net] of [...days].sort(([first], [second]) => first.localeCompare(second))) {
-        balance = round(balance + net);
-        lowest = Math.min(lowest, balance);
-      }
-      return lowest;
-    };
-    requireValue(minimum(next) >= Math.min(0, minimum(previous)) - 0.01, 'El movimiento deja caja o banco en negativo en alguna fecha. Revisa el fondo y la fecha.');
-  }
-}
 export function guardLedgerMutation(previous, next, access, {restoreServiceConfiguration=false}={}) {
   previous = operationalDocument(previous, access.company?.allowNegativeValues);
   next = operationalDocument(next, access.company?.allowNegativeValues);
@@ -234,12 +221,14 @@ export function guardLedgerMutation(previous, next, access, {restoreServiceConfi
   requireValue(equal(previous?.cfg?.treasuryControls,next.cfg?.treasuryControls),'Configura tesorería mediante sus operaciones.');
   requireValue(equal(previous?.cfg?.bankControls,next.cfg?.bankControls),'Configura los cierres bancarios mediante su operación específica.');
   requireValue(equal(previous?.cfg?.pos || {}, next.cfg?.pos || {}) && equal(previous?.cfg?.cash || {}, next.cfg?.cash || {}) && equal(previous?.cfg?.advance || {}, next.cfg?.advance || {}), 'Los parámetros operativos solo se modifican desde su configuración.');
+  const liveOpenings=entries=>(entries||[]).filter(e=>['apertura','apertura-importada'].includes(e.type)&&!entries.some(r=>r.reversalOf===e.id));
+  for(const branchId of new Set(next.entries.map(e=>e.branchId||'principal')))requireValue(liveOpenings(next.entries).filter(e=>(e.branchId||'principal')===branchId).length<=Math.max(1,liveOpenings(previous?.entries||[]).filter(e=>(e.branchId||'principal')===branchId).length),'Solo puede existir una apertura vigente por sucursal.');
   const before = new Map((previous?.entries || []).map(entry => [entry.id, entry]));
   const after = new Map(next.entries.map(entry => [entry.id, entry]));
-  for (const entry of before.values()) if (entry.type === 'venta' || entry.managed) requireValue(equal(entry, after.get(entry.id)), 'Las facturas y operaciones de caja no se editan ni se borran. Emite una nota de crédito o una anulación.');
+  for (const entry of before.values()) if (entry.type === 'venta' || entry.managed || ['apertura','apertura-importada','anula-apertura'].includes(entry.type)) requireValue(equal(entry, after.get(entry.id)), 'Las facturas y operaciones de caja no se editan ni se borran. Emite una nota de crédito o una anulación.');
   for (const entry of before.values()) if (entry.lines?.some(line => ['1101', '1102', '1104'].includes(line.a) || line.a.startsWith('1103-'))) requireValue(equal(entry, after.get(entry.id)), 'Los movimientos de dinero no se borran ni sobrescriben. Anula con un asiento inverso desde Caja general o registra una corrección documentada.');
   for (const entry of next.entries) if (!equal(before.get(entry.id), entry)) {
-    requireValue(!entry.managed && !['venta', 'nota-credito', 'costo', 'caja', 'caja-apertura', 'caja-cierre'].includes(entry.type), 'Registra las ventas desde Facturación con un turno abierto.');
+    requireValue(!entry.reversalOf && !entry.correctionOf && !entry.managed && !['anula-apertura','correccion-anulacion','venta', 'nota-credito', 'costo', 'caja', 'caja-apertura', 'caja-cierre'].includes(entry.type), 'Registra las ventas desde Facturación con un turno abierto.');
     for (const line of entry.lines || []) {
       requireValue(line.a !== '1104' && !line.a.startsWith('1103-') && line.a !== '2107', 'Las cuentas de turnos y caja chica se mueven desde sus módulos.');
       if (line.a === '1101' && line.c > 0) requireValue(text(entry.reference), 'Cada egreso de Caja general necesita un número de comprobante.');
@@ -691,7 +680,7 @@ export async function runOperation(companyId, session, body) {
     accessError('La ampliación de tesorería no está habilitada.',503);
   });
   const addedKeys = [];
-  if((COMMERCE_OPS.includes(body.operation)||DELIVERY_OPS.includes(body.operation)||BAKERY_OPS.includes(body.operation)||FOOD_OPS.includes(body.operation)||BENEFIT_OPS.includes(body.operation)||body.operation==='completeProfile'||WORKFLOW_OPS.includes(body.operation)||PERSONNEL_OPS.includes(body.operation)||CERTIFICATE_OPS.includes(body.operation)||CLIENT_OPS.includes(body.operation)||FISCAL_OPS.includes(body.operation)||INVENTORY_OPS.includes(body.operation)||ANALYSIS_OPS.includes(body.operation)||BUDGET_OPS.includes(body.operation)||TREASURY_OPS.includes(body.operation)||BANK_OPS.includes(body.operation)||RECURRING_OPS.includes(body.operation)||BUSINESS_OPS.includes(body.operation)||['serviceDefinition','economicSector','specializedChart','serviceAccrueCommission'].includes(body.operation))&&!body.operationId)accessError('La operación requiere un identificador único.',400);
+  if((COMMERCE_OPS.includes(body.operation)||DELIVERY_OPS.includes(body.operation)||BAKERY_OPS.includes(body.operation)||FOOD_OPS.includes(body.operation)||BENEFIT_OPS.includes(body.operation)||body.operation==='completeProfile'||WORKFLOW_OPS.includes(body.operation)||PERSONNEL_OPS.includes(body.operation)||CERTIFICATE_OPS.includes(body.operation)||CLIENT_OPS.includes(body.operation)||FISCAL_OPS.includes(body.operation)||INVENTORY_OPS.includes(body.operation)||ANALYSIS_OPS.includes(body.operation)||BUDGET_OPS.includes(body.operation)||TREASURY_OPS.includes(body.operation)||BANK_OPS.includes(body.operation)||RECURRING_OPS.includes(body.operation)||BUSINESS_OPS.includes(body.operation)||['correctEntry','serviceDefinition','economicSector','specializedChart','serviceAccrueCommission'].includes(body.operation))&&!body.operationId)accessError('La operación requiere un identificador único.',400);
   let output = null;
   if(body.operationId && !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.operationId)) accessError('Identificador de operación inválido.',400);
   const receipt=body.operationId?{id:body.operationId,actor:session.email+':'+(session.memberId||''),hash:createHash('sha256').update(JSON.stringify(body)).digest('hex'),resultId:()=>typeof output==='string'?output:null}:null;
@@ -1002,31 +991,12 @@ export async function runOperation(companyId, session, body) {
         requireValue(date >= original.date, 'La anulación no puede ser anterior al movimiento.');
         const reversal = appendEntry(data, operationSession, { date, type: 'caja-anulacion', reversalOf: original.id, desc: 'Anulación - ' + text(body.reason), reference: text(body.reference), total: original.total, lines: original.lines.map(line => ({ a: line.a, d: line.c, c: line.d })) });
         record.reversalId = reversal.id;
-      } else if (operation === 'reverseLegacyCash') {
-        financialCash(access);
-        if (!supervisor(access)) accessError('El supervisor autoriza las anulaciones de dinero.');
-        const original = data.entries.find(entry => entry.id === body.id && !entry.managed);
-        requireValue(original && ['manual', 'gasto', 'compra', 'abono', 'fiscal-pago'].includes(original.type) && original.lines.some(line => ['1101', '1102'].includes(line.a)) && !data.entries.some(entry => entry.reversalOf === original.id), 'Este asiento ya está anulado o requiere su corrección específica.');
-        requireValue(text(body.reason) && text(body.reference), 'Indica motivo y comprobante de la anulación.');
-        const date = dateValue(body.date);
-        requireValue(date >= original.date, 'La anulación no puede preceder al asiento.');
-        const stock = (original.stock || []).map(movement => ({ ...movement, q: -movement.q }));
-        const changes = new Map();
-        for (const movement of stock) {
-          const product = data.products.find(record => record.id === movement.pid);
-          requireValue(product, 'Un producto del asiento ya no existe.');
-          const change = changes.get(product.id) || { quantity: 0, value: 0 };
-          change.quantity += movement.q;
-          change.value += movement.q * (movement.unitCost ?? original.items?.find(item => item.p === product.id)?.u ?? product.cost);
-          changes.set(product.id, change);
-        }
-        for (const [id, change] of changes) {
-          const product = data.products.find(record => record.id === id), quantity = Math.round((product.stock + change.quantity) * 1e6) / 1e6, value = product.stock * product.cost + change.value;
-          requireValue(data.cfg.allowNegativeValues===true || quantity >= 0 && value >= -0.01, 'La anulación dejaría inventario negativo; registra un ajuste documentado.');
-          product.stock = quantity;
-          if (quantity > 0) product.cost = round(Math.max(0, value) / quantity);
-        }
-        appendEntry(data, operationSession, { date, type: 'caja-anulacion', reversalOf: original.id, invoiceId: original.invoiceId || null, taxId: original.taxId || null, desc: 'Anulación documentada - ' + text(body.reason), reference: text(body.reference), total: original.total, stock, lines: original.lines.map(line => ({ a: line.a, d: line.c, c: line.d })) });
+      } else if (operation === 'correctEntry' || operation === 'reverseLegacyCash') {
+        const original=data.entries.find(e=>e.id===body.id);
+        if(original)requireModule(access,original.type==='compra'?'compras':original.type==='gasto'?'gastos':original.type==='invini'?'inventario':original.type==='fiscal-pago'?'fiscal':original.type==='abono'?(data.entries.find(e=>e.id===original.invoiceId)?.pay==='1201'?'ventas':data.entries.find(e=>e.id===original.invoiceId)?.pay==='2101'?'compras':'contabilidad'):'contabilidad');
+        const correction=correctEntry(data,access,operationSession,body,{append:appendEntry,date:dateValue});
+        output=correction.correctedId||correction.reversalId;
+        await audit(client,companyId,operationSession,'Corrección de asiento',[{area:'entries',...correction,at:new Date().toISOString()}]);
       } else if (operation === 'costCatalog') {
         requirePermission(access, 'costos');
         accountExists(data, body.account, ['gasto', 'costo']);

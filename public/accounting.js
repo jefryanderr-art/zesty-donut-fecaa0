@@ -45,10 +45,11 @@ function taxTotals(items){
   const vat=r2(items.reduce((total,item)=>total+r2(r2(item.q*item.u)*(item.vatRate||0)/100),0));
   return {subtotal,vat,total:r2(subtotal+vat)};
 }
-function invoiceForm(ex,sale){
+function invoiceForm(ex,sale,correction=false){
   if(!sale&&S.cfg?.costing?.method==='fifo'&&ex){alert('PEPS conserva las compras históricas. No se permite editarlas.');return}
   const title=sale?'venta':'compra';
-  const form=modal(`${ex?'Editar':'Nueva'} ${title}`,field('dt',uiT("accounting.3","Fecha"),ex?.date||today(),'date','required')+(sale?saleCustomerFields(ex):supplierFields(ex))+field('reference',uiT("accounting.4","Número de factura"),ex?.reference||'','text','required')+field('due',uiT("accounting.5","Vencimiento (si es crédito)"),ex?.due||ex?.date||today(),'date','required')+`<label>${esc(uiT("accounting.6","Forma de pago"))}<select name="py">${payOpts(sale?'1201':'2101')}</select></label>`+notice(uiT("accounting.7","Los precios son sin IVA. Activa el IVA por producto solo cuando aplique; el porcentaje es configurable."))+`<div class="items">${(ex?.items?.length?ex.items:[{}]).map(item=>itemRow(item,true)).join('')}</div><div class="accounting-actions"><button type="button" class="lk" data-a="addItem">${esc(uiT("accounting.9","+ Agregar producto"))}</button>${sale?`<button type="button" class="lk" data-a="printSale">${esc(uiT("accounting.8","Imprimir"))}</button>`:''}</div><div id="invoice-totals" class="accounting-notice" aria-live="polite"></div>`,async form=>{
+  const form=modal(`${ex?'Editar':'Nueva'} ${title}`,field('dt',uiT("accounting.3","Fecha"),ex?.date||today(),'date','required')+(sale?saleCustomerFields(ex):supplierFields(ex))+field('reference',uiT("accounting.4","Número de factura"),ex?.reference||'','text','required')+field('due',uiT("accounting.5","Vencimiento (si es crédito)"),ex?.due||ex?.date||today(),'date','required')+`<label>${esc(uiT("accounting.6","Forma de pago"))}<select name="py">${payOpts(sale?'1201':'2101')}</select></label>`+notice(uiT("accounting.7","Los precios son sin IVA. Activa el IVA por producto solo cuando aplique; el porcentaje es configurable."))+`<div class="items">${(ex?.items?.length?ex.items:[{}]).map(item=>itemRow(item,true)).join('')}</div><div class="accounting-actions"><button type="button" class="lk" data-a="addItem">${esc(uiT("accounting.9","+ Agregar producto"))}</button>${sale?`<button type="button" class="lk" data-a="printSale">${esc(uiT("accounting.8","Imprimir"))}</button>`:''}</div><div id="invoice-totals" class="accounting-notice" aria-live="polite"></div>`+(correction?correctionFields():''),async form=>{
+    if(correction&&form.elements.annulOnly.checked){await submitCorrection(ex,form,v(form,'dt'));view();return;}
     const items=readItems(),pay=v(form,'py');
     const customer=sale?customerById(v(form,'customerId')):null;
     if(sale&&v(form,'customerId')&&!customer)return 'El cliente ya no está disponible. Selecciona otro o registra un nombre manual.';
@@ -85,11 +86,13 @@ function invoiceForm(ex,sale){
     const entry={id:ex?.id||uid(),date:v(form,'dt'),due:v(form,'due'),reference:v(form,'reference'),desc:`${sale?'Venta':'Compra'} - ${party}`,party,type:title,pay,items,stock:items.map(item=>({pid:item.p,q:sale?-item.q:item.q,unit:item.unit,unitCost:item.cost})),lines,...totals};
     if(sale){entry.customerId=customer?.id||'';entry.customer=saleCustomerSnapshot(form)}
     else {entry.supplierId=v(form,'supplierId');entry.supplier=supplierSnapshot(entry.supplierId)}
+    if(correction){await submitCorrection(ex,form,entry.date,entry);view();return;}
     if(!sale&&S.cfg?.costing?.method==='fifo'){await operate('fifoPurchase',{date:entry.date,due:entry.due,reference:entry.reference,party:entry.party,supplierId:entry.supplierId,pay:entry.pay,items:entry.items});view();return}
     updates.forEach(update=>{update.product.stock=update.quantity;update.product.cost=update.cost});
     if(ex)Object.assign(ex,entry);else S.entries.push(entry);
     save();view();
   });
+  if(correction)form.classList.add('correction-form');
   form.dataset.k=sale?'venta':'compra';form.elements.py.value=ex?.pay||(sale?'1101':'1102');
   form.dataset.invoiceId=ex?.id||'';
   if(sale)updateSaleCustomer(form);
@@ -141,15 +144,17 @@ function productForm(product){
 }
 ACT.newprod=()=>productForm();ACT.editprod=data=>productForm(prod(data.id));
 V.productos=()=>main(pageHead(uiT("accounting.23","Productos e inventario"),`<button class="btn" data-a="newprod">${esc(uiT("accounting.24","+ Producto"))}</button>`)+notice(uiT("accounting.25","El costo y precio se guardan sin IVA. El porcentaje opcional se propone en ventas y compras; el IVA acreditable no aumenta el costo del inventario."))+accountingTable(['Código','Producto','Costo','Precio','IVA opcional','Existencia','Valor','Acciones'],S.products.map(product=>`<tr><td>${esc(product.code)}</td><td>${esc(product.name)}${product.stock<=product.min?' ⚠️':''}</td><td>${money(product.cost)}</td><td>${money(product.price)}</td><td>${esc(product.vatRate||0)}%</td><td>${esc(product.stock)}</td><td>${money(S.cfg?.costing?.method==='fifo'?(S.inventoryLayers||[]).filter(l=>l.epoch===S.cfg.costing.epoch&&l.productId===product.id).reduce((s,l)=>s+l.valueCents,0)/100:r2(product.stock*product.cost))}</td><td>${actionButton('editprod',product.id,'Editar')} ${actionButton('ajuste',product.id,'Ajustar')} ${actionButton('delprod',product.id,'Eliminar')}</td></tr>`).join(''))+`<p class="tt">${esc(uiT("accounting.26","Inventario valorizado:"))} <b>${money(S.cfg?.costing?.method==='fifo'?(S.inventoryLayers||[]).filter(l=>l.epoch===S.cfg.costing.epoch).reduce((s,l)=>s+l.valueCents,0)/100:S.products.reduce((total,product)=>total+product.stock*product.cost,0))}</b></p>`);
-function expenseForm(ex){
-  const form=modal(ex?'Editar gasto':'Nuevo gasto',field('date',uiT("accounting.27","Fecha"),ex?.date||today(),'date','required')+field('description',uiT("accounting.28","Concepto"),ex?.party||'','text','required')+field('reference',uiT("accounting.29","Factura"),ex?.reference||'')+field('due',uiT("accounting.30","Vencimiento"),ex?.due||ex?.date||today(),'date','required')+`<label>${esc(uiT("accounting.31","Cuenta de gasto"))}<select name="account">${accOpts(ex?.expenseAccount||'6103',account=>account.tipo==='gasto')}</select></label>`+amountField('base','Monto sin IVA',ex?.subtotal??ex?.total??0)+field('vat',uiT("accounting.32","IVA acreditable opcional (%)"),ex?.vatRate||0,'number','min="0" max="100" step="0.01" required')+`<label>${esc(uiT("accounting.33","Forma de pago"))}<select name="pay">${payOpts('2101')}</select></label>`,form=>{
+function expenseForm(ex,correction=false){
+  const form=modal(ex?'Editar gasto':'Nuevo gasto',field('date',uiT("accounting.27","Fecha"),ex?.date||today(),'date','required')+field('description',uiT("accounting.28","Concepto"),ex?.party||'','text','required')+field('reference',uiT("accounting.29","Factura"),ex?.reference||'')+field('due',uiT("accounting.30","Vencimiento"),ex?.due||ex?.date||today(),'date','required')+`<label>${esc(uiT("accounting.31","Cuenta de gasto"))}<select name="account">${accOpts(ex?.expenseAccount||'6103',account=>account.tipo==='gasto')}</select></label>`+amountField('base','Monto sin IVA',ex?.subtotal??ex?.total??0)+field('vat',uiT("accounting.32","IVA acreditable opcional (%)"),ex?.vatRate||0,'number','min="0" max="100" step="0.01" required')+`<label>${esc(uiT("accounting.33","Forma de pago"))}<select name="pay">${payOpts('2101')}</select></label>`+(correction?correctionFields():''),async form=>{
+    if(correction&&form.elements.annulOnly.checked){await submitCorrection(ex,form,v(form,'date'));view();return;}
     const base=r2(v(form,'base')),rate=+v(form,'vat'),vat=r2(base*rate/100),total=r2(base+vat),pay=v(form,'pay');if(base<=0)return 'Indica un monto mayor que cero.';
     if(ex&&invoicePayments(ex.id).length&&(pay!==ex.pay||total<paidInvoice(ex.id)))return 'Conserva la forma de pago y un total igual o mayor a los abonos.';
     if(pay==='2101'&&v(form,'due')<v(form,'date'))return 'Revisa el vencimiento.';
     const lines=[{a:v(form,'account'),d:base,c:0},{a:pay,d:0,c:total}];if(vat)lines.push({a:'1202',d:vat,c:0});
     const record={id:ex?.id||uid(),type:'gasto',date:v(form,'date'),due:v(form,'due'),party:v(form,'description'),desc:'Gasto - '+v(form,'description'),reference:v(form,'reference'),expenseAccount:v(form,'account'),pay,subtotal:base,vat,vatRate:rate,total,lines};
+    if(correction){await submitCorrection(ex,form,record.date,record);view();return;}
     if(ex)Object.assign(ex,record);else S.entries.push(record);save();view();
-  });form.elements.pay.value=ex?.pay||'1102';
+  });if(correction)form.classList.add('correction-form');form.elements.pay.value=ex?.pay||'1102';
 }
 ACT.gasto=()=>expenseForm();ACT.editgasto=data=>expenseForm(S.entries.find(entry=>entry.id===data.id));
 function debtView(receivable){
@@ -165,7 +170,7 @@ ACT.invoicePay=data=>{const entry=S.entries.find(entry=>entry.id===data.id);if(!
   const total=r2(v(form,'total'));if(total<=0||(S.cfg.allowNegativeValues!==true&&total>invoiceBalance(entry)))return 'El abono debe ser positivo y no superar el saldo.';if(v(form,'date')<entry.date)return 'El pago no puede ser anterior a la factura.';
   const cash=v(form,'cash');if(!receivable&&!v(form,'note').trim())return 'Indica el número de comprobante del egreso.';addEntry({type:'abono',date:v(form,'date'),invoiceId:entry.id,customerId:entry.customerId||'',supplierId:entry.supplierId||'',reference:v(form,'note'),total,desc:`${receivable?'Cobro':'Pago'} ${entry.reference||entry.id} - ${v(form,'note')}`,lines:receivable?[{a:cash,d:total,c:0},{a:'1201',d:0,c:total}]:[{a:'2101',d:total,c:0},{a:cash,d:0,c:total}]});view();
 })};
-ACT.invoiceHistory=data=>{const entry=S.entries.find(entry=>entry.id===data.id);modal(uiT("accounting.extra.18","Historial de abonos"),accountingTable(['Fecha','Referencia','Abono'],invoicePayments(data.id).map(payment=>`<tr><td>${esc(payment.date)}</td><td>${esc(payment.desc)}</td><td>${money(payment.total)}</td></tr>`).join(''))+notice(`Saldo pendiente: ${money(invoiceBalance(entry))}`),()=>{},'Cerrar')};
+ACT.invoiceHistory=data=>{const entry=S.entries.find(entry=>entry.id===data.id);modal(uiT("accounting.extra.18","Historial de abonos"),accountingTable(['Fecha','Referencia','Abono','Acciones'],invoicePayments(data.id).map(payment=>`<tr><td>${esc(payment.date)}</td><td>${esc(payment.desc)}</td><td>${money(payment.total)}</td><td>${entryCorrectionButton(payment)}</td></tr>`).join(''))+notice(`Saldo pendiente: ${money(invoiceBalance(entry))}`),()=>{},'Cerrar')};
 ACT.cobro=()=>{R='cobrar';view()};ACT.pago=()=>{R='pagar';view()};
 let KARDEX_PRODUCT='';
 V.kardex=()=>{

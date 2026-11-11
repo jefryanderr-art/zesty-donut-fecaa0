@@ -1,5 +1,5 @@
 'use strict';
-const loanMath=()=>import('./lending-math.mjs?v=e22950c42b342850');
+const loanMath=()=>import('./lending-math.mjs?v=50f2811437d44609');
 const lnDate=()=>bField('date','Fecha',today(),'date','required');
 const lnRead=f=>({date:v(f,'date')});
 const lnForm=(d,op,title,html,read)=>businessOperationForm(d,op,lnDate()+html+businessLegal()+bConfirm(),f=>({...lnRead(f),...read(f)}),title);

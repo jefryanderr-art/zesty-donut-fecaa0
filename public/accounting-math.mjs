@@ -287,7 +287,7 @@ export function treasuryForecast({from,to,openingCents,events,scenarios,frequenc
  });
 }
 export function treasuryIndirect(data,from,to){
- recurringDay(from);recurringDay(to);const cash=new Set(data.accounts.filter(a=>a.sub==='ef').map(a=>a.code)),accounts=new Map(data.accounts.map(a=>[a.code,a])),entries=(data.entries||[]).filter(e=>e.date>=from&&e.date<=to&&e.type!=='apertura');
+ recurringDay(from);recurringDay(to);const cash=new Set(data.accounts.filter(a=>a.sub==='ef').map(a=>a.code)),accounts=new Map(data.accounts.map(a=>[a.code,a])),entries=(data.entries||[]).filter(e=>e.date>=from&&e.date<=to&&!['apertura','apertura-importada','anula-apertura'].includes(e.type));
  let profitCents=0,adjustmentCents=0,directCents=0,exchangeEffectCents=0;const adjustments=[];
  for(const e of entries){
   if(e.revaluation)exchangeEffectCents=treasurySum([exchangeEffectCents,...e.lines.filter(l=>cash.has(l.a)).map(l=>moneyCents(l.d)-moneyCents(l.c))]);

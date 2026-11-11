@@ -1,3 +1,4 @@
+import {guardCash} from '../netlify/lib/cash-guard.mjs';
 // Platform tests: actual operation, access/update and storage verification, with a simulated SQL boundary.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -43,8 +44,8 @@ function harness(flag,historicalFlag){
  vm.runInContext(section(accessSource,'export async function companyAccess','export function entryModule'),ctx);
  vm.runInContext(section(accessSource,'export async function updateCompany','export function validatePermissions'),ctx);
  // Only database and unrelated feature boundaries are replaced. openShift and guardCash run unchanged.
- const operationSource=read('netlify/lib/operations.mjs').replace(/^import .*;\n/gm,'').replaceAll('export ','');
- const operationContext={...codec,structuredClone,Date,console,randomUUID,createHash,OPERATION_ARRAYS,operatorId,accountingEntries,
+ const operationSource=read('netlify/lib/operations.mjs').replace(/^import .*;\n/gm,'').replace(/^export \{.*\} from .*;\n/gm,'').replaceAll('export ','');
+ const operationContext={guardCash,...codec,structuredClone,Date,console,randomUUID,createHash,OPERATION_ARRAYS,operatorId,accountingEntries,
   updateCompany:ctx.updateCompany,companyAccess:ctx.companyAccess,db:context.db,scopeBranch,companyBranches,
   actorName:session=>session.email,accessError:fail,requireModule:()=>{},allowed:()=>true,equal:context.equal,handlesAdvanced:()=>false,
   fifoEnabled:()=>false,guardFifoOperation:noOp,applyFifo:noOp,commerceReservationsValid:noOp,validateBusinessRecords:noOp,

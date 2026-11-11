@@ -1,5 +1,5 @@
 // Cálculos compartidos: cantidades en unidades; todo importe nuevo en centavos.
-import {businessRecipePlan,moneyCents} from './accounting-math.mjs?v=1bfa441d13b0456e';
+import {businessRecipePlan,moneyCents} from './accounting-math.mjs?v=ebd0d1f516492643';
 export function sectorBom(recipe,n,recipes,products,path=[]){
  if(path.includes(recipe.id)||path.length>=12)throw new Error('Lista de materiales cíclica o de más de 12 niveles.');
  const result=new Map();
