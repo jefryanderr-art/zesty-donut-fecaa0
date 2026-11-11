@@ -20,6 +20,6 @@ export function importRecords(data,access,session,body,h){
    }
   }catch(error){const message='Fila '+(index+2)+': '+(error.publicMessage||error.message);check(false,message)}
  }
- if(kind==='opening'){const lines=balancedLines(opening,data.accounts);check(!lines.some(l=>['1104','2107'].includes(l.a)||l.a.startsWith('1103-')),'Los saldos de turnos y caja chica se registran desde sus módulos.');append(data,session,{date:when,type:'apertura-importada',desc:'Saldos iniciales importados',reference:String(body.reference||'IMPORTACION').slice(0,200),total:lines.reduce((s,l)=>s+l.d,0),lines})}
+ if(kind==='opening'){check(!(data.entries||[]).some(e=>['apertura','apertura-importada'].includes(e.type)&&!data.entries.some(r=>r.reversalOf===e.id)),'Ya existe una apertura vigente; usa Corregir apertura.');const lines=balancedLines(opening,data.accounts);check(!lines.some(l=>['1104','2107'].includes(l.a)||l.a.startsWith('1103-')),'Los saldos de turnos y caja chica se registran desde sus módulos.');append(data,session,{date:when,type:'apertura-importada',desc:'Saldos iniciales importados',reference:String(body.reference||'IMPORTACION').slice(0,200),total:lines.reduce((s,l)=>s+l.d,0),lines})}
  return body.records.length;
 }

@@ -66,3 +66,9 @@ Verificación manual y de plataforma:
 8. Probar accesos directos API a descarga, cierre y reapertura con permisos parciales, otra sucursal, consolidado, soporte, sesión vencida y cambio de plan. Probar varias pestañas durante generación.
 9. Comprobar respaldo/exportación/restauración compatible con metadatos y archivos, rechazo de copias que retiren historial protegido, y conservación de archivos en rotación de versiones.
 10. Revisar móvil, modo oscuro, enlaces recíprocos, filtros, mensajes de bloqueo y ayuda. Conciliar cada paquete con los reportes originales y verificar con el contador la configuración fiscal y las limitaciones indicadas.
+
+## Correcciones de asientos históricos
+
+Corregir / Anular conserva el original y añade su inverso y, cuando corresponde, la versión corregida. La apertura histórica utiliza `anula-apertura`, sumada a los saldos iniciales; no crea un corte anual adicional. Se actualizó el tratamiento de aperturas en resultados, flujo y exportaciones. Los libros de compras y cálculos fiscales incorporan el inverso de compras, sin duplicar su base. No se cambiaron cierre anual, reapertura, presentaciones ni sus instantáneas.
+
+El pago fiscal histórico admite anulación y recupera el saldo pendiente de su obligación mediante el cálculo existente de pagos vigentes. Un pago vinculado al flujo de Declaraciones permanece protegido; las presentaciones requieren su rectificativa. Nómina/liquidación cerradas, des-conciliación e inventario PEPS quedaron pendientes por los vínculos e instantáneas que deben preservarse, detallados en [correcciones-contables.md](correcciones-contables.md). La validación funcional y de permisos sigue pendiente de la plataforma y del despliegue.

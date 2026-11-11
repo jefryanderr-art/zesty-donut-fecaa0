@@ -1,3 +1,4 @@
+import {supervisor} from './policies.mjs';
 import {commerceCanRead} from './commerce.mjs';
 import {guardWorkflows,accountingPermissionModules} from './fiscal-workflows.mjs';
 import {guardFifoMutation} from './fifo.mjs';
@@ -142,6 +143,7 @@ export async function companyAccess(client, companyId, session, lock = false, lo
   return finish({ company, owner: false, permissions: member.permissions, member, rolePolicy });
 }
 export function entryModule(entry) {
+  if(entry.type==='correccion-anulacion'&&['manual','gasto','compra','abono','fiscal-pago','invini'].includes(entry.originalType))return entryModule({...entry,type:entry.originalType});
   if(String(entry.type).startsWith('tesoreria-'))return entry.type.slice(10);
   if (entry.type === 'venta') return entry.shiftId ? 'facturacion' : 'ventas';
   if (entry.type === 'nota-credito') return 'facturacion';
@@ -158,9 +160,9 @@ export function entryModule(entry) {
   return 'contabilidad';
 }
 const paymentModule = (entry,data) => {const invoice=data?.entries?.find(e=>e.id===entry.invoiceId);return invoice?.pay==='1201'?'ventas':invoice?.pay==='2101'?'compras':'contabilidad'};
-const entryAccessModule = (entry,data) => entry.type==='abono'?paymentModule(entry,data):entry.type==='factura'?'contabilidad':entryModule(entry);
+const entryAccessModule = (entry,data) => (entry.type==='abono'||entry.type==='correccion-anulacion'&&entry.originalType==='abono')?paymentModule(entry,data):entry.type==='factura'?'contabilidad':entryModule(entry);
 const visibleEntry = (access, entry, data) => {
- const module=entry.type==='abono'?paymentModule(entry,data):entryModule(entry);
+ const module=(entry.type==='abono'||entry.type==='correccion-anulacion'&&entry.originalType==='abono')?paymentModule(entry,data):entryModule(entry);
  // Un libro o estado autorizado conserva todos sus asientos de origen. Fiscal
  // por sí solo no concede ese acceso al plan operativo.
  if(allowed(access,'contabilidad')||allowed(access,'finanzas'))return true;
@@ -660,6 +662,7 @@ function guardRoleChanges(previous, next, access, operation) {
       if (equal(old,row)) continue;
       const target=module || (collection==='entries'?entryAccessModule(row||old,next):(row||old).module);
       if (!target) accessError('No se pudo determinar el permiso del registro.');
+      if(['Operación: correctEntry','Operación: reverseLegacyCash'].includes(operation)&&collection==='entries'&&!old&&(row.reversalOf||row.correctionOf)&&supervisor(access))continue;
       const action=!old?'create':!row?'delete':'edit';
       if (!allowed(access,target,true,action)) accessError('No tienes permiso para '+({create:'crear',edit:'editar',delete:'borrar'})[action]+' en '+target+'.');
     }
