@@ -1,4 +1,4 @@
-import {moneyCents,businessLateCharge} from './accounting-math.mjs?v=ebd0d1f516492643';
+import {moneyCents,businessLateCharge} from './accounting-math.mjs?v=57b73d453489204a';
 export function loanPosition(r,day){
  let principalCents=0,accruedCents=0,settlementCents=0,overdueCents=0,days=0;
  for(const q of r.schedule||[]){const capital=Math.max(0,moneyCents(q.principal)-Math.max(0,moneyCents(q.paid)-moneyCents(q.interestPaid||0))),interest=Math.max(0,moneyCents(q.interest+q.penalty)-moneyCents(q.interestPaid||0)),lateDays=Math.max(0,Math.floor((Date.parse(day)-Date.parse(q.due))/86400000)),extra=Math.max(0,moneyCents(businessLateCharge(q.principal,r.lateRate,lateDays))-moneyCents(q.penalty));principalCents+=capital;accruedCents+=q.accrued?interest:0;if(capital||interest){settlementCents+=capital+((q.accrued||q.due<=day)?interest:0)+extra;if(q.due<day){days=Math.max(days,lateDays);overdueCents+=capital+interest+extra;}}}

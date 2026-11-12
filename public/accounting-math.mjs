@@ -333,3 +333,16 @@ export function businessSeasonPrice(product,records,date){
  const season=recipe?.foodSettings?.seasons?.find(s=>s.from<=date&&s.to>=date);
  return season?season.unitCents/100:product.price;
 }
+
+// Instantánea por unidad: importes nuevos en centavos, porcentajes y tasas sin conversión monetaria.
+export function invoicePriceAdjustment(original, final, mode='percent', exchangeRate=null, maximum=99){
+ if(typeof final!=='number'||!Number.isFinite(final))throw new AccountingValidationError('El precio debe ser mayor que cero.');
+ const originalCents=moneyCents(original),finalCents=moneyCents(final);
+ if(finalCents<=0||originalCents<0)throw new AccountingValidationError('El precio debe ser mayor que cero.');
+ if(originalCents===finalCents)return null;
+ const percent=originalCents?Math.abs(finalCents-originalCents)/originalCents*100:null;
+ if(finalCents<originalCents&&percent>Math.min(99,maximum)+1e-9)throw new AccountingValidationError('El descuento excede el máximo autorizado (hasta 99%).');
+ if(!['percent','nio','usd'].includes(mode)||mode==='percent'&&percent===null)throw new AccountingValidationError('Revisa la forma de ajuste y el precio original.');
+ if(mode==='usd'&&(!Number.isFinite(exchangeRate)||exchangeRate<=0))throw new AccountingValidationError('Define la tasa de cambio del dólar.');
+ return {type:finalCents<originalCents?'discount':'increase',mode,originalCents,finalCents,...(mode==='percent'?{percent:round(percent)}:{amountCents:Math.round(Math.abs(finalCents-originalCents)/(mode==='usd'?exchangeRate:1))}),...(mode==='usd'?{exchangeRate}:{})};
+}
