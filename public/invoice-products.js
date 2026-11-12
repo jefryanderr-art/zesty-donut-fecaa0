@@ -38,9 +38,15 @@ function openInvoiceProducts(form,opener){
   const insufficient=rows().some(r=>{const p=prod(r.querySelector('[name=posProduct]').value);return p?.kind!=='service'&&p?.stock<+r.querySelector('[name=posQuantity]').value;});if(insufficient)tell('Existencias insuficientes'+(S.cfg.allowNegativeValues===true?' · se permite saldo negativo':''));
   dialog.querySelector('footer strong').textContent=`${formatQuantity(count)} productos · Total ${money(operationalRound(total))}`;
  }
+ const stepFor=(p,current)=>{
+  if(p.kind==='service'||S.cfg.allowNegativeValues===true)return 1;
+  const remaining=quantityRound(p.stock-current);
+  return remaining>0?Math.min(1,remaining):0;
+ };
  function add(product){
-  let row=find(product.id),q=(row?+row.querySelector('[name=posQuantity]').value:0)+1;
-  if(product.kind!=='service'&&q>product.stock&&S.cfg.allowNegativeValues!==true){tell('Existencias insuficientes: '+product.name);focus();return;}
+  let row=find(product.id);const current=row?+row.querySelector('[name=posQuantity]').value:0,step=stepFor(product,current);
+  if(step===0){tell('Existencias insuficientes: '+product.name);focus();return;}
+  const q=quantityRound(current+step);
   if(!row){draft.insertAdjacentHTML('beforeend',posRow());row=draft.lastElementChild;row.querySelector('[name=posProduct]').value=product.id;row.querySelector('[name=posPrice]').value=form.foodMath?.businessSeasonPrice(product,S.businessRecords,v(form,'date'))??product.price;if(typeof commerceActive==='function'&&commerceActive()&&typeof cmConfig==='function'){const list=cmConfig(product.id)?.customerPrices.find(l=>l.customerIds.includes(v(form,'customerId')));if(list)row.querySelector('[name=posPrice]').value=list.unitCents/100;}}
   row.querySelector('[name=posQuantity]').value=quantityRound(q);renderSelected();tell(product.kind!=='service'&&q>product.stock?'Existencias insuficientes · se permite saldo negativo':product.name+' agregado');input.value='';renderCatalog();focus();
  }
@@ -61,7 +67,7 @@ function openInvoiceProducts(form,opener){
   else if(b.hasAttribute('data-direction')){direction=-direction;renderCatalog();focus();}
   else if(b.dataset.sort){direction=sort===b.dataset.sort?-direction:1;sort=b.dataset.sort;renderCatalog();focus();}
   else if(b.hasAttribute('data-prev')||b.hasAttribute('data-next')){page+=b.hasAttribute('data-prev')?-1:1;renderCatalog();focus();}
-  else if(b.closest('[data-chosen]')){const choice=b.closest('[data-chosen]'),row=find(choice.dataset.chosen);if(b.hasAttribute('data-remove'))row.remove();else{const next=quantityRound(+row.querySelector('[name=posQuantity]').value+Number(b.dataset.delta)),p=prod(choice.dataset.chosen);if(next>p.stock&&p.kind!=='service'&&S.cfg.allowNegativeValues!==true){tell('Existencias insuficientes: '+p.name);focus();return;}if(next<=0)row.remove();else row.querySelector('[name=posQuantity]').value=next;}renderSelected();focus();}
+  else if(b.closest('[data-chosen]')){const choice=b.closest('[data-chosen]'),row=find(choice.dataset.chosen);if(b.hasAttribute('data-remove'))row.remove();else{const p=prod(choice.dataset.chosen),current=+row.querySelector('[name=posQuantity]').value,step=Number(b.dataset.delta)>0?stepFor(p,current):-1;if(step===0){tell('Existencias insuficientes: '+p.name);focus();return;}const next=quantityRound(current+step);if(next>p.stock&&p.kind!=='service'&&S.cfg.allowNegativeValues!==true){tell('Existencias insuficientes: '+p.name);focus();return;}if(next<=0)row.remove();else row.querySelector('[name=posQuantity]').value=next;}renderSelected();focus();}
  });
  dialog.addEventListener('input',e=>{
   const choice=e.target.closest('[data-chosen]');if(!choice)return;
