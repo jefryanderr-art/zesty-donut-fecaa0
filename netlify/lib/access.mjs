@@ -1,3 +1,5 @@
+import {replayOperationReceipt} from './operation-replay.mjs';
+import {routeNoticeAllowed,routeNoticeContext} from './route-notices.mjs';
 import {supervisor} from './policies.mjs';
 import {commerceCanRead} from './commerce.mjs';
 import {guardWorkflows,accountingPermissionModules} from './fiscal-workflows.mjs';
@@ -230,8 +232,8 @@ export function projectData(data, access, {includeSpaces=false}={}) {
   for(const [name,module] of Object.entries({...ADVANCED_ARRAYS,...TRADE_ARRAYS})) projected[name]=allowed(access,module)?structuredClone(data[name]||[]):[];
   if(allowed(access,'fiscal'))projected.fiscalCreditReservations=globalThis.AcontecFiscalMath.effectiveDeclarations(data).flatMap(r=>r.frozen.credits||[]).filter(c=>c.source==='iva').map(c=>({period:c.period,amountCents:c.amountCents}));
   projected.fiscalWorkflows=(data.fiscalWorkflows||[]).filter(r=>allowed(access,r.module)&&(['template','configuration'].includes(r.kind)||[...accountingPermissionModules,...new Set((data.businessRecords||[]).filter(b=>['bancos','constancias_laborales','retenciones_fiscales'].includes(b.module)).map(b=>b.module))].every(m=>allowed(access,m))));
-  projected.businessRecords=(data.businessRecords||[]).filter(row=>(!routeWorker||row.module==='rutas'&&(row.operatorId===ownId||row.assignedMemberId===ownId||row.kind==='route-definition'&&projected.customers.some(c=>c.routeZone===row.route)))&&allowed(access,row.module)&&(row.kind!=='lodging-close'||allowed(access,'ventas')&&allowed(access,'contabilidad'))&&(access.routeRole&&row.module==='rutas'||commerceCanRead(row,m=>allowed(access,m)))&&(row.module!=='auditoria_revision'||row.kind==='settings'||(row.kind==='report'?row:(data.businessRecords||[]).find(r=>r.id===row.reportId))?.scope?.every(m=>allowed(access,m)))).map(row=>structuredClone(row));
-  for(const r of projected.businessRecords){if(routeWorker&&r.kind==='route-definition')delete r.commissions;if(r.kind==='lodging-unit')for(const t of r.tasks||[]){if(!allowed(access,'costos'))delete t.amountCents;if(!allowed(access,'compras'))delete t.supplierId;}if(!allowed(access,'contabilidad')&&!allowed(access,'finanzas'))delete r.servicePaymentPlans;if(!allowed(access,'personal'))for(const t of r.serviceTime||[])delete t.employeeId;}
+  projected.businessRecords=(data.businessRecords||[]).filter(row=>(!routeWorker||row.module==='rutas'&&(row.kind==='route-notice'?routeNoticeAllowed(data.businessRecords||[],access,row):row.operatorId===ownId||row.assignedMemberId===ownId||row.kind==='route-definition'&&projected.customers.some(c=>c.routeZone===row.route)))&&allowed(access,row.module)&&(row.kind!=='lodging-close'||allowed(access,'ventas')&&allowed(access,'contabilidad'))&&(access.routeRole&&row.module==='rutas'||commerceCanRead(row,m=>allowed(access,m)))&&(row.module!=='auditoria_revision'||row.kind==='settings'||(row.kind==='report'?row:(data.businessRecords||[]).find(r=>r.id===row.reportId))?.scope?.every(m=>allowed(access,m)))).map(row=>structuredClone(row));
+  for(const r of projected.businessRecords){if(r.kind==='route-notice')r.relatedId=routeNoticeContext(data.businessRecords||[],r).authority?.id||r.sourceId;if(routeWorker&&r.kind==='route-definition'){delete r.commissions;if(r.workerTargets)r.workerTargets=r.workerTargets.filter(t=>t.memberId===ownId);}if(r.kind==='lodging-unit')for(const t of r.tasks||[]){if(!allowed(access,'costos'))delete t.amountCents;if(!allowed(access,'compras'))delete t.supplierId;}if(!allowed(access,'contabilidad')&&!allowed(access,'finanzas'))delete r.servicePaymentPlans;if(!allowed(access,'personal'))for(const t of r.serviceTime||[])delete t.employeeId;}
   if(!allowed(access,'produccion')||!allowed(access,'inventario'))for(const r of projected.businessRecords){delete r.eventMenu;delete r.eventIngredients;}
   projected.stockTransfers=moduleIncluded(access.billingPlan||{blockedModules:[]},'sucursales')&&allowed(access,'inventario')?structuredClone(data.stockTransfers||[]):[];
   return projected;
@@ -327,6 +329,7 @@ export function mergeData(current, incoming, access, {restoreServiceConfiguratio
   if (!incoming || !['accounts', 'entries', 'products'].every(name => Array.isArray(incoming[name]))) accessError('Datos contables inválidos.', 400);
   current = operationalDocument(current, access.company?.allowNegativeValues);
   incoming = operationalDocument(incoming, access.company?.allowNegativeValues);
+  if(!access.owner&&!equal(incoming.cfg?.routePolicy,current?.cfg?.routePolicy))accessError('Solo el dueño cambia la política general de rutas.');
   const goals=incoming.cfg?.operatingDailyGoals;
   if(goals!==undefined){
     if(!Array.isArray(goals)||goals.length>500)accessError('Metas diarias inválidas.',400);
@@ -471,8 +474,7 @@ export async function updateCompany(companyId, session, revision, mutate, action
     if (operation) {
       const [receipt] = await client.select().from(saveOperations).where(and(eq(saveOperations.companyId, companyId), eq(saveOperations.operationId, operation.id)));
       if (receipt) {
-        if (receipt.actor !== operationActor || receipt.payloadHash !== operation.hash) accessError('Identificador de guardado reutilizado con otros datos.', 422);
-        return {revision: receipt.revision, replayed: true, resultId: receipt.resultId};
+        return replayOperationReceipt(receipt,operation,operationActor,accessError);
       }
     }
     access.company.data = await readAccounting(client, access.company);

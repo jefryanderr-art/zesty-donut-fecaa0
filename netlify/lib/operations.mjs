@@ -1,3 +1,4 @@
+import {durableRoutePayload} from '../../public/route-queue.mjs';
 import {ROUTE_OPS,routeOperation,routeOperationGuard,routeSaleGuard,routeCustomerAllowed,routeManager,routeCommission} from './routes.mjs';
 import {guardCash} from './cash-guard.mjs';
 export {guardCash} from './cash-guard.mjs';
@@ -44,7 +45,7 @@ import {BUSINESS_OPS,businessOperation,prepareBusinessSale,restoreBusinessReturn
 import { normalizeItemQuantity } from './accounting-engine.mjs';
 import {configureService,validateConfiguredServices,serviceConsumptionPlan,serviceSaleSnapshot} from './service-catalog.mjs';
 import {configureEconomicSector,validateEconomicSector} from './economic-sector.mjs';
-import { consumeDiscount, normalInvoicePrice } from './discounts.mjs';
+import { consumeDiscount, normalInvoicePrice, approveRouteOrderPrices, routeOrderPriceAdjustments, routeOrderDiscountBody } from './discounts.mjs';
 import { tradeOperation, TRADE_OPS } from './trade.mjs';
 import { countryTemplate } from './country.mjs';
 import { importRecords } from './importer.mjs';
@@ -350,13 +351,14 @@ function registerCost(data, access, session, body) {
   data.costs.push(record);
   return record;
 }
-async function makeSale(data, access, session, body, client, companyId, trustedSourceId=null) {
+async function makeSale(data, access, session, body, client, companyId, trustedSourceId=null, trustedRouteOrder=null) {
   ensurePrintVersions(data,access.company,session);
   routeSaleGuard(data,access,body,requireValue);
   requirePermission(access, 'facturacion');
   const invoiceDraft=body.sourceInvoiceDraft?data.invoiceDrafts?.find(row=>row.id===body.sourceInvoiceDraft&&row.branchId===access.branchId):null;
   requireValue(!body.sourceInvoiceDraft||invoiceDraft?.status==='Registrada','La factura registrada no está disponible para aplicar.');
-  const priceAdjustments=await consumeDiscount(client,companyId,access,session,body,data);
+  requireValue(!body.routeOrderId||trustedRouteOrder&&trustedRouteOrder===data.businessRecords.find(r=>r.id===body.routeOrderId&&r.kind==='route-order')&&body.operation==='routeDelivery','Factura el pedido desde su entrega protegida.');
+  const priceAdjustments=trustedRouteOrder?await routeOrderPriceAdjustments(client,companyId,access,session,trustedRouteOrder,body,data):await consumeDiscount(client,companyId,access,session,body,data);
   let context = saleContext(body.saleContext, requireValue);
   const date = dateValue(body.date), payments = body.payments;
   requireValue(!(body.loyalty===true||body.quickService===true||(Array.isArray(payments)&&payments.some(p=>p.method==='vale')))||body.operationId,'La operación requiere un identificador único.');
@@ -705,7 +707,8 @@ export async function runOperation(companyId, session, body) {
   if((ROUTE_OPS.includes(body.operation)||COMMERCE_OPS.includes(body.operation)||DELIVERY_OPS.includes(body.operation)||BAKERY_OPS.includes(body.operation)||FOOD_OPS.includes(body.operation)||BENEFIT_OPS.includes(body.operation)||body.operation==='completeProfile'||WORKFLOW_OPS.includes(body.operation)||PERSONNEL_OPS.includes(body.operation)||CERTIFICATE_OPS.includes(body.operation)||CLIENT_OPS.includes(body.operation)||FISCAL_OPS.includes(body.operation)||INVENTORY_OPS.includes(body.operation)||ANALYSIS_OPS.includes(body.operation)||BUDGET_OPS.includes(body.operation)||TREASURY_OPS.includes(body.operation)||BANK_OPS.includes(body.operation)||RECURRING_OPS.includes(body.operation)||BUSINESS_OPS.includes(body.operation)||['correctEntry','registerAgain','serviceDefinition','economicSector','specializedChart','serviceAccrueCommission'].includes(body.operation))&&!body.operationId)accessError('La operación requiere un identificador único.',400);
   let output = null;
   if(body.operationId && !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.operationId)) accessError('Identificador de operación inválido.',400);
-  const receipt=body.operationId?{id:body.operationId,actor:session.email+':'+(session.memberId||''),hash:createHash('sha256').update(JSON.stringify(body)).digest('hex'),resultId:()=>typeof output==='string'?output:null}:null;
+  let receiptBody;try{receiptBody=durableRoutePayload(body)}catch{accessError('La cola solo admite pedidos de preventa y visitas.',400)}
+  const receipt=body.operationId?{id:body.operationId,actor:session.email+':'+(session.memberId||''),hash:createHash('sha256').update(JSON.stringify(receiptBody)).digest('hex'),resultId:()=>typeof output==='string'?output:null}:null;
   try {
     const result = await updateCompany(companyId, session, body.revision, async (company, access, client) => {
       if(access.rolePolicy){
@@ -719,7 +722,8 @@ export async function runOperation(companyId, session, body) {
       guardFifoOperation(data,body);
       const fifoBefore=structuredClone(data);
       const operationSession = access.member ? { ...session, member: access.member } : session;
-      const historical = body.file ? await retainedCompanyData(client, companyId) : [];
+      const historical = body.file || body.photo ? await retainedCompanyData(client, companyId) : [];
+      const storePrivatePhoto=async file=>{requireValue(file&&typeof file.content==='string'&&file.content.length<=1400000&&/^[A-Za-z0-9+/]*={0,2}$/.test(file.content),'Imagen inválida.');const bytes=Buffer.from(file.content,'base64');const valid=file.type==='image/jpeg'?bytes[0]===255&&bytes[1]===216&&bytes[2]===255:file.type==='image/png'?bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):file.type==='image/webp'&&bytes.subarray(0,4).toString()==='RIFF'&&bytes.subarray(8,12).toString()==='WEBP';requireValue(valid&&bytes.length>0&&bytes.length<=1048576,'Adjunta JPG, PNG o WebP de hasta 1 MB.');const refs=[...new Map([access.company.data,...historical.map(h=>h.data)].flatMap(d=>(d?.businessRecords||[]).flatMap(r=>[r.referencePhoto,r.proof?.photo,...(r.receptionPhotos||[])].filter(Boolean)).map(p=>[p.key,p]))).values()];requireValue(refs.length<100&&refs.reduce((n,r)=>n+r.size,0)+bytes.length<=50*1048576,'Las referencias privadas superan 100 archivos o 50 MB.');const key=companyId+'/'+randomUUID();addedKeys.push(key);await getStore({name:'acontec-private-receipts',consistency:'strong'}).set(key,bytes);return {key,type:file.type,name:text(file.name,180),size:bytes.length};};
       const beforeIds=new Set(data.entries.map(e=>e.id));
       let businessPatch={};
       const operation = body.operation, userId = operatorId(access, session);
@@ -728,10 +732,13 @@ export async function runOperation(companyId, session, body) {
       let routeTeam=[];
       if(ROUTE_OPS.includes(operation)||operation==='commerceLoad')routeTeam=await client.select({id:companyMembers.id,name:companyMembers.name,branchIds:companyMembers.branchIds,active:companyMembers.active,routeRole:companyRoles.key}).from(companyMembers).innerJoin(companyRoles,eq(companyRoles.id,companyMembers.roleId)).where(eq(companyMembers.companyId,companyId));
       if(ROUTE_OPS.includes(operation))output=await routeOperation(data,access,operationSession,body,{
-        check:requireValue,permit:requirePermission,date:dateValue,team:routeTeam,
+        check:requireValue,permit:requirePermission,date:dateValue,team:routeTeam,normalPrice:normalInvoicePrice,
+        approveOrderPrices:r=>approveRouteOrderPrices(client,companyId,access,operationSession,r,body.discountAuthorization,data,dateValue(body.date)),
+        storePhoto:storePrivatePhoto,
+        checkOrderPrices:r=>routeOrderPriceAdjustments(client,companyId,access,operationSession,r,routeOrderDiscountBody(r,dateValue(body.date)),data),
         entry:e=>appendEntry(data,operationSession,e),shift:id=>currentShift(data,access,operationSession,id),
         cashAvailable:shift=>cents(round(shift.opening+shiftPayments(data,shift).efectivo)),
-        sale:(b,id)=>makeSale(data,access,operationSession,b,client,companyId,id),credit:b=>creditNote(data,access,operationSession,b),
+        sale:(b,id,order)=>makeSale(data,access,operationSession,b,client,companyId,id,order),credit:b=>creditNote(data,access,operationSession,b),
         adjust:async ({productId,delta,date,reason})=>{const p=data.products.find(p=>p.id===productId);requireValue(p&&p.kind!=='service'&&Number.isFinite(delta)&&delta&&p.stock+delta>=0,'Diferencia de inventario inválida.');requireValue(!data.entries.some(e=>e.date>date&&e.stock?.some(i=>i.pid===p.id)),'La diferencia no puede preceder movimientos posteriores.');const total=invoiceTotals([{q:Math.abs(delta),u:p.cost,vatRate:0}]).total;appendEntry(data,operationSession,{date,type:'ajuste',operatorId:userId,adjustmentReason:'merma',desc:'Liquidación de ruta · '+reason,total,stock:[{pid:p.id,q:delta,unit:p.unit||'unidad',unitCost:p.cost}],lines:total?(delta>0?linesBetween('1301','6107',total):linesBetween('6107','1301',total)):[]});p.stock=Math.round((p.stock+delta)*1000)/1000;}
       });
       else if(operation==='completeProfile'){
@@ -770,9 +777,9 @@ export async function runOperation(companyId, session, body) {
         output=treasuryOperation(data,access,operationSession,body,{permit:requirePermission,entry:appendEntry,financialCash,members});
       }
       else if(BANK_OPS.includes(operation))output=bankOperation(data,access,operationSession,body,{permit:requirePermission,entry:appendEntry});
-      else if(RECURRING_OPS.includes(operation))output=await recurringOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,amount,entry:appendEntry,financialCash,credit:b=>creditNote(data,access,operationSession,b),sale:(b,id)=>makeSale(data,access,operationSession,b,client,companyId,id)});
+      else if(RECURRING_OPS.includes(operation))output=await recurringOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,amount,entry:appendEntry,financialCash,credit:b=>creditNote(data,access,operationSession,b),sale:(b,id,order)=>makeSale(data,access,operationSession,b,client,companyId,id,order)});
       else if(BUSINESS_OPS.includes(operation)){
-        output=await businessOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,amount,date:dateValue,entry:appendEntry,financialCash,registerCost,readPermit:(a,m)=>requireModule(a,m),storePhoto:async file=>{requireValue(file&&typeof file.content==='string'&&file.content.length<=1400000&&/^[A-Za-z0-9+/]*={0,2}$/.test(file.content),'Imagen inválida.');const bytes=Buffer.from(file.content,'base64');const valid=file.type==='image/jpeg'?bytes[0]===255&&bytes[1]===216&&bytes[2]===255:file.type==='image/png'?bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):file.type==='image/webp'&&bytes.subarray(0,4).toString()==='RIFF'&&bytes.subarray(8,12).toString()==='WEBP';requireValue(valid&&bytes.length>0&&bytes.length<=1048576,'Adjunta JPG, PNG o WebP de hasta 1 MB.');const refs=[...new Map([access.company.data,...historical.map(h=>h.data)].flatMap(d=>(d?.businessRecords||[]).flatMap(r=>[r.referencePhoto,...(r.receptionPhotos||[])].filter(Boolean)).map(p=>[p.key,p]))).values()];requireValue(refs.length<100&&refs.reduce((n,r)=>n+r.size,0)+bytes.length<=50*1048576,'Las referencias privadas superan 100 archivos o 50 MB.');const key=companyId+'/'+randomUUID();addedKeys.push(key);await getStore({name:'acontec-private-receipts',consistency:'strong'}).set(key,bytes);return {key,type:file.type,name:text(file.name,180),size:bytes.length};},sale:(b,id)=>makeSale(data,access,operationSession,b,client,companyId,id)});
+        output=await businessOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,amount,date:dateValue,entry:appendEntry,financialCash,registerCost,readPermit:(a,m)=>requireModule(a,m),storePhoto:storePrivatePhoto,sale:(b,id,order)=>makeSale(data,access,operationSession,b,client,companyId,id,order)});
         if(operation==='businessOnboard'){businessPatch=output;output=null;}
       }
       else if(operation==='serviceDefinition')output=configureService(data,access,body,{permit:requirePermission});
