@@ -51,7 +51,7 @@ permit('rutas');check(routeManager(access)||!access.routeRole,'Solo supervisor o
   return add('rutas','commerce-load',{operatorId:access.member?.id||session.email,assignedMemberId:b.assignedMemberId||'',route:route.route||route.name,handedBy:session.member?.name||session.email,receivedBy:ctx.team?.find(m=>m.id===b.assignedMemberId)?.name||'',loadType:b.loadType||'Venta directa',reloads:[],name:'Carga · '+route.name,status:'Preparada',routeId:route.id,items,remaining:structuredClone(items),sales:[],closed:false}).id;
  }
  if(b.operation==='commerceLoadReturn'){
-  permit('rutas');check(!access.routeRole,'Usa la liquidación de tu camión.');permit('inventario');const load=get('commerce-load');check(!load.closed&&txt(b.reason),'La carga ya fue cerrada o falta motivo.');load.returnedItems=structuredClone(load.remaining);load.remaining=[];load.closed=true;load.status='Entregada';load.events.push(event);return load.id;
+  permit('rutas');check(!access.routeRole,'Usa la liquidación de tu camión.');permit('inventario');const load=get('commerce-load');check(!rows.some(r=>r.kind==='route-settlement'&&r.loadId===load.id&&r.status==='Pendiente'),'La carga tiene una liquidación pendiente.');check(!load.closed&&txt(b.reason),'La carga ya fue cerrada o falta motivo.');load.returnedItems=structuredClone(load.remaining);load.remaining=[];load.closed=true;load.status='Entregada';load.events.push(event);return load.id;
  }
  if(b.operation==='commerceExpiredReturn'){
   check(operationalType(access.company)==='farmacia','Esta devolución corresponde al perfil farmacia.');permit('compras');permit('inventario');permit('lotes');permit('documentos_venta');permit('contabilidad');permit('cajas');
@@ -136,7 +136,7 @@ permit('rutas');check(routeManager(access)||!access.routeRole,'Solo supervisor o
  }
  if(b.operation==='commerceRouteClose'){
   permit('rutas');permit('contabilidad');permit('cajas');const r=rows.find(r=>r.id===b.id&&r.module==='rutas'&&!commerceRecord(r));check(r,'Ruta inexistente.');check(!rows.some(x=>x.kind==='commerce-route-close'&&x.routeId===r.id&&x.date===date),'La ruta ya tiene cuadre de esta fecha.');
-  const available=commerceRouteCashRows(rows,data.entries,r.id,date),ids=b.entryIds||[];check(Array.isArray(ids)&&ids.length<=1000&&new Set(ids).size===ids.length&&available.length===ids.length&&available.every(e=>ids.includes(e.entryId)),'Incluye todos los cobros y devoluciones de la ruta y fecha.');check(!rows.some(x=>x.kind==='commerce-route-close'&&x.entryIds.some(id=>ids.includes(id))),'Un movimiento ya está incluido en otro cuadre.');
+  const available=commerceRouteCashRows(rows,data.entries,r.id,date),ids=b.entryIds||[];check(Array.isArray(ids)&&ids.length<=1000&&new Set(ids).size===ids.length&&available.length===ids.length&&available.every(e=>ids.includes(e.entryId)),'Incluye todos los movimientos pendientes de la ruta.');check(!rows.some(x=>x.kind==='commerce-route-close'&&x.entryIds.some(id=>ids.includes(id))),'Un movimiento ya está incluido en otro cuadre.');
   const amountCents=available.reduce((n,e)=>n+e.amountCents,0),bankCents=available.reduce((n,e)=>n+e.bankCents,0),counted=cents(b.amountCents);check(counted===amountCents||routeManager(access),'Las diferencias requieren aprobación del supervisor o dueño.');check(txt(b.reason),'Explica el resultado del cuadre.');return add('rutas','commerce-route-close',{name:'Cuadre · '+r.name,status:'Preparada',routeId:r.id,entryIds:ids,cashRows:available,amountCents,bankCents,receivedCents:counted,differenceCents:counted-amountCents}).id;
  }
  if(b.operation==='commerceClaim'){
@@ -171,7 +171,7 @@ export function commerceReservationsValid(data,check){
 
 export function commerceLoadSale(data,body,entry,check,permit,access){
  if(!body.commerceLoadId)return;
- const records=data.businessRecords||[],load=records.find(r=>r.kind==='commerce-load'&&r.id===body.commerceLoadId&&!r.closed);check(load,'Carga no disponible.');permit('rutas');const route=records.find(r=>r.module==='rutas'&&r.id===load.routeId);check(route,'Ruta inexistente.');
+ const records=data.businessRecords||[],load=records.find(r=>r.kind==='commerce-load'&&r.id===body.commerceLoadId&&!r.closed);check(load,'Carga no disponible.');check(!records.some(r=>r.kind==='route-settlement'&&r.loadId===load.id&&r.status==='Pendiente'),'La carga tiene una liquidación pendiente.');permit('rutas');const route=records.find(r=>r.module==='rutas'&&r.id===load.routeId);check(route,'Ruta inexistente.');
  for(const i of entry.items.filter(i=>!i.service)){const remaining=load.remaining.find(r=>r.p===i.p);check(remaining&&remaining.q>=i.q,'La venta supera la cantidad pendiente de la carga.');remaining.q=qty(remaining.q-i.q);}
  load.sales.push(entry.id);entry.commerceLoadId=load.id;load.events.push({date:entry.date,action:'Venta de carga',entryId:entry.id});
  if(route.commissionRate){if(!access?.routeRole){permit('comisiones');permit('personal');}check(data.employees.some(e=>e.id===route.employeeId&&e.active!==false),'Vendedor inactivo.');records.push({id:randomUUID(),module:'comisiones',kind:'ruta',name:txt('Comisión · '+entry.reference),date:entry.date,status:'Pendiente',branchId:load.branchId,employeeId:route.employeeId,saleId:entry.id,rate:route.commissionRate,paid:0,events:[]});}

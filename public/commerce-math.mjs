@@ -7,19 +7,19 @@ export function commerceSupplierNetCents(unitCents,discount){const bps=Math.roun
 export function commercePromotion(p,q,date){if(!p||p.from>date||p.to<date||q<p.minimum)return 0;if(p.mode==='2x1'){if(!Number.isInteger(q))return 0;return Math.floor(q/2)/q*100}return p.percent}
 export function commerceReplenishment({stock,min,max,pending=0}){return stock+pending<min?commerceQuantity(Math.max(0,Math.round((max-stock-pending)*1000)/1000)):0}
 export function commerceABC(products,entries,from,to){const amounts=new Map(),quantities=new Map(),last=new Map();for(const e of entries){if(!['venta','nota-credito'].includes(e.type)||e.date>to)continue;for(const i of e.items||[]){const sign=e.type==='venta'?1:-1;if(e.type==='venta'&&(!last.get(i.p)||last.get(i.p)<e.date))last.set(i.p,e.date);if(e.date<from)continue;amounts.set(i.p,(amounts.get(i.p)||0)+sign*inventoryLineCostCents(i.q,i.u));quantities.set(i.p,(quantities.get(i.p)||0)+sign*i.q)}}const rows=products.filter(p=>p.kind!=='service').map(p=>({productId:p.id,name:p.name,amountCents:Math.max(0,amounts.get(p.id)||0),q:Math.round((quantities.get(p.id)||0)*1000)/1000,stock:p.stock,last:last.get(p.id)||'',idleDays:last.get(p.id)?Math.floor((Date.parse(to)-Date.parse(last.get(p.id)))/86400000):null})).sort((a,b)=>b.amountCents-a.amountCents);const total=rows.reduce((n,r)=>n+r.amountCents,0);let cumulative=0;return rows.map(r=>{const share=total?cumulative/total:1;cumulative+=r.amountCents;return {...r,abc:!r.amountCents?'C':share<0.8?'A':share<0.95?'B':'C'}})}
-export function commerceRouteCashRows(records,entries,routeId,date,workerId=''){
- const route=records.find(r=>r.id===routeId&&r.module==='rutas'),ids=new Set([...(route?.billed||[]).map(b=>b.entryId),...records.filter(r=>r.kind==='commerce-load'&&r.routeId===routeId).flatMap(r=>r.sales||[])]);
- if(route?.route)for(const e of entries.filter(e=>e.type==='venta'&&e.route===route.route))ids.add(e.id);
+export function commerceRouteCashRows(records,entries,routeId,date,workerId='',loadId=''){
+ const route=records.find(r=>r.id===routeId&&r.module==='rutas'),ids=new Set([...(!loadId?route?.billed||[]:[]).map(b=>b.entryId),...records.filter(r=>r.kind==='commerce-load'&&r.routeId===routeId&&(!loadId||r.id===loadId)).flatMap(r=>r.sales||[])]);
+ if(!loadId&&route?.route)for(const e of entries.filter(e=>e.type==='venta'&&e.route===route.route))ids.add(e.id);
  const used=new Set(records.filter(r=>r.kind==='commerce-route-close'||r.kind==='route-settlement'&&r.status==='Aprobada').flatMap(r=>r.entryIds||[]));
- const linked=new Map();for(const id of ids)for(const e of invoiceLinkedEntries(entries,id)){if(e.date!==date)continue;const old=linked.get(e.id);if(!old)linked.set(e.id,{...e,lines:[...(e.lines||[])]});else if(e.allocationJournal)old.lines.push(...(e.lines||[]));}
- if(workerId)for(const e of entries.filter(e=>e.routeMovement===true&&e.operatorId===workerId&&e.date===date))linked.set(e.id,e);
- return [...linked.values()].filter(e=>(!workerId||e.operatorId===workerId||e.routeWorkerId===workerId||e.originalOperatorId===workerId)&&!used.has(e.id)&&!used.has(e.id+'@'+routeId)).flatMap(e=>{
+ const linked=new Map();for(const id of ids)for(const e of invoiceLinkedEntries(entries,id)){if(loadId&&e.commerceLoadId&&e.commerceLoadId!==loadId)continue;const old=linked.get(e.id);if(!old)linked.set(e.id,{...e,lines:[...(e.lines||[])]});else if(e.allocationJournal)old.lines.push(...(e.lines||[]));}
+ if(workerId)for(const e of entries.filter(e=>e.routeMovement===true&&e.operatorId===workerId&&(!e.commerceLoadId||!loadId||e.commerceLoadId===loadId)&&(!e.route||e.route===route?.route)))linked.set(e.id,e);
+ return [...linked.values()].filter(e=>(!workerId||loadId&&ids.has(e.invoiceId||e.id)||e.operatorId===workerId||e.routeWorkerId===workerId||e.originalOperatorId===workerId)&&!used.has(e.id)&&!used.has(e.id+'@'+routeId)).flatMap(e=>{
   let amountCents=0,bankCents=0;
   if(['venta','nota-credito'].includes(e.type)){const sign=e.type==='nota-credito'?-1:1;amountCents=sign*(e.payments||[]).filter(p=>p.method==='efectivo').reduce((s,p)=>s+moneyCents(p.amount),0);bankCents=sign*(e.payments||[]).filter(p=>['transferencia','tarjeta'].includes(p.method)).reduce((s,p)=>s+moneyCents(p.amount),0);}
   else if(e.lines?.some(l=>l.a==='1201'&&l.c>0)){amountCents=e.lines.filter(l=>['1101','1104'].includes(l.a)).reduce((s,l)=>s+moneyCents(l.d)-moneyCents(l.c),0);bankCents=e.lines.filter(l=>l.a==='1102').reduce((s,l)=>s+moneyCents(l.d)-moneyCents(l.c),0);}
   else if(e.routeMovement===true&&e.type==='gasto')amountCents=(e.lines||[]).filter(l=>l.a==='1104').reduce((n,l)=>n+moneyCents(l.d)-moneyCents(l.c),0);
   const creditCents=['venta','nota-credito'].includes(e.type)?(e.payments||[]).filter(p=>p.method==='credito').reduce((n,p)=>n+moneyCents(p.amount)*(e.type==='nota-credito'?-1:1),0):0;
-  return amountCents||bankCents||creditCents?[{entryId:e.allocationJournal?e.id+'@'+routeId:e.id,journalId:e.id,reference:e.reference||e.desc,date,amountCents,bankCents,...(creditCents?{creditCents}:{}),...(e.type==='abono'?{collectionCents:amountCents+bankCents}:{}),...(e.type==='gasto'?{expenseCents:-amountCents}:{})}]:[];
+  return amountCents||bankCents||creditCents?[{entryId:e.allocationJournal?e.id+'@'+routeId:e.id,journalId:e.id,reference:e.reference||e.desc,date:e.date,amountCents,bankCents,...(creditCents?{creditCents}:{}),...(e.type==='abono'?{collectionCents:amountCents+bankCents}:{}),...(e.type==='gasto'?{expenseCents:-amountCents}:{})}]:[];
  });
 }
 
@@ -31,4 +31,24 @@ export function commerceInstallmentBalances(record,entries){
 export function commerceOrderPaymentState(record,entries){
  if(!record.entryId)return record.deposit?(record.reserved?'Anticipo completo':'Anticipo parcial'):'Pendiente';const invoice=entries.find(e=>e.id===record.entryId);if(!invoice)return 'Facturado';
  const balance=invoiceLinkedEntries(entries,invoice.id).flatMap(e=>e.lines||[]).filter(l=>l.a==='1201').reduce((n,l)=>n+moneyCents(l.d)-moneyCents(l.c),0);return balance>0?'Saldo por cobrar':'Pagado / saldo aplicado';
+}
+
+// Read posted cost, including FIFO, rather than repricing historical products.
+export function commerceRouteProfit(entries){
+ const result={salesNetCents:0,salesGrossCents:0,returnsNetCents:0,returnsGrossCents:0,costSoldCents:0,grossProfitCents:0};
+ for(const e of new Map(entries.map(e=>[e.id,e])).values()){
+  if(!['venta','nota-credito'].includes(e.type))continue;
+  const returns=e.type==='nota-credito';
+  result[returns?'returnsNetCents':'salesNetCents']+=moneyCents(e.subtotal??e.total-(e.vat||0));
+  result[returns?'returnsGrossCents':'salesGrossCents']+=moneyCents(e.total);
+  result.costSoldCents+=(e.lines||[]).filter(l=>l.a==='5101').reduce((n,l)=>n+moneyCents(l.d)-moneyCents(l.c),0);
+ }
+ result.grossProfitCents=result.salesNetCents-result.returnsNetCents-result.costSoldCents;
+ if(!Object.values(result).every(Number.isSafeInteger))throw Error('Los importes de utilidad superan el rango seguro.');
+ return result;
+}
+
+// Approval is loaded from server-only storage, never accepted from the request.
+export function commerceRouteApprovalMatches(approval,order,body,branchId,policyVersion){
+ return !!approval&&approval.orderId===order.id&&approval.customerId===body.customerId&&approval.branchId===branchId&&approval.policyVersion===policyVersion&&Array.isArray(approval.lines)&&body.items.every(i=>approval.lines.some(l=>l.productId===i.p&&l.unitPriceCents===moneyCents(i.u)&&i.q>0&&i.q<=l.q));
 }

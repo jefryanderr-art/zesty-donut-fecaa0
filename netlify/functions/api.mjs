@@ -1,3 +1,4 @@
+import {routePhotoAllowed} from '../lib/routes.mjs';
 import {listCompanyRoles,manageCompanyRole,requireAccessAdmin} from '../lib/company-roles.mjs';
 import {rentalPortal} from '../lib/rental-portal.mjs';
 import {sharedCalendar} from '../lib/lodging-calendar.mjs';
@@ -470,8 +471,8 @@ const handleRequest = async (request, context, metrics) => {
     }
     if(path==='order-reference'&&method==='GET'){
       const companyId=url.searchParams.get('c'),access=await companyAccess(db,companyId,session);
-      const record=scopeBranch(access.company.data,access).businessRecords?.find(r=>r.id===url.searchParams.get('id')&&(['bakery-order','bakery-wholesale'].includes(r.kind)||['proyectos','reservas','contratos'].includes(r.module)&&r.referencePhoto));
-      const photoId=url.searchParams.get('photo'),photo=photoId?record?.receptionPhotos?.find(p=>p.id===photoId):record?.referencePhoto;
+      const record=scopeBranch(access.company.data,access).businessRecords?.find(r=>r.id===url.searchParams.get('id')&&(routePhotoAllowed(access.company.data.businessRecords,access,r)||['bakery-order','bakery-wholesale'].includes(r.kind)||['proyectos','reservas','contratos'].includes(r.module)&&r.referencePhoto));
+      const photoId=url.searchParams.get('photo'),photo=photoId?record?.receptionPhotos?.find(p=>p.id===photoId):record?.proof?.photo||record?.referencePhoto;
       if(!photo?.key?.startsWith(companyId+'/'))return fail('Referencia no encontrada.',404);
       requireModule(access,record.module);
       const bytes=await getStore({name:'acontec-private-receipts',consistency:'strong'}).get(photo.key,{type:'arrayBuffer'});
