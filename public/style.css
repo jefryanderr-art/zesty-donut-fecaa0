@@ -585,3 +585,17 @@ input[data-decimal]{text-align:center}
  .pos-item input,.pos-item select{min-height:44px}
  .pos-item .pos-line-total{grid-column:1;justify-self:start}
 }
+
+/* Compact settings history and correction controls, using the current theme. */
+.settings-backups summary{cursor:pointer;font-weight:700;padding:12px 0}
+#backup-history{max-height:24rem;overflow:auto;overscroll-behavior:contain}
+#backup-history tr[hidden]{display:none}
+.settings-backups .backup-actions{flex-wrap:wrap}
+.entry-annulled>td:not(:last-child),.entry-annulled .entry-card-heading>div:first-child{opacity:.6}
+.entry-annulled>td:nth-child(2){text-decoration:line-through}
+.entry-card-heading{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.entry-correction-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;max-width:100%}
+.correction-choice{border:0;padding:0;min-width:0}
+.correction-choice .ck{align-items:flex-start;white-space:normal}
+.correction-choice input[type=radio]{flex-shrink:0;width:auto}
+@media(max-width:600px){.settings-backups .backup-actions>*{max-width:100%;white-space:normal}.entry-correction-actions{width:100%}}

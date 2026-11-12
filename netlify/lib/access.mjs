@@ -678,7 +678,7 @@ function guardRoleChanges(previous, next, access, operation) {
       if (equal(old,row)) continue;
       const target=module || (collection==='entries'?entryAccessModule(row||old,next):(row||old).module);
       if (!target) accessError('No se pudo determinar el permiso del registro.');
-      if(['Operación: correctEntry','Operación: reverseLegacyCash'].includes(operation)&&collection==='entries'&&!old&&(row.reversalOf||row.correctionOf)&&supervisor(access))continue;
+      if(['Operación: correctEntry','Operación: registerAgain','Operación: reverseLegacyCash'].includes(operation)&&collection==='entries'&&!old&&(row.reversalOf||row.correctionOf)&&supervisor(access))continue;
       const action=!old?'create':!row?'delete':'edit';
       if (!allowed(access,target,true,action)) accessError('No tienes permiso para '+({create:'crear',edit:'editar',delete:'borrar'})[action]+' en '+target+'.');
     }
