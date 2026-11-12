@@ -43,7 +43,7 @@ import {BUSINESS_OPS,businessOperation,prepareBusinessSale,restoreBusinessReturn
 import { normalizeItemQuantity } from './accounting-engine.mjs';
 import {configureService,validateConfiguredServices,serviceConsumptionPlan,serviceSaleSnapshot} from './service-catalog.mjs';
 import {configureEconomicSector,validateEconomicSector} from './economic-sector.mjs';
-import { consumeDiscount } from './discounts.mjs';
+import { consumeDiscount, normalInvoicePrice } from './discounts.mjs';
 import { tradeOperation, TRADE_OPS } from './trade.mjs';
 import { countryTemplate } from './country.mjs';
 import { importRecords } from './importer.mjs';
@@ -353,7 +353,7 @@ async function makeSale(data, access, session, body, client, companyId, trustedS
   requirePermission(access, 'facturacion');
   const invoiceDraft=body.sourceInvoiceDraft?data.invoiceDrafts?.find(row=>row.id===body.sourceInvoiceDraft&&row.branchId===access.branchId):null;
   requireValue(!body.sourceInvoiceDraft||invoiceDraft?.status==='Registrada','La factura registrada no está disponible para aplicar.');
-  await consumeDiscount(client,companyId,access,session,body);
+  const priceAdjustments=await consumeDiscount(client,companyId,access,session,body,data);
   let context = saleContext(body.saleContext, requireValue);
   const date = dateValue(body.date), payments = body.payments;
   requireValue(!(body.loyalty===true||body.quickService===true||(Array.isArray(payments)&&payments.some(p=>p.method==='vale')))||body.operationId,'La operación requiere un identificador único.');
@@ -375,15 +375,14 @@ async function makeSale(data, access, session, body, client, companyId, trustedS
   commerceSaleGuard(data,body,requireValue,trustedSourceId,m=>requirePermission(access,m));
   const businessAllocations=prepareBusinessSale(data,access,session,body,{check:requireValue,permit:requirePermission,amount,date:dateValue,entry:appendEntry,trustedSourceId});
   const quantities = new Map();
-  const items = body.items.map(item => {
+  const items = body.items.map((item,index) => {
     const product = data.products.find(record => record.id === item.p), quantity = normalizeItemQuantity(item.q);
     requireValue(product && Number.isFinite(quantity) && quantity > 0 && quantity <= 1000000, 'Producto o cantidad inválida.');
     if(product.kind!=='service')quantities.set(product.id, (quantities.get(product.id) || 0) + quantity);
     const price = amount(item.u ?? effectiveFoodPrice(data,product,date), true), unit = round(price * (1 - discount / 100)), vatRate = Number(product.vatRate || 0);
     requireValue(Number.isFinite(price) && price >= 0 && Number.isFinite(vatRate) && vatRate >= 0 && vatRate <= 100, 'Precio o IVA de producto inválido.');
-    const commerceFloor=commercePrice(data,product,body.customerId,(body.commercePresentations||[]).find(i=>i.p===product.id)?.code||'base');
-    requireValue(price >= (commerceFloor!==product.price?commerceFloor:effectiveFoodPrice(data,product,date)), 'Usa el campo de descuento autorizado para rebajar el precio de catálogo.');
-    return { ...(typeof item.note==='string'&&item.note.trim()?{note:text(item.note,500)}:{}), originalPrice: effectiveFoodPrice(data,product,date), code: product.code || '', p: product.id, name: product.name, unit: product.unit || 'unidad', q: quantity, listPrice: price, u: unit, cost: product.kind==='service'?0:product.cost, ...(product.kind==='service'?{service:true}:{}), vatRate };
+    requireValue(price > 0, 'El precio debe ser mayor que cero.');
+    return { ...(typeof item.note==='string'&&item.note.trim()?{note:text(item.note,500)}:{}), ...(priceAdjustments[index]?{priceAdjustment:priceAdjustments[index]}:{}), originalPrice: normalInvoicePrice(data,product,body), code: product.code || '', p: product.id, name: product.name, unit: product.unit || 'unidad', q: quantity, listPrice: price, u: unit, cost: product.kind==='service'?0:product.cost, ...(product.kind==='service'?{service:true}:{}), vatRate };
   });
   const servicePlan=serviceConsumptionPlan(data,body.items);
   requireValue(!servicePlan.rows.length||body.serviceConsumptionConfirmed===true,'Confirma los consumibles del servicio antes de emitir.');
@@ -446,6 +445,7 @@ async function makeSale(data, access, session, body, client, companyId, trustedS
   redeemGift(gift,entry);
   if(body.previousDay===true)entry.previousDayDiscount=true;
   if(loyalty)entry.loyalty={configId:loyalty.configId,percent:loyalty.percent};
+  if(items.some(item=>item.priceAdjustment))await audit(client,companyId,session,'Descuentos',[{area:'descuentos',event:'Factura con ajuste de precio',invoiceId:entry.id,reference:entry.reference,items:items.filter(i=>i.priceAdjustment).map(i=>({p:i.p,...i.priceAdjustment}))}]);
   if(entry.discountAudit) await audit(client,companyId,session,'Descuentos',[{area:'descuentos',event:'Factura con descuento',invoiceId:entry.id,reference:entry.reference,...entry.discountAudit}]);
   if(serviceSnapshots.length)entry.serviceSnapshots=serviceSnapshots;
   if(servicePlan.rows.length){
@@ -754,6 +754,7 @@ export async function runOperation(companyId, session, body) {
       else if(TRADE_OPS.includes(operation)){output=tradeOperation(data,access,operationSession,body,{requireValue,requirePermission,appendEntry,dateValue,amount,ledgerBalance,guardCash});}
       else if(operation==='importRecords'){ output=importRecords(data,access,operationSession,body,{requireValue,requirePermission,appendEntry,dateValue,validateSupplier}); }
       else if (handlesAdvanced(operation)) {
+        if(operation==='invoiceDraft')body={...body,priceAdjustments:await consumeDiscount(client,companyId,access,operationSession,body,data)};
         output=advancedOperation(data,access,operationSession,body,{requireValue,requirePermission,appendEntry,dateValue,amount,actorName});
       } else if (operation === 'branch') {
         if(!access.owner) accessError('Solo el dueño administra sucursales.');

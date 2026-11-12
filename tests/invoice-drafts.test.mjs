@@ -18,8 +18,8 @@ const saleSource=operations.slice(operations.indexOf('async function makeSale(')
 function saleHarness(){
  const context=vm.createContext({invoiceTotals,normalizeItemQuantity,
   ensurePrintVersions(){},requirePermission:helpers.requirePermission,requireValue:check,
-  consumeDiscount:async()=>{},saleContext:()=>null,commerceSaleGuard(){},prepareBusinessSale:()=>[],
-  effectiveFoodPrice:(_d,p)=>p.price,commercePrice:(_d,p)=>p.price,
+  consumeDiscount:async()=>[],saleContext:()=>null,commerceSaleGuard(){},prepareBusinessSale:()=>[],
+  normalInvoicePrice:(_d,p)=>p.price,effectiveFoodPrice:(_d,p)=>p.price,commercePrice:(_d,p)=>p.price,
   serviceConsumptionPlan:()=>({rows:[]}),serviceSaleSnapshot:()=>[],fiscalIssueGuard(){},
   giftPayment:()=>null,redeemGift(){},commerceLoadSale(){},commerceSnapshot:()=>({}),
   dateValue:v=>v,amount:Number,text:v=>String(v||''),round:v=>Math.round(v*100)/100,cents:moneyCents,

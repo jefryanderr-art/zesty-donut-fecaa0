@@ -14,10 +14,10 @@ export function invoiceDraftOperation(data,access,body,{requireValue:check,requi
  const customer=body.customerId?data.customers.find(c=>c.id===body.customerId):null;
  check(!body.customerId||customer,'Cliente inexistente.');
  const name=String(customer?.name||body.party||'').trim().slice(0,200);check(name,'Indica el cliente.');
- const items=body.items.map(row=>{
+ const items=body.items.map((row,index)=>{
   const p=data.products.find(p=>p.id===row.p),q=normalizeItemQuantity(row.q);
   check(p&&Number.isFinite(q)&&q>0&&q<=1e6,'Producto o cantidad inválida.');
-  return {p:p.id,q,u:amount(row.u??p.price,true),vatRate:p.vatRate||0};
+  return {...(body.priceAdjustments?.[index]?{priceAdjustment:body.priceAdjustments[index]}:{}),p:p.id,name:p.name,q,u:amount(row.u??p.price,true),vatRate:p.vatRate||0};
  });
  const discount=Number(body.discount||0);check(Number.isFinite(discount)&&discount>=0&&discount<100,'Descuento inválido.');
  const record={discount,id:existing?.id||randomUUID(),branchId:access.branchId,status:'Registrada',date:date(body.date),name,customerId:customer?.id||'',items,total:invoiceTotals(items).total,...(body.sourceQuotation?{sourceQuotation:String(body.sourceQuotation)}:{})};

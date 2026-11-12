@@ -73,7 +73,7 @@ async function customerAccountData(id){
   if(!permission('ventas'))return null;
   const customer=customerById(id);if(!customer)return null;
   const companyId=CO.id,source=S;
-  const math=await import('/accounting-math.mjs?v=ebd0d1f516492643');
+  const math=await import('/accounting-math.mjs?v=57b73d453489204a');
   if(CO.id!==companyId||S!==source||!permission('ventas'))return null;
   const accounting=permission('contabilidad')||permission('finanzas');
   const entries=math.customerAccountEntries(id,S.entries).sort((a,b)=>a.date.localeCompare(b.date)||String(a.createdAt||'').localeCompare(String(b.createdAt||''))||String(a.id).localeCompare(String(b.id)));

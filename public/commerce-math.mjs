@@ -1,4 +1,4 @@
-import {inventoryLineCostCents,serviceCommissionCents,invoiceLinkedEntries,moneyCents} from './accounting-math.mjs?v=ebd0d1f516492643';
+import {inventoryLineCostCents,serviceCommissionCents,invoiceLinkedEntries,moneyCents} from './accounting-math.mjs?v=57b73d453489204a';
 // Cantidades y cotizaciones compartidas: no redondear equivalencias silenciosamente.
 export function commerceQuantity(value){const n=Number(value);if(!Number.isFinite(n)||n<0||n>1e6||Math.abs(n*1000-Math.round(n*1000))>1e-7)throw Error('La cantidad debe ser exacta, con hasta tres decimales.');return Math.round(n*1000)/1000}
 export function commerceMeasure({quantity=1,factor=1,gross,tare=0}){const f=commerceQuantity(factor);if(!f)throw Error('La equivalencia debe ser positiva.');const net=gross===undefined?commerceQuantity(quantity):commerceQuantity(commerceQuantity(gross)-commerceQuantity(tare));const q=commerceQuantity(net*f);if(!q)throw Error('La cantidad neta debe ser positiva.');return q}
