@@ -92,3 +92,16 @@ document.addEventListener('keydown',async event=>{
   try{if(SCANNER)await SCANNER.onCode(code);else await scanProduct(code,form)}catch(error){scanTone(false);barcodeFeedback(error.message,form)}finally{physicalBusy=false;if(SCANNER)SCANNER.host.querySelector('#physical-scan')?.focus();else focusScan(form)}
  }else if(event.key.length===1){physicalBuffer=(physicalBuffer+event.key).slice(-128)}else physicalBuffer='';
 },{capture:true});
+
+// Shared HID focus behavior: only an explicit tap opens the touch keyboard.
+function bindBluetoothSearch(input,anchor,{placement='after',always=false}={}){
+ const coarse=matchMedia('(any-pointer:coarse)').matches;let bluetooth=false;
+ input.inputMode=coarse?'none':'search';
+ const focus=()=>{if(!coarse||bluetooth){if(coarse)input.inputMode='none';input.focus({preventScroll:true});}};
+ input.addEventListener('pointerdown',()=>{input.inputMode='search';});
+ if(coarse||always){
+  const reader=document.createElement('button');reader.type='button';reader.className='lk product-bluetooth';reader.textContent=uiT('invoiceProducts.bluetooth','Usar lector Bluetooth');reader.setAttribute('aria-pressed','false');
+  reader.addEventListener('click',()=>{bluetooth=!bluetooth;reader.setAttribute('aria-pressed',String(bluetooth));if(bluetooth)focus();else reader.focus();});anchor[placement](reader);
+ }
+ return {focus,get bluetooth(){return bluetooth;}};
+}
