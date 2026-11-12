@@ -25,14 +25,9 @@ function openInvoiceProducts(form,opener,mode='factura'){
  document.body.append(dialog);const input=dialog.querySelector('input'),feedback=dialog.querySelector('.product-feedback');
  const rows=()=>[...draft.querySelectorAll(rowSelector)].filter(r=>r.querySelector(`[name=${productField}]`).value);
  const find=id=>rows().find(r=>r.querySelector(`[name=${productField}]`).value===id);
- const coarse=matchMedia('(any-pointer:coarse)').matches;let bluetooth=false;
- input.inputMode=coarse?'none':'search';
- const focus=()=>{if(!coarse||bluetooth){if(coarse)input.inputMode='none';input.focus({preventScroll:true});}};
- input.addEventListener('pointerdown',()=>{input.inputMode='search';});
- if(coarse){
-  const reader=document.createElement('button');reader.type='button';reader.className='lk product-bluetooth';reader.textContent=uiT('invoiceProducts.bluetooth','Usar lector Bluetooth');reader.setAttribute('aria-pressed','false');
-  reader.addEventListener('click',()=>{bluetooth=!bluetooth;reader.setAttribute('aria-pressed',String(bluetooth));if(bluetooth)focus();else reader.focus();});dialog.querySelector('.product-tools').after(reader);
- }
+ const coarse=matchMedia('(any-pointer:coarse)').matches;
+ const readerMode=bindBluetoothSearch(input,dialog.querySelector('.product-tools'));
+ const focus=()=>readerMode.focus();
  const viewport=window.visualViewport;
  const fit=()=>{dialog.style.setProperty('--picker-height',(viewport?.height||innerHeight)+'px');dialog.style.setProperty('--picker-top',(viewport?.offsetTop||0)+'px');dialog.classList.toggle('keyboard-open',coarse&&!!viewport&&viewport.height<innerHeight-100);};
  viewport?.addEventListener('resize',fit);viewport?.addEventListener('scroll',fit);
@@ -80,7 +75,7 @@ function openInvoiceProducts(form,opener,mode='factura'){
   else if(b.hasAttribute('data-done')){
    if(purchase){for(const field of dialog.querySelectorAll('.product-selected input'))if(!field.reportValidity())return;}
    for(const row of [...draft.children])if(!row.querySelector(`[name=${productField}]`).value)row.remove();container.replaceChildren(...draft.children);if(purchase){container.querySelectorAll('.item').forEach(preparePurchaseProductRow);close();return;}form.dispatchEvent(new Event('input',{bubbles:true}));form.discountAuthorization='';form.querySelector('.discount-feedback').textContent='Autoriza el descuento después de revisar productos y precios.';previewPos(form);close();
-  }else if(b.hasAttribute('data-scan')){await openScanner(scan);if(SCANNER){dialog.append(SCANNER.host);const physical=SCANNER.host.querySelector('#physical-scan');if(physical){physical.inputMode=coarse?'none':'search';physical.addEventListener('pointerdown',()=>{physical.inputMode='search';});if(!coarse||bluetooth)physical.focus();else SCANNER.host.querySelector('button')?.focus();}}}
+  }else if(b.hasAttribute('data-scan')){await openScanner(scan);if(SCANNER){dialog.append(SCANNER.host);const physical=SCANNER.host.querySelector('#physical-scan');if(physical){physical.inputMode=coarse?'none':'search';physical.addEventListener('pointerdown',()=>{physical.inputMode='search';});if(!coarse||readerMode.bluetooth)physical.focus();else SCANNER.host.querySelector('button')?.focus();}}}
   else if(b.hasAttribute('data-direction')){direction=-direction;renderCatalog();focus();}
   else if(b.dataset.sort){direction=sort===b.dataset.sort?-direction:1;sort=b.dataset.sort;renderCatalog();focus();}
   else if(b.hasAttribute('data-prev')||b.hasAttribute('data-next')){page+=b.hasAttribute('data-prev')?-1:1;renderCatalog();focus();}

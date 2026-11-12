@@ -115,8 +115,8 @@ function searchPeriod(value){
   if(/^\d{4}$/.test(query))return [query+'-01-01',query+'-12-31'];
   return null;
 }
-function searchBar(placeholder='Factura, fecha o nombre'){
-  return `<form class="module-search noprint" id="module-search"><label><span>${esc(uiT("operations.6","Buscar"))}</span><input type="search" name="query" value="${esc(SEARCHES[R]||'')}" placeholder="${esc(placeholder)}" autocomplete="off"></label><button class="btn ghost" type="submit">${esc(uiT("operations.7","Buscar"))}</button><button class="lk" type="button" data-a="searchClear">${esc(uiT("operations.8","Limpiar"))}</button><small id="search-feedback" role="status">${SEARCHES[R]&&searchPeriod(SEARCHES[R])?esc(searchPeriod(SEARCHES[R]).join(' → ')):''}</small></form>`;
+function searchBar(placeholder='Factura, fecha o nombre',scanner=false){
+  return `<form class="module-search noprint" id="module-search"><label><span>${esc(uiT("operations.6","Buscar"))}</span><input type="search" name="query" value="${esc(SEARCHES[R]||'')}" placeholder="${esc(placeholder)}" autocomplete="off"></label>${scanner?'<button class="btn ghost" type="button" data-a="invoiceDraftScan">Escanear</button>':''}<button class="btn ghost" type="submit">${esc(uiT("operations.7","Buscar"))}</button><button class="lk" type="button" data-a="searchClear">${esc(uiT("operations.8","Limpiar"))}</button><small id="search-feedback" role="status">${SEARCHES[R]&&searchPeriod(SEARCHES[R])?esc(searchPeriod(SEARCHES[R]).join(' → ')):''}</small></form>`;
 }
 function saleContextRows(entry){
  const c=entry.saleContext||{};
@@ -133,7 +133,7 @@ document.addEventListener('submit',event=>{
   const query=v(event.target,'query').trim(),period=searchPeriod(query);
   if(financialSearchRoutes.has(R)&&R!=='kardex'&&query&&!period){$('#search-feedback').textContent=uiT("operations.extra.14","Usa julio 2026, 2026-07, una fecha o un año.");return}
   SEARCHES[R]=query;
-  if(period&&!['personal','accesibilidad','cuentas'].includes(R)){P.k='rango';[P.from,P.to]=period}
+  if(period&&!['personal','accesibilidad','cuentas','invoiceDrafts'].includes(R)){P.k='rango';[P.from,P.to]=period}
   if(R==='auditoria')auditPage=0;
   view();
 });
@@ -580,9 +580,24 @@ function correctPaymentForm(entry,again=false){
 
 Object.assign(ACTION_MODULE,{invoiceDraftList:'facturacion',invoiceDraftEdit:'facturacion',invoiceDraftApply:'facturacion',deleteInvoiceDraft:'facturacion'});
 ROUTE_MODULE.invoiceDrafts='facturacion';
-ACT.invoiceDraftList=()=>{R='invoiceDrafts';view();};
+let invoiceDraftPeriod={k:'todo'};
+ACT.invoiceDraftList=()=>{invoiceDraftPeriod={k:'todo'};R='invoiceDrafts';view();};
+READ_ACTIONS.add('invoiceDraftPeriod');READ_ACTIONS.add('invoiceDraftScan');
+ACTION_MODULE.invoiceDraftPeriod=ACTION_MODULE.invoiceDraftScan='facturacion';
+ACT.invoiceDraftPeriod=data=>{invoiceDraftPeriod.k=data.k;view();};
+ACT.invoiceDraftScan=()=>openScanner(code=>{closeScanner();SEARCHES.invoiceDrafts=String(code).trim();view();});
+function matchesInvoiceDraft(row,query){
+ const entry=S.entries.find(e=>e.id===row.entryId);
+ if(matchesEntry({reference:entry?.reference||row.id,party:row.name,date:row.date,items:[]},query))return true;
+ const words=normalizeSearch(query).split(/\s+/);
+ const text=normalizeSearch([row.id,entry?.reference,row.name,row.date,...(row.items||[]).flatMap(item=>[item.name,item.code,...item.barcodes||[],prod(item.p)?.code,...prod(item.p)?.barcodes||[]])].join(' '));
+ return words.every(word=>text.includes(word));
+}
 V.invoiceDrafts=()=>{
- main(pageHead(esc(uiT('invoiceDraft.list','Facturas registradas')),`<button class="btn" data-a="venta">${esc(uiT('invoiceDraft.new','Crear factura'))}</button>`)+notice(uiT('invoiceDraft.notice','Registrar no reserva existencias ni genera pagos o asientos. Aplicar revalida la venta. Las aplicadas se corrigen con nota de crédito.'))+accountingTable([uiT('invoiceDraft.status','Estado'),uiT('invoiceDraft.customer','Cliente'),uiT('invoiceDraft.total','Total'),uiT('invoiceDraft.date','Fecha'),uiT('invoiceDraft.actions','Acciones')],(S.invoiceDrafts||[]).map(row=>`<tr><td>${esc(uiT('invoiceDraft.state.'+row.status,row.status))}</td><td>${esc(row.name)}</td><td>${esc(money(row.total))}</td><td>${esc(row.date)}</td><td>${row.status==='Registrada'?actionButton('invoiceDraftEdit',row.id,uiT('invoiceDraft.edit','Editar'))+' '+actionButton('invoiceDraftApply',row.id,uiT('invoiceDraft.apply','Aplicar'))+' '+actionButton('deleteInvoiceDraft',row.id,uiT('invoiceDraft.delete','Eliminar')):esc(S.entries.find(e=>e.id===row.entryId)?.reference||row.entryId||'')}</td></tr>`).join('')));enforceAccessUI();
+ const [from,to]=rg(invoiceDraftPeriod),query=SEARCHES.invoiceDrafts||'';
+ const rows=(S.invoiceDrafts||[]).filter(row=>row.date>=from&&row.date<=to&&(!query||matchesInvoiceDraft(row,query)));
+ main('<section class="invoice-drafts"><div class="invoice-drafts-title"><button type="button" class="btn ghost" data-a="nav" data-r="facturacion" aria-label="Volver a Facturación">←</button><h2>'+esc(uiT('invoiceDraft.list','Facturas registradas'))+'</h2></div>'+pageHead('',`<button class="btn" data-a="venta">${esc(uiT('invoiceDraft.new','Crear factura'))}</button>`)+pbar(invoiceDraftPeriod,'invoiceDraftPeriod',false)+searchBar('Factura, código de barras o nombre',true)+notice(uiT('invoiceDraft.notice','Registrar no reserva existencias ni genera pagos o asientos. Aplicar revalida la venta. Las aplicadas se corrigen con nota de crédito.'))+accountingTable([uiT('invoiceDraft.status','Estado'),uiT('invoiceDraft.customer','Cliente'),uiT('invoiceDraft.total','Total'),uiT('invoiceDraft.date','Fecha'),uiT('invoiceDraft.actions','Acciones')],rows.map(row=>`<tr><td>${esc(uiT('invoiceDraft.state.'+row.status,row.status))}</td><td>${esc(row.name)}</td><td>${esc(money(row.total))}</td><td>${esc(row.date)}</td><td>${row.status==='Registrada'?actionButton('invoiceDraftEdit',row.id,uiT('invoiceDraft.edit','Editar'))+' '+actionButton('invoiceDraftApply',row.id,uiT('invoiceDraft.apply','Aplicar'))+' '+actionButton('deleteInvoiceDraft',row.id,uiT('invoiceDraft.delete','Eliminar')):esc(S.entries.find(e=>e.id===row.entryId)?.reference||row.entryId||'')}</td></tr>`).join('')||'<tr><td colspan="5">No hay facturas para este filtro</td></tr>')+'</section>');
+ const form=$('#module-search');bindBluetoothSearch(form.elements.query,form.querySelector('[data-a=searchClear]'),{placement:'before',always:true});enforceAccessUI();
 };
 async function openInvoiceDraft(data){
  const row=(S.invoiceDrafts||[]).find(r=>r.id===data.id);if(!row||row.status!=='Registrada')throw new Error(uiT('invoiceDraft.unavailable','La factura registrada no está disponible.'));

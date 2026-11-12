@@ -332,14 +332,14 @@ function view(){if(typeof routeAllowed==='function'&&!routeAllowed(R))R=firstAll
 const menu=o=>{$('#drawer').classList.toggle('open',o);$('#ov').classList.toggle('show',o)};
 
 // ---------- periodos ----------
-function rg(){const n=new Date(),y=n.getFullYear(),m=n.getMonth();
-  switch(P.k){case'dia':return[today(),today()];
+function rg(period=P){const n=new Date(),y=n.getFullYear(),m=n.getMonth();
+  switch(period.k){case'dia':return[today(),today()];
   case'sem':{const a=new Date(n);a.setDate(n.getDate()-((n.getDay()+6)%7));const b=new Date(a);b.setDate(a.getDate()+6);return[iso(a),iso(b)]}
   case'mes':return[iso(new Date(y,m,1)),iso(new Date(y,m+1,0))];
   case'anio':return[y+'-01-01',y+'-12-31'];
   case'todo':return['0000-01-01','9999-12-31'];
-  default:return[P.from||'0000-01-01',P.to||'9999-12-31']}}
-const pbar=()=>`<div class="seg noprint">${[['dia','Diario'],['sem','Semanal'],['mes','Mensual'],['anio','Anual'],['todo','Todo'],['rango','Rango']].map(([k,l])=>`<button data-a="per" data-k="${k}" class="${P.k==k?'on':''}">${l}</button>`).join('')}</div>${P.k=='rango'?`<div class="rg noprint"><input type="date" id="pf" value="${P.from}"><input type="date" id="pt" value="${P.to}"></div>`:''}`;
+  default:return[period.from||'0000-01-01',period.to||'9999-12-31']}}
+const pbar=(period=P,action='per',includeRange=true)=>`<div class="seg noprint">${[['dia','Diario'],['sem','Semanal'],['mes','Mensual'],['anio','Anual'],['todo','Todo'],['rango','Rango']].filter(([k])=>includeRange||k!=='rango').map(([k,l])=>`<button data-a="${action}" data-k="${k}" class="${period.k==k?'on':''}">${l}</button>`).join('')}</div>${period.k=='rango'?`<div class="rg noprint"><input type="date" id="pf" value="${period.from}"><input type="date" id="pt" value="${period.to}"></div>`:''}`;
 const plabel=()=>{const[f,t]=rg();return P.k=='todo'?'Todo el historial':`Del ${f} al ${t}`};
 const rh=(t,sub)=>`<div class="rh"><h2>${esc(S.cfg.name||CO.name)}</h2><b>${t}</b><p>${sub}</p>${S.cfg.ruc?`<p>RUC: ${esc(S.cfg.ruc)}</p>`:''}</div>`;
 const pbtn=()=>`<button class="btn ghost noprint" data-a="print">${esc(uiT("app.60","🖨️ Imprimir / PDF"))}</button>`;
