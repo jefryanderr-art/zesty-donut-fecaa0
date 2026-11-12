@@ -516,7 +516,7 @@ function settle(title,acc,cobro){modal(title,`<label>${esc(uiT("app.257","Fecha"
   const m=r2(v(ff,'mt')),py=v(ff,'py');if(m<=0)return 'Monto inválido';
   addEntry({date:v(ff,'dt'),desc:title+(v(ff,'ds')?' - '+v(ff,'ds'):''),type:'manual',lines:cobro?[{a:py,d:m,c:0},{a:acc,d:0,c:m}]:[{a:acc,d:m,c:0},{a:py,d:0,c:m}],total:m});view()})}
 function purchaseModal(ex){
-  const form=modal(ex?'Editar compra':'Nueva compra',`<label>${esc(uiT("app.262","Fecha"))}<input type="date" name="dt" value="${esc(ex?.date||today())}" required></label><label>${esc(uiT("app.263","Proveedor"))}<input name="pv" value="${esc(ex?.party||'')}"></label><label>${esc(uiT("app.264","Forma de pago"))}<select name="py">${payOpts('2101')}</select></label><div class="items">${ex?.items?.length?ex.items.map(item=>itemRow(item,true)).join(''):itemRow({},!!ex)}</div><button type="button" class="lk" data-a="addItem">${esc(uiT("app.265","+ Agregar producto"))}</button>`,ff=>{
+  const form=modal(ex?'Editar compra':'Nueva compra',`<label>${esc(uiT("app.262","Fecha"))}<input type="date" name="dt" value="${esc(ex?.date||today())}" required></label><label>${esc(uiT("app.263","Proveedor"))}<input name="pv" value="${esc(ex?.party||'')}"></label><label>${esc(uiT("app.264","Forma de pago"))}<select name="py">${payOpts('2101')}</select></label><div class="items">${ex?.items?.length?ex.items.map(item=>itemRow(item,true)).join(''):''}</div><button type="button" class="lk" data-a="purchaseProducts">+ Agregar productos</button>`,ff=>{
     const items=readItems(),py=v(ff,'py');if(!items.length)return 'Agrega al menos un producto';
     if(items.some(item=>!prod(item.p)||!Number.isFinite(item.q)||!Number.isFinite(item.u)||item.u<0))return 'Revisa los productos, cantidades y precios';
     const total=r2(items.reduce((sum,item)=>sum+item.q*item.u,0));if(!Number.isFinite(total))return 'El total de la compra no es válido';
@@ -544,6 +544,7 @@ function purchaseModal(ex){
     }
     view();
   },ex?'Guardar cambios':'Guardar');
+  form.querySelectorAll('.item').forEach(preparePurchaseProductRow);
   form.dataset.k=ex?'editcompra':'compra';if(ex)form.elements.py.value=ex.pay;
 }
 function entryModal(type,ex,correction=false,again=false){

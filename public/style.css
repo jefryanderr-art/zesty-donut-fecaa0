@@ -611,3 +611,62 @@ input[data-decimal]{text-align:center}
 
 @media(any-pointer:coarse){.invoice-customers.keyboard-open{top:calc(var(--picker-visible-top,0px) + 8px);bottom:auto;margin:0 auto}}
 @media(max-width:380px){.invoice-customers .invoice-customer-actions,.invoice-customers .invoice-customer-actions nav{gap:4px}.invoice-customers .invoice-customer-actions .btn{padding-inline:4px}}
+
+/* Shared invoice / purchase product picker: fixed tools and independent scroll areas. */
+.invoice-products[open]{position:fixed;inset:0;margin:auto;width:calc(100% - 16px);max-width:680px;height:92vh;height:92dvh;max-height:92vh;max-height:min(92dvh,calc(var(--picker-height,100dvh) - 8px));padding:12px;overflow:hidden;border-radius:18px;box-sizing:border-box}
+.invoice-products header{flex:none;gap:8px}.invoice-products header h2{font-size:1.25rem}
+.invoice-products .product-tools,.invoice-products.keyboard-open .product-tools{display:flex;flex:none;align-items:flex-end;flex-wrap:nowrap;gap:8px;padding:4px 0}
+.invoice-products .product-tools label,.invoice-products.keyboard-open .product-tools label{flex:1;min-width:0;font-size:.85rem}
+.invoice-products .product-tools input{margin:2px 0 0}
+.invoice-products .product-tools>button,.invoice-products.keyboard-open .product-tools>button{display:block;flex:0 0 110px;width:110px;padding:4px 8px;font-size:.8rem;line-height:1.15}
+.invoice-products .product-bluetooth{align-self:flex-start;min-height:24px;margin:0;padding:0;font-size:.8rem;flex:none}
+.invoice-products .product-mobile-sort,.invoice-products.keyboard-open .product-mobile-sort{display:flex;flex:none;align-items:center;gap:6px;font-size:.8rem;margin:2px 0}
+.invoice-products .product-mobile-sort select{flex:1;min-width:0;width:auto;margin:0;padding:4px}
+.invoice-products .product-mobile-sort button{border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit;padding:4px 8px}
+.invoice-products .product-feedback,.invoice-products.keyboard-open .product-feedback{display:block;min-height:0;flex:none;margin:2px 0;padding:2px 6px;font-size:.8rem;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.invoice-products .product-feedback:empty{display:none}
+.invoice-products .product-workspace{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;gap:6px}
+.invoice-products .product-results{display:flex;flex-direction:column;flex:0 1 38%;min-height:65px;overflow:hidden}
+.invoice-products .product-catalog,.invoice-products.keyboard-open .product-catalog{flex:1;min-height:0;max-height:none;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.invoice-products .product-catalog table,.invoice-products .product-catalog tbody{display:block}
+.invoice-products .product-catalog thead{display:none}
+.invoice-products .product-catalog tr[data-product]{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);height:auto;min-height:44px;padding:5px 0;border-bottom:1px solid var(--line)}
+.invoice-products .product-catalog td{display:block;border:0;padding:1px 4px;font-size:.8rem;line-height:1.25}
+.invoice-products .product-catalog td:nth-child(2){grid-column:1/-1;grid-row:1;font-weight:600;font-size:.9rem}
+.invoice-products .product-catalog td:before{content:attr(data-label) ': ';font-weight:400;opacity:.75}
+.invoice-products .product-catalog td:nth-child(2):before{content:''}
+.invoice-products .product-pages,.invoice-products.keyboard-open .product-pages{display:flex;flex:none;gap:4px;margin:2px 0;font-size:.75rem}
+.invoice-products .product-pages span{flex:1;text-align:center}
+.invoice-products .product-pages button{min-height:32px;padding:0 6px}
+.invoice-products .product-workspace>.product-selected,.invoice-products.keyboard-open .product-workspace>.product-selected{display:block;flex:1;min-height:0;max-height:none;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.invoice-products .product-selected h3,.invoice-products.keyboard-open .product-selected h3{display:block;font-size:1rem;margin:2px 0 4px}
+.invoice-products .product-choice{grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;padding:6px 0}
+.invoice-products .product-choice>b{grid-column:1/-1;grid-row:auto}.invoice-products .product-choice b small{font-weight:400}
+.invoice-products .product-choice>.product-quantity{grid-column:1;grid-row:auto;min-width:0}
+.invoice-products .product-quantity button{flex:0 0 44px;width:44px;height:44px}
+.invoice-products .product-quantity input{flex:1;width:60px;min-width:0;height:44px}
+.invoice-products .product-choice>span{grid-column:1;grid-row:auto}
+.invoice-products .product-choice>[data-remove]{grid-column:2;grid-row:auto;min-height:44px}
+.invoice-products .product-cost{grid-column:2;margin:0;font-size:.8rem;width:90px}
+.invoice-products .product-cost input{box-sizing:border-box;width:100%;margin:0;padding:4px}
+.invoice-products footer,.invoice-products.keyboard-open footer{display:flex;flex:none;flex-wrap:wrap;position:static;gap:6px;margin:4px 0 0;padding:6px 0 env(safe-area-inset-bottom,0px);font-size:.85rem}
+.invoice-products footer>div,.invoice-products.keyboard-open footer>div{display:flex;flex:1;gap:8px;margin:0}
+.invoice-products footer strong{flex:1 1 200px}.invoice-products footer button{flex:1;min-height:44px}
+.invoice-products.keyboard-open{top:var(--picker-top,0px);bottom:auto;margin:4px auto;height:calc(var(--picker-height,100dvh) - 8px)}
+.invoice-products.keyboard-open>header{display:flex}
+@media(min-width:1024px) and (min-height:600px){
+ .invoice-products[open]{max-width:760px;height:85vh;height:85dvh;max-height:85vh;max-height:min(85dvh,calc(var(--picker-height,100dvh) - 8px))}
+ .invoice-products .product-workspace{flex-direction:row;gap:14px}
+ .invoice-products .product-results{flex:1;min-width:0}.invoice-products .product-workspace>.product-selected{flex:1.15;min-width:0}
+}
+@media(any-pointer:coarse){.invoice-products .product-pages button,.invoice-products .product-mobile-sort button,.invoice-products .product-mobile-sort select{min-height:44px}}
+@media(max-width:640px){.invoice-products[open]{padding:8px}.invoice-products footer strong{flex-basis:100%}}
+@media(max-height:480px){.invoice-products[open]{padding:6px}.invoice-products header h2{font-size:1rem}.invoice-products footer strong{flex-basis:auto}.invoice-products .product-workspace{gap:2px}.invoice-products .product-selected h3{font-size:.85rem}}
+/* Purchase rows retain the original form fields and submission contract. */
+form[data-k=compra] .item>[name=p],form[data-k=editcompra] .item>[name=p]{display:none}
+form[data-k=compra] .purchase-product-name,form[data-k=editcompra] .purchase-product-name{grid-column:1/-1;overflow-wrap:anywhere}
+@media(max-width:640px){
+ .invoice-products.keyboard-open footer strong{flex:1 1 110px;font-size:.75rem}
+ .invoice-products.keyboard-open footer>div{flex:1 1 150px}
+ .invoice-products.keyboard-open .product-results{min-height:48px;flex-basis:36%}
+}
