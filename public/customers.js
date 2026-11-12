@@ -6,7 +6,7 @@ const customerMoney=customer=>`${customer.currency} ${customer.creditLimit.toLoc
 const customerSnapshot=customer=>Object.fromEntries(['name','taxId','phone','email','address','contact','seller','paymentType','creditLimit','creditDays','currency'].map(name=>[name,customer[name]]));
 const customerOptions=(selected='')=>(S.customers||[]).filter(customer=>customer.status==='activo'||customer.id===selected).sort((first,second)=>first.name.localeCompare(second.name,'es')).map(customer=>`<option value="${esc(customer.id)}" ${customer.id===selected?'selected':''}>${esc(customer.name)}${customer.taxId?' · '+esc(customer.taxId):''} · ${customer.paymentType==='credito'?'Crédito':'Contado'}${customer.status!=='activo'?' · '+esc(CUSTOMER_STATES[customer.status]):''}</option>`).join('');
 function saleCustomerFields(entry){
-  return `<label>${esc(uiT("customers.1","Cliente de cartera"))}<select name="customerId"><option value="">${esc(uiT("customers.2","Cliente manual / general"))}</option>${customerOptions(entry?.customerId)}</select></label>`+field('party',uiT("customers.3","Nombre o razón social"),entry?.party||'','text','maxlength="200"')+'<div id="sale-customer-info" class="accounting-notice" hidden></div>';
+  return `<label>${esc(uiT("customers.1","Cliente de cartera"))}<select name="customerId"><option value="">${esc(uiT("customers.2","Cliente manual / general"))}</option><option value="__other__">${esc(uiT("customers.other","Otro (escribir nombre)"))}</option>${customerOptions(entry?.customerId)}</select></label>`+field('party',uiT("customers.3","Nombre o razón social"),entry?.party||'','text','maxlength="200"')+'<div id="sale-customer-info" class="accounting-notice" hidden></div>';
 }
 function saleCustomerSnapshot(form){
   const customer=customerById(v(form,'customerId'));
@@ -16,11 +16,13 @@ function saleCustomerSnapshot(form){
 function updateSaleCustomer(form,applyConditions=false){
   const customer=customerById(v(form,'customerId'));
   form.elements.party.readOnly=!!customer;
+  form.elements.party.required=v(form,'customerId')==='__other__';
+  if(applyConditions&&!customer&&form.elements.py&&v(form,'customerId')==='__other__'&&v(form,'py')==='1201')form.elements.py.value='1101';
   const info=form.querySelector('#sale-customer-info');info.hidden=!customer;
   if(!customer)return;
   if(applyConditions){
     form.elements.party.value=customer.name;
-    form.elements.py.value=customer.paymentType==='credito'?'1201':'1101';
+    if(form.elements.py)form.elements.py.value=customer.paymentType==='credito'?'1201':'1101';
     updateSaleDue(form);
   }
   const details=saleCustomerSnapshot(form);
@@ -125,3 +127,5 @@ document.addEventListener('change',event=>{
   if(control.name==='customerId')updateSaleCustomer(form,true);
   if(['dt','py'].includes(control.name))updateSaleDue(form);
 });
+
+const selectedSaleCustomerId=form=>v(form,'customerId')==='__other__'?'':v(form,'customerId');

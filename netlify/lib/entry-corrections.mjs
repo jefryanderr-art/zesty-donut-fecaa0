@@ -19,12 +19,13 @@ function stockEffect(data,effects){
  for(const [original,sign]of effects)for(const m of original.stock||[]){const p=data.products.find(p=>p.id===m.pid);check(p,'Un producto del asiento ya no existe.');const unit=m.unitCost??original.items?.find(i=>i.p===p.id)?.u??(original.type==='invini'&&original.stock.length===1?original.total/m.q:undefined);check(Number.isFinite(unit)&&unit>=0&&Number.isFinite(m.q),'Falta el costo histórico del inventario; requiere revisión documentada.');const v=changes.get(p.id)||{q:0,v:0};v.q+=sign*m.q;v.v+=sign*(m.costCents!==undefined?Math.sign(m.q)*m.costCents/100:m.q*unit);changes.set(p.id,v);}
  for(const [id,m]of changes){const p=data.products.find(p=>p.id===id),q=Math.round((p.stock+m.q)*1e6)/1e6,v=p.stock*p.cost+m.v;check(q>=0&&v>=-0.001&&(q!==0||Math.abs(v)<0.011),'La corrección deja existencias o valoración negativas o valor sin existencias.');p.stock=q;if(!m.q&&!m.v)continue;p.cost=q?Math.round(v/q*100)/100:0;}
 }
-export function correctEntry(data,access,session,body,{append,date}){
+export function correctEntry(data,access,session,body,{append,date,registerAgain=false}){
  if(!supervisor(access))fail('Necesitas el permiso especial Correcciones.',403);
  check(access.branchId,'Selecciona una sucursal activa; el consolidado es de consulta.');
  const previous=structuredClone(data);
  const original=data.entries.find(e=>e.id===body.id&&(e.branchId||'principal')===access.branchId);
- check(original&&active(data,original),'El asiento no existe en esta sucursal o ya está anulado.');
+ check(original&&(registerAgain?!original.reversalOf&&data.entries.some(r=>r.reversalOf===original.id)&&!data.entries.some(r=>r.correctionOf===original.id):active(data,original)),'El asiento no existe en esta sucursal o ya está anulado.');
+ if(registerAgain)check(['gasto','compra','manual','abono'].includes(original.type)&&body.replacement,'Este tipo requiere su flujo específico de corrección.');
  check(!['venta','nota-credito'].includes(original.type),'Las ventas se anulan mediante nota de crédito.');
  check(!original.allocationJournal&&!original.treasuryId&&!original.shiftId&&!original.costId,'Esta operación tiene su propio flujo de anulación.');
  check(!original.managed||original.correctionOf||original.type==='apertura-importada','Esta operación tiene su propio flujo de anulación.');
@@ -68,23 +69,24 @@ export function correctEntry(data,access,session,body,{append,date}){
    const total=validate(data,r.lines);check(typeof r.desc==='string'&&r.desc.trim()&&r.desc.length<=200,'Indica la descripción corregida.');
    check(!r.lines.some(l=>l.a==='1104'||l.a.startsWith('1103-')),'Usa los módulos de turnos y caja chica.');
    Object.assign(replacement,{total,desc:r.desc.trim(),lines:r.lines.map(l=>({a:l.a,d:l.d,c:l.c}))});
-   if(original.type==='abono'){
+   if(registerAgain&&original.type==='abono'&&!original.invoiceId)check(r.lines.every(l=>original.lines.some(o=>o.a===l.a)),'El abono debe conservar su factura y contrapartida de dinero.');
+   if(original.type==='abono'&&(!registerAgain||original.invoiceId)){
     const invoice=data.entries.find(e=>e.id===original.invoiceId&&active(data,e));check(invoice&&['1201','2101'].includes(invoice.pay)&&dt>=invoice.date,'La factura vinculada no está vigente.');
     const receivable=invoice.pay==='1201',debit=r.lines.find(l=>receivable?['1101','1102'].includes(l.a)&&l.d===total&&!l.c:l.a==='2101'&&l.d===total&&!l.c),credit=r.lines.find(l=>receivable?l.a==='1201'&&l.c===total&&!l.d:['1101','1102'].includes(l.a)&&l.c===total&&!l.d);
     check(r.lines.length===2&&debit&&credit,'El abono debe conservar su factura y contrapartida de dinero.');
-    const balance=data.entries.filter(e=>e.id===invoice.id||e.invoiceId===invoice.id||e.reversalOf===invoice.id).flatMap(e=>e.lines).filter(l=>l.a===invoice.pay).reduce((n,l)=>n+(receivable?l.d-l.c:l.c-l.d),0)+original.total-total;
+    const balance=data.entries.filter(e=>e.id===invoice.id||e.invoiceId===invoice.id||e.reversalOf===invoice.id).flatMap(e=>e.lines).filter(l=>l.a===invoice.pay).reduce((n,l)=>n+(receivable?l.d-l.c:l.c-l.d),0)+(registerAgain?0:original.total)-total;
     check(data.cfg?.allowNegativeValues===true||balance>=-0.001,'El abono supera la deuda de la factura.');
    }
   }
  }
  if(replacement?.stock?.length)check(data.cfg?.costing?.method!=='fifo','PEPS requiere su flujo de capas.');
- stockEffect(data,[[original,-1],...(replacement?[[replacement,1]]:[])]);
+ stockEffect(data,[...(registerAgain?[]:[[original,-1]]),...(replacement?[[replacement,1]]:[])]);
 
- const reversal=append(data,session,{date:dt,branchId:access.branchId,type:opening(original)?'anula-apertura':'correccion-anulacion',reversalOf:original.id,invoiceId:original.invoiceId||null,taxId:original.taxId||null,reason,reference,party:original.party||'',supplierId:original.supplierId||'',originalType:original.type,subtotal:original.subtotal??original.total,vat:original.vat||0,desc:'Anulación · '+reason,total:original.total,stock:(original.stock||[]).map(m=>({...m,...(m.unitCost===undefined&&original.type==='invini'&&original.stock.length===1?{costCents:Math.round(original.total*100)}:{}),q:-m.q})),lines:original.lines.map(l=>({...l,d:l.c,c:l.d}))});
+ const reversal=registerAgain?null:append(data,session,{date:dt,branchId:access.branchId,type:opening(original)?'anula-apertura':'correccion-anulacion',reversalOf:original.id,invoiceId:original.invoiceId||null,taxId:original.taxId||null,reason,reference,party:original.party||'',supplierId:original.supplierId||'',originalType:original.type,subtotal:original.subtotal??original.total,vat:original.vat||0,desc:'Anulación · '+reason,total:original.total,stock:(original.stock||[]).map(m=>({...m,...(m.unitCost===undefined&&original.type==='invini'&&original.stock.length===1?{costCents:Math.round(original.total*100)}:{}),q:-m.q})),lines:original.lines.map(l=>({...l,d:l.c,c:l.d}))});
  let corrected=null;if(replacement){corrected=append(data,session,{...replacement,managed:true,reason,branchId:access.branchId});}
  if(opening(original))check(data.entries.filter(e=>opening(e)&&active(data,e)).length<=1,'Solo puede existir una apertura vigente por sucursal.');
  guardPeriods(previous,data,'Operación: correctEntry');
  check(statement(data,'0000','9999').inventory>=0,'La corrección deja la valoración contable del inventario en negativo.');
  guardCash(previous,data,{strict:true});
- return {originalId:original.id,reversalId:reversal.id,correctedId:corrected?.id||null,reason,reference};
+ return {originalId:original.id,reversalId:reversal?.id||null,correctedId:corrected?.id||null,reason,reference};
 }

@@ -98,3 +98,32 @@ function paintNegativeFigures(){
  else if(main&&S?.cfg?.allowNegativeValues!==true)main.querySelector('[data-negative-notice]')?.remove();
 }
 new MutationObserver(()=>{if(!negativePaintPending){negativePaintPending=true;requestAnimationFrame(paintNegativeFigures);}}).observe(document.body,{childList:true,subtree:true,characterData:true});
+
+// All settings extensions keep their own permission checks; only move their existing nodes.
+const orderedSettingsView=V.ajustes;
+V.ajustes=async function(){
+ const companyId=CO.id;await orderedSettingsView();
+ if(R!=='ajustes'||CO?.id!==companyId)return;
+ const root=$('#main'),history=$('#settings-backups');if(!history)return;
+ const backup=document.createElement('section');backup.className='card settings-backups';
+ const details=document.createElement('details'),summary=document.createElement('summary');
+ summary.textContent=uiT('settings.backups','Versiones y respaldos');details.append(summary);
+ const companyCard=root.querySelector('[data-a="cfg"]')?.closest('.card')||root.querySelector('.backup-actions')?.closest('.card');
+ const actions=companyCard?.querySelector('.backup-actions');
+ if(actions){
+  const cfg=actions.querySelector('[data-a="cfg"]');if(cfg)companyCard.insertBefore(cfg,actions);
+  backup.append(actions);
+  for(const selector of ['#rf','#export-status']){const node=companyCard.querySelector(selector);if(node)backup.append(node)}
+ }
+ const fullPdf=root.querySelector('[data-a="fullDataPdf"]')?.closest('.card');
+ if(fullPdf){backup.append(fullPdf);fullPdf.classList.remove('card')}
+ details.append(...history.childNodes);history.remove();backup.append(details);root.append(backup);
+ const priorities=['discountSettings','serviceSector','specializedChart'];
+ const heading=root.querySelector('.ph');let anchor=heading;
+ for(const action of priorities){
+  const button=root.querySelector('[data-a="'+action+'"]'),card=button?.closest('.card');if(!card)continue;
+  if(!card.querySelector('h3')){const title=document.createElement('h3');title.textContent=button.textContent;card.prepend(title)}
+  if(anchor)anchor.after(card);else root.prepend(card);anchor=card;
+ }
+ if(heading)root.prepend(heading);
+};

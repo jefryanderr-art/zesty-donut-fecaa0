@@ -14818,3 +14818,141 @@ Object.assign(UI_CATALOG, {
     "max": 200
   }
 });
+
+Object.assign(UI_CATALOG, {
+  "corrections.statusAnnulled": {
+    "original": "Anulado",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.statusCorrected": {
+    "original": "Corregido",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.statusRegistered": {
+    "original": "Registrada",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.origin": {
+    "original": "Anula y registra de nuevo desde el módulo de origen.",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.again": {
+    "original": "Registrar de nuevo",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "customers.otherName": {
+    "original": "Escribe el nombre o razón social.",
+    "group": "Ajustes y facturación",
+    "max": 200
+  },
+  "corrections.missing": {
+    "original": "El asiento no existe en esta sucursal o ya está anulado.",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.branch": {
+    "original": "Selecciona una sucursal activa; el consolidado es de consulta.",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.inverse": {
+    "original": "El contrasiento se conserva; consulta el documento original.",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.already": {
+    "original": "El asiento ya está anulado.",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.sales": {
+    "original": "Las ventas se anulan mediante nota de crédito.",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.cash": {
+    "original": "Los turnos y la caja chica se corrigen desde sus módulos.",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.ownFlow": {
+    "original": "Esta operación tiene su propio flujo de anulación.",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.typeFlow": {
+    "original": "Este tipo requiere su flujo específico de corrección.",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.closed": {
+    "original": "El período está cerrado. Solo el dueño puede reabrirlo.",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.payments": {
+    "original": "El documento tiene abonos vinculados; corrige primero los abonos.",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.bank": {
+    "original": "Des-concilia primero el movimiento; los movimientos en moneda original requieren su operación bancaria.",
+    "group": "Contabilidad y correcciones",
+    "max": 309
+  },
+  "corrections.bankClosed": {
+    "original": "El período bancario está cerrado; registra una corrección en un período posterior.",
+    "group": "Contabilidad y correcciones",
+    "max": 246
+  },
+  "corrections.fiscal": {
+    "original": "Las declaraciones presentadas usan una rectificativa; este pago pertenece al flujo de declaraciones.",
+    "group": "Contabilidad y correcciones",
+    "max": 300
+  },
+  "corrections.fifo": {
+    "original": "El inventario PEPS requiere revisión de sus capas antes de corregir.",
+    "group": "Contabilidad y correcciones",
+    "max": 204
+  },
+  "corrections.replace": {
+    "original": "Corregir y reemplazar (anula el original y registra la versión corregida)",
+    "group": "Contabilidad y correcciones",
+    "max": 219
+  },
+  "corrections.only": {
+    "original": "Solo anular (no registra uno nuevo)",
+    "group": "Contabilidad y correcciones",
+    "max": 200
+  },
+  "corrections.warning": {
+    "original": "Quedará anulado. Para volver a registrarlo usa el botón Registrar de nuevo.",
+    "group": "Contabilidad y correcciones",
+    "max": 225
+  },
+  "customers.otherCash": {
+    "original": "Otro solo permite contado.",
+    "group": "Ajustes y facturación",
+    "max": 200
+  },
+  "settings.more": {
+    "original": "Ver más",
+    "group": "Ajustes y facturación",
+    "max": 200
+  },
+  "settings.backups": {
+    "original": "Versiones y respaldos",
+    "group": "Ajustes y facturación",
+    "max": 200
+  },
+  "customers.other": {
+    "original": "Otro (escribir nombre)",
+    "group": "Ajustes y facturación",
+    "max": 200
+  }
+});

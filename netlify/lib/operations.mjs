@@ -399,6 +399,7 @@ async function makeSale(data, access, session, body, client, companyId, trustedS
     cashTender={receivedCents,changeCents};
   }
   const customer = data.customers.find(record => record.id === body.customerId);
+  if(body.manualCustomer===true)requireValue(!body.customerId&&text(body.party)&&!body.payments?.some(p=>p.method==='credito'),'Otro requiere un nombre y solo permite contado.');
   if (body.customerId) requireValue(customer && customer.status === 'activo', 'Selecciona un cliente activo.');
   const credit = payments.find(payment => payment.method === 'credito')?.amount || 0;
   const paymentTerms=credit?paymentTermsSnapshot(data,customer?.id,date):null;
@@ -683,7 +684,7 @@ export async function runOperation(companyId, session, body) {
     accessError('La ampliación de tesorería no está habilitada.',503);
   });
   const addedKeys = [];
-  if((COMMERCE_OPS.includes(body.operation)||DELIVERY_OPS.includes(body.operation)||BAKERY_OPS.includes(body.operation)||FOOD_OPS.includes(body.operation)||BENEFIT_OPS.includes(body.operation)||body.operation==='completeProfile'||WORKFLOW_OPS.includes(body.operation)||PERSONNEL_OPS.includes(body.operation)||CERTIFICATE_OPS.includes(body.operation)||CLIENT_OPS.includes(body.operation)||FISCAL_OPS.includes(body.operation)||INVENTORY_OPS.includes(body.operation)||ANALYSIS_OPS.includes(body.operation)||BUDGET_OPS.includes(body.operation)||TREASURY_OPS.includes(body.operation)||BANK_OPS.includes(body.operation)||RECURRING_OPS.includes(body.operation)||BUSINESS_OPS.includes(body.operation)||['correctEntry','serviceDefinition','economicSector','specializedChart','serviceAccrueCommission'].includes(body.operation))&&!body.operationId)accessError('La operación requiere un identificador único.',400);
+  if((COMMERCE_OPS.includes(body.operation)||DELIVERY_OPS.includes(body.operation)||BAKERY_OPS.includes(body.operation)||FOOD_OPS.includes(body.operation)||BENEFIT_OPS.includes(body.operation)||body.operation==='completeProfile'||WORKFLOW_OPS.includes(body.operation)||PERSONNEL_OPS.includes(body.operation)||CERTIFICATE_OPS.includes(body.operation)||CLIENT_OPS.includes(body.operation)||FISCAL_OPS.includes(body.operation)||INVENTORY_OPS.includes(body.operation)||ANALYSIS_OPS.includes(body.operation)||BUDGET_OPS.includes(body.operation)||TREASURY_OPS.includes(body.operation)||BANK_OPS.includes(body.operation)||RECURRING_OPS.includes(body.operation)||BUSINESS_OPS.includes(body.operation)||['correctEntry','registerAgain','serviceDefinition','economicSector','specializedChart','serviceAccrueCommission'].includes(body.operation))&&!body.operationId)accessError('La operación requiere un identificador único.',400);
   let output = null;
   if(body.operationId && !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.operationId)) accessError('Identificador de operación inválido.',400);
   const receipt=body.operationId?{id:body.operationId,actor:session.email+':'+(session.memberId||''),hash:createHash('sha256').update(JSON.stringify(body)).digest('hex'),resultId:()=>typeof output==='string'?output:null}:null;
@@ -995,12 +996,12 @@ export async function runOperation(companyId, session, body) {
         requireValue(date >= original.date, 'La anulación no puede ser anterior al movimiento.');
         const reversal = appendEntry(data, operationSession, { date, type: 'caja-anulacion', reversalOf: original.id, desc: 'Anulación - ' + text(body.reason), reference: text(body.reference), total: original.total, lines: original.lines.map(line => ({ a: line.a, d: line.c, c: line.d })) });
         record.reversalId = reversal.id;
-      } else if (operation === 'correctEntry' || operation === 'reverseLegacyCash') {
+      } else if (operation === 'correctEntry' || operation === 'registerAgain' || operation === 'reverseLegacyCash') {
         const original=data.entries.find(e=>e.id===body.id);
         if(original)requireModule(access,original.type==='compra'?'compras':original.type==='gasto'?'gastos':original.type==='invini'?'inventario':original.type==='fiscal-pago'?'fiscal':original.type==='abono'?(data.entries.find(e=>e.id===original.invoiceId)?.pay==='1201'?'ventas':data.entries.find(e=>e.id===original.invoiceId)?.pay==='2101'?'compras':'contabilidad'):'contabilidad');
-        const correction=correctEntry(data,access,operationSession,body,{append:appendEntry,date:dateValue});
+        const correction=correctEntry(data,access,operationSession,body,{append:appendEntry,date:dateValue,registerAgain:operation==='registerAgain'});
         output=correction.correctedId||correction.reversalId;
-        await audit(client,companyId,operationSession,'Corrección de asiento',[{area:'entries',...correction,at:new Date().toISOString()}]);
+        await audit(client,companyId,operationSession,operation==='registerAgain'?'Registrar de nuevo':'Corrección de asiento',[{area:'entries',...correction,at:new Date().toISOString()}]);
       } else if (operation === 'costCatalog') {
         requirePermission(access, 'costos');
         accountExists(data, body.account, ['gasto', 'costo']);
