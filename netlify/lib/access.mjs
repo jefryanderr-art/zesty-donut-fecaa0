@@ -10,7 +10,7 @@ import {guardServicePayroll} from './service-commission.mjs';
 import { catalog, validateProfile, initialCompanyDocument, validateCompanyDetails } from './business-profile.mjs';
 import {projectServiceProduct,projectServiceEntry} from './service-catalog.mjs';
 import { fiscalAnnualTotals } from './fiscal-projection.mjs';
-import { normalizeItemQuantity } from './accounting-engine.mjs';
+import { normalizeItemQuantity, customerCreditBalance } from './accounting-engine.mjs';
 import { requireBilling } from './billing.mjs';
 import { planLimits,internalTestApplies,internalTestEntitlement,moduleIncluded,requirePlanModule,supportGrantActive, entitlement } from './billing-rules.mjs';
 import { users, servicePlans, supportGrants, subscriptions } from '../../db/schema.ts';
@@ -137,10 +137,11 @@ export async function companyAccess(client, companyId, session, lock = false, lo
   if (member.roleId) {
     const [role] = await client.select().from(companyRoles).where(and(eq(companyRoles.id,member.roleId),eq(companyRoles.companyId,companyId)));
     if (!role) accessError('El cargo ya no está disponible. Solicita revisar tu acceso.');
-    rolePolicy = member.permissionExceptions || role.policy;
-    member = { ...member, role: role.name, permissions: roleRules.levels(rolePolicy) };
+    rolePolicy = structuredClone(member.permissionExceptions || role.policy);
+    if(roleRules.routeRoles[role.key]){const ceiling=roleRules.preset(role.key,MODULES);for(const [m,grants]of Object.entries(rolePolicy.modules||{}))for(const action of roleRules.actions)grants[action]=grants[action]===true&&ceiling.modules[m]?.[action]===true;for(const special of roleRules.specials)rolePolicy.specials[special]=rolePolicy.specials[special]===true&&ceiling.specials[special]===true;rolePolicy.ownOperations=role.key!=='route_supervisor';}
+    member = { ...member, routeRole: roleRules.routeRoles[role.key]?role.key:null, role: role.name, permissions: roleRules.levels(rolePolicy) };
   }
-  return finish({ company, owner: false, permissions: member.permissions, member, rolePolicy });
+  return finish({ company, owner: false, permissions: member.permissions, member, routeRole:member.routeRole||null, rolePolicy });
 }
 export function entryModule(entry) {
   if(entry.type==='correccion-anulacion'&&['manual','gasto','compra','abono','fiscal-pago','invini'].includes(entry.originalType))return entryModule({...entry,type:entry.originalType});
@@ -180,6 +181,8 @@ export function projectData(data, access, {includeSpaces=false}={}) {
   if(data)delete data.profileSpaces;
   const serviceEmployeeIds=new Set((data?.employees||[]).map(e=>e.id));
   if (!data) return data;
+  const routeWorker=access.routeRole&&access.routeRole!=='route_supervisor';
+  if(routeWorker)data.customers=(data.customers||[]).filter(c=>c.sellerId===access.member.id||(data.businessRecords||[]).some(r=>r.customerId===c.id&&r.assignedMemberId===access.member.id));
   if(access.owner&&!restrictedPlan(access)){
     if(Array.isArray(data.products))data.products=data.products.map(p=>p.serviceDefinition?projectServiceProduct(p,true,serviceEmployeeIds):p);
     if(Array.isArray(data.entries))data.entries=data.entries.map(e=>projectServiceEntry(e,true,serviceEmployeeIds));
@@ -189,8 +192,8 @@ export function projectData(data, access, {includeSpaces=false}={}) {
   const ownId = access.member?.id;
   const ownShiftIds = new Set((data.shifts || []).filter(shift => shift.operatorId === ownId).map(shift => shift.id));
   const ownFundIds = new Set((data.pettyFunds || []).filter(fund => fund.responsible === ownId).map(fund => fund.id));
-  const ownInvoiceIds = new Set((data.entries || []).filter(entry => entry.type === 'venta' && (entry.operatorId === ownId || ownShiftIds.has(entry.shiftId))).map(entry => entry.id));
-  const canSeeEntry = entry => operationalOnly ? (allowed(access,'facturacion') && ['venta', 'nota-credito'].includes(entry.type) && (entry.operatorId === ownId || ownShiftIds.has(entry.shiftId) || ownInvoiceIds.has(entry.invoiceId))) : visibleEntry(access, entry, data);
+  const ownInvoiceIds = new Set((data.entries || []).filter(entry => entry.type === 'venta' && (entry.operatorId === ownId || entry.routeWorkerId === ownId || ownShiftIds.has(entry.shiftId))).map(entry => entry.id));
+  const canSeeEntry = entry => operationalOnly ? (allowed(access,'facturacion') && ['venta', 'nota-credito'].includes(entry.type) && (entry.operatorId === ownId || entry.routeWorkerId === ownId || ownShiftIds.has(entry.shiftId) || ownInvoiceIds.has(entry.invoiceId))) : visibleEntry(access, entry, data);
   const visibleIds = new Set((data.entries || []).filter(canSeeEntry).map(entry => entry.id));
   const entries = (data.entries || []).filter(entry => visibleIds.has(entry.id) || (!operationalOnly && entry.invoiceId && visibleIds.has(entry.invoiceId) && visibleEntry(access,entry,data)) || (!operationalOnly && allowed(access, 'inventario') && entry.stock?.length)).map(entry => {
     if (visibleIds.has(entry.id) || (entry.invoiceId && visibleIds.has(entry.invoiceId) && visibleEntry(access,entry,data))) {
@@ -207,12 +210,13 @@ export function projectData(data, access, {includeSpaces=false}={}) {
   if (!allowed(access, 'fiscal')) cfg.fiscal = { vatRate: cfg.fiscal?.vatRate || 0 };
   const projected = { branches: access.branches, cfg, accounts: structuredClone(data.accounts || []), entries, products: [] };
   if(allowed(access,'fiscal')&&!allowed(access,'contabilidad'))projected.fiscalSummary=fiscalAnnualTotals(data);
+  projected.routeCreditSummaries=access.routeRole?(data.customers||[]).map(c=>{const balanceCents=Math.round(customerCreditBalance(c.id,data.entries||[])*100);return {customerId:c.id,balanceCents}}):[];
   projected.customers = allowed(access, 'ventas') || allowed(access, 'facturacion') ? structuredClone(data.customers || []) : [];
   if (['ventas', 'facturacion', 'compras', 'inventario', 'contabilidad', 'finanzas', 'fiscal'].some(module => allowed(access, module))) projected.products = (data.products || []).map(product => {const copy=projectServiceProduct(product,allowed(access,'personal'),serviceEmployeeIds);return operationalOnly ? { ...copy, cost: 0 } : copy});
   for (const name of OPERATION_ARRAYS) {
     const module = name === 'suppliers' ? 'proveedores' : ['costCatalog', 'costs'].includes(name) ? 'costos' : name === 'shifts' ? 'facturacion' : 'cajas';
     projected[name] = allowed(access, module) ? structuredClone(data[name] || []) : [];
-    if (name === 'shifts' && !cashAdministrator(access)) projected[name] = projected[name].filter(shift => shift.operatorId === ownId);
+    if (name === 'shifts' && !cashAdministrator(access)&&access.routeRole!=='route_supervisor') projected[name] = projected[name].filter(shift => shift.operatorId === ownId);
     if (['pettyFunds', 'pettyVouchers', 'cashCounts'].includes(name) && !cashAdministrator(access)) projected[name] = projected[name].filter(record => record.responsible === ownId || ownFundIds.has(record.fundId));
     if (name === 'cashMovements' && !cashAdministrator(access)) projected[name] = [];
     if (name === 'pettyFunds' && !cashAdministrator(access)) for (const fund of projected[name]) fund.ledgerBalance = Math.round((data.entries || []).flatMap(entry => entry.lines || []).filter(line => line.a === fund.account).reduce((sum, line) => sum + line.d - line.c, 0) * 100) / 100;
@@ -226,8 +230,8 @@ export function projectData(data, access, {includeSpaces=false}={}) {
   for(const [name,module] of Object.entries({...ADVANCED_ARRAYS,...TRADE_ARRAYS})) projected[name]=allowed(access,module)?structuredClone(data[name]||[]):[];
   if(allowed(access,'fiscal'))projected.fiscalCreditReservations=globalThis.AcontecFiscalMath.effectiveDeclarations(data).flatMap(r=>r.frozen.credits||[]).filter(c=>c.source==='iva').map(c=>({period:c.period,amountCents:c.amountCents}));
   projected.fiscalWorkflows=(data.fiscalWorkflows||[]).filter(r=>allowed(access,r.module)&&(['template','configuration'].includes(r.kind)||[...accountingPermissionModules,...new Set((data.businessRecords||[]).filter(b=>['bancos','constancias_laborales','retenciones_fiscales'].includes(b.module)).map(b=>b.module))].every(m=>allowed(access,m))));
-  projected.businessRecords=(data.businessRecords||[]).filter(row=>allowed(access,row.module)&&(row.kind!=='lodging-close'||allowed(access,'ventas')&&allowed(access,'contabilidad'))&&commerceCanRead(row,m=>allowed(access,m))&&(row.module!=='auditoria_revision'||row.kind==='settings'||(row.kind==='report'?row:(data.businessRecords||[]).find(r=>r.id===row.reportId))?.scope?.every(m=>allowed(access,m)))).map(row=>structuredClone(row));
-  for(const r of projected.businessRecords){if(r.kind==='lodging-unit')for(const t of r.tasks||[]){if(!allowed(access,'costos'))delete t.amountCents;if(!allowed(access,'compras'))delete t.supplierId;}if(!allowed(access,'contabilidad')&&!allowed(access,'finanzas'))delete r.servicePaymentPlans;if(!allowed(access,'personal'))for(const t of r.serviceTime||[])delete t.employeeId;}
+  projected.businessRecords=(data.businessRecords||[]).filter(row=>(!routeWorker||row.module==='rutas'&&(row.operatorId===ownId||row.assignedMemberId===ownId||row.kind==='route-definition'&&projected.customers.some(c=>c.routeZone===row.route)))&&allowed(access,row.module)&&(row.kind!=='lodging-close'||allowed(access,'ventas')&&allowed(access,'contabilidad'))&&(access.routeRole&&row.module==='rutas'||commerceCanRead(row,m=>allowed(access,m)))&&(row.module!=='auditoria_revision'||row.kind==='settings'||(row.kind==='report'?row:(data.businessRecords||[]).find(r=>r.id===row.reportId))?.scope?.every(m=>allowed(access,m)))).map(row=>structuredClone(row));
+  for(const r of projected.businessRecords){if(routeWorker&&r.kind==='route-definition')delete r.commissions;if(r.kind==='lodging-unit')for(const t of r.tasks||[]){if(!allowed(access,'costos'))delete t.amountCents;if(!allowed(access,'compras'))delete t.supplierId;}if(!allowed(access,'contabilidad')&&!allowed(access,'finanzas'))delete r.servicePaymentPlans;if(!allowed(access,'personal'))for(const t of r.serviceTime||[])delete t.employeeId;}
   if(!allowed(access,'produccion')||!allowed(access,'inventario'))for(const r of projected.businessRecords){delete r.eventMenu;delete r.eventIngredients;}
   projected.stockTransfers=moduleIncluded(access.billingPlan||{blockedModules:[]},'sucursales')&&allowed(access,'inventario')?structuredClone(data.stockTransfers||[]):[];
   return projected;
@@ -280,6 +284,7 @@ function validateCustomers(data) {
     if (!customer || !/^[a-z0-9-]{1,80}$/.test(customer.id || '') || ids.has(customer.id)) accessError('Cliente inválido o duplicado.', 400);
     ids.add(customer.id);
     for (const [name, maximum] of Object.entries(fields)) if (typeof customer[name] !== 'string' || customer[name].length > maximum) accessError('Ficha de cliente inválida.', 400);
+    if(customer.routeZone!==undefined&&(typeof customer.routeZone!=='string'||customer.routeZone.length>100)||customer.sellerId!==undefined&&(typeof customer.sellerId!=='string'||customer.sellerId.length>80)||customer.routeOrder!==undefined&&(!Number.isSafeInteger(customer.routeOrder)||customer.routeOrder<0||customer.routeOrder>100000)||customer.visitDays!==undefined&&(!Array.isArray(customer.visitDays)||customer.visitDays.length>7||new Set(customer.visitDays).size!==customer.visitDays.length||customer.visitDays.some(d=>!Number.isInteger(d)||d<0||d>6)))accessError('Ruta, días de visita o vendedor inválidos.',400);
     if (!customer.name.trim() || !customer.currency.trim() || !['contado', 'credito'].includes(customer.paymentType) || !['activo', 'suspendido', 'inactivo'].includes(customer.status) || (!Number.isSafeInteger(customer.creditDays) || customer.creditDays < 1 || customer.creditDays > 3650) || !Number.isFinite(customer.creditLimit) || customer.creditLimit < 0 || customer.creditLimit > 999999999999) accessError('Condiciones del cliente inválidas.', 400);
     if (customer.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email)) accessError('Correo del cliente inválido.', 400);
     if (customer.birthday !== undefined && (typeof customer.birthday !== 'string' || (customer.birthday !== '' && (!/^\d{4}-\d{2}-\d{2}$/.test(customer.birthday) || !Number.isFinite(Date.parse(customer.birthday)) || new Date(customer.birthday).toISOString().slice(0,10) !== customer.birthday || customer.birthday > new Date().toISOString().slice(0,10))))) accessError('Fecha de cumpleaños inválida.', 400);
@@ -511,6 +516,8 @@ export async function updateCompany(companyId, session, revision, mutate, action
         guardWorkflows(fullCompany.data,patch.data,action);
         guardRoleChanges(fullCompany.data, patch.data, access, action);
       }
+      const reassignedCustomers=(patch.data.customers||[]).filter(c=>c.sellerId&&c.sellerId!==(fullCompany.data?.customers||[]).find(old=>old.id===c.id)?.sellerId);
+      if(reassignedCustomers.length){const team=await client.select({id:companyMembers.id,active:companyMembers.active,key:companyRoles.key}).from(companyMembers).innerJoin(companyRoles,eq(companyRoles.id,companyMembers.roleId)).where(eq(companyMembers.companyId,companyId));if(reassignedCustomers.some(c=>!team.some(m=>m.id===c.sellerId&&m.active&&roleRules.routeRoles[m.key])))accessError('Selecciona un colaborador activo con rol en ruta.',400);}
       await syncBarcodes(client, fullCompany, patch.data);
     }
     fullCompany.data = accountingDocument(fullCompany.data);
@@ -595,6 +602,7 @@ export async function manageMember(companyId, session, body) {
     if (body.roleId) {
       const [assigned] = await client.select().from(companyRoles).where(and(eq(companyRoles.id,body.roleId),eq(companyRoles.companyId,companyId)));
       if (!assigned) accessError('Selecciona un cargo de esta empresa.',400);
+      if(roleRules.routeRoles[assigned.key]&&!username)accessError('Los trabajadores de ruta requieren usuario y contraseña.',400);
       const policy = body.permissionExceptions || assigned.policy;
       validateRolePolicy(policy,access);
       roleId = assigned.id; assignedName = assigned.name; permissionExceptions = body.permissionExceptions || null;
@@ -654,6 +662,7 @@ export function validateRolePolicy(policy, access) {
 }
 
 function guardRoleChanges(previous, next, access, operation) {
+  if(access.routeRole&&!operation.startsWith('Operación: '))accessError('Los accesos de ruta guardan desde sus operaciones protegidas.');
   if (access.owner || !access.rolePolicy || !next) return;
   const serverOperation = operation.startsWith('Operación: ');
   const previousCfg = accountingDocument(scopeBranch(previous,access))?.cfg, nextCfg = accountingDocument(next)?.cfg;
@@ -680,6 +689,8 @@ function guardRoleChanges(previous, next, access, operation) {
       if (!target) accessError('No se pudo determinar el permiso del registro.');
       if(['Operación: correctEntry','Operación: registerAgain','Operación: reverseLegacyCash'].includes(operation)&&collection==='entries'&&!old&&(row.reversalOf||row.correctionOf)&&supervisor(access))continue;
       const action=!old?'create':!row?'delete':'edit';
+      if(serverOperation&&access.routeRole&&['Operación: sale','Operación: routeDelivery'].includes(operation)&&collection==='businessRecords'&&!old&&row.module==='comisiones'&&row.kind==='ruta'&&row.saleId)continue;
+      if(serverOperation&&access.routeRole&&collection==='entries'&&!old&&((operation==='Operación: routeExpense'&&row.type==='gasto')||(['Operación: routeApproveSettlement','Operación: routeReturnApprove'].includes(operation)&&row.type==='ajuste')))continue;
       if (!allowed(access,target,true,action)) accessError('No tienes permiso para '+({create:'crear',edit:'editar',delete:'borrar'})[action]+' en '+target+'.');
     }
   }

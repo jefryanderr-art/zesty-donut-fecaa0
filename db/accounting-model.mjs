@@ -6,7 +6,7 @@ export const collections = {
   branches: { table: 'branches', text: ['name','code','address','phone'] },
   accounts: { table: 'accounts', key: 'code', text: ['name', 'tipo', 'nat', 'sub'] },
   products: { table: 'products', text: ['name', 'code', 'unit'], money: ['cost', 'price'], numeric: ['stock', 'min'] },
-  customers: { table: 'customers', text: ['name', 'taxId', 'status'], money: ['creditLimit'] },
+  customers: { table: 'customers', residual: ['routeZone','visitDays','routeOrder','sellerId'], text: ['name', 'taxId', 'status'], money: ['creditLimit'] },
   suppliers: { table: 'suppliers', text: ['name', 'taxId', 'currency'], money: ['creditLimit'] },
   employees: { table: 'employees', text: ['name', 'start', 'position'], money: ['salary'] },
   payrolls: { table: 'payrolls', text: ['employeeId', 'from', 'to', 'status', 'entryId'], money: ['base', 'overtime', 'bonus', 'commission', 'gross', 'tax', 'social', 'loan', 'net'] },
@@ -50,7 +50,7 @@ export const children = {
 export const snake = name => name.replace(/[A-Z]/g, char => '_' + char.toLowerCase());
 
 // Metadatos de declaraciones y paquetes: valores monetarios nativos, nunca flotantes.
-export const workflowCentFields=[...new Set([...Object.values(collections),...Object.values(children)].flatMap(d=>(d.money||[]).map(k=>k+'Cents'))),'contractCents','contractAdjustmentCents','expectedPriceCents','retentionCents','accruedCents','wipCents','actualCostCents','debtCents','disposableCents','requiredCents','employerSocialCents','inatecCents','revaluationCents','debitCents','creditCents','closingCents','incomeCents','expenseCents','equityCents','assetsCents','liabilitiesCents','outputCents','inputCents','creditCents','advanceCents','adjustmentCents','taxableCents','penaltyCents','interestCents','paidCents','amountCents','differenceCents'];
+export const workflowCentFields=[...new Set([...Object.values(collections),...Object.values(children)].flatMap(d=>(d.money||[]).map(k=>k+'Cents'))),'contractCents','contractAdjustmentCents','expectedPriceCents','retentionCents','accruedCents','wipCents','actualCostCents','debtCents','disposableCents','requiredCents','employerSocialCents','inatecCents','revaluationCents','debitCents','creditCents','closingCents','incomeCents','expenseCents','equityCents','assetsCents','liabilitiesCents','outputCents','inputCents','creditCents','advanceCents','adjustmentCents','taxableCents','penaltyCents','interestCents','paidCents','amountCents','differenceCents','routeCashCents','bankCents','collectionCents'];
 
 // Defaults are additive: never replace an existing value or historical catalog.
 export const initialAccounts=[['1101','Caja general','activo','D','ef'],['1102','Bancos','activo','D','ef'],['1201','Cuentas por cobrar','activo','D',''],['1301','Inventario de mercadería','activo','D',''],['1401','Mobiliario y equipo','activo','D','fijo'],['1402','Vehículos','activo','D','fijo'],['1403','Depreciación acumulada','activo','C','fijo'],

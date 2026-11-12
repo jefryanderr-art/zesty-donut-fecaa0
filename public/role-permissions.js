@@ -26,7 +26,14 @@
   function within(candidate,ceiling){
     return Object.entries(candidate.modules||{}).every(([module,grants])=>actions.every(action=>!grants[action]||permits(ceiling,module,action)))&&specials.every(key=>!candidate.specials?.[key]||ceiling.specials?.[key]===true)&&(!ceiling.ownOperations||candidate.ownOperations===true);
   }
+  const routeRoles={route_seller:'Vendedor de ruta',route_preseller:'Preventista',route_driver:'Entregador',route_supervisor:'Supervisor de ruta'};
+  function routePreset(role,modules){
+    const supervisor=role==='route_supervisor',selling=role!=='route_preseller';
+    const grants=Object.fromEntries(modules.map(m=>{const write=['rutas','ventas'].includes(m)||selling&&['facturacion','cajas'].includes(m)||supervisor&&m==='inventario';const view=write||m==='panel'||m==='inventario';return [m,{view,create:write,edit:write,delete:supervisor&&write}]}));
+    return {modules:grants,specials:{discounts:supervisor,corrections:supervisor,salesAdmin:false,cashAdmin:false,allBranches:false},ownOperations:!supervisor};
+  }
   function preset(role,modules){
+    if(routeRoles[role])return routePreset(role,modules);
     const permissions=Object.fromEntries(modules.map(module=>{
       let level='ninguno';
       if(['cajero','vendedor','supervisor'].includes(role)&&module==='facturacion')level='escritura';
@@ -39,5 +46,5 @@
     }));
     return legacyPolicy(role,permissions,modules);
   }
-  globalThis.AcontecRoles=Object.freeze({actions,specials,legacyPolicy,levels,permits,within,preset});
+  globalThis.AcontecRoles=Object.freeze({actions,specials,legacyPolicy,levels,permits,within,preset,routeRoles});
 })();

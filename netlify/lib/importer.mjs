@@ -15,7 +15,7 @@ export function importRecords(data,access,session,body,h){
    }else if(kind==='opening'){opening.push({a:string(row.cuenta,40),d:money(row.debe),c:money(row.haber)})}
    else{
     const name=string(row.nombre),taxId=string(row.ruc,80),phone=string(row.telefono,80),email=string(row.correo,254),address=string(row.direccion,1000);check(name&&(!taxId||!data[kind].some(r=>r.taxId?.toLowerCase()===taxId.toLowerCase())),'Nombre vacío o RUC repetido.');check(!email||/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),'Correo inválido.');
-    if(kind==='customers')data.customers.push({id:randomUUID(),name,taxId,phone,email,address,contact:'',seller:'',currency:data.cfg.cur||'C$',notes:'',paymentType:'contado',status:'activo',creditDays:30,creditLimit:0});
+    if(kind==='customers'){const days=String(row.dias_visita||'').split(/[|,]/).filter(Boolean).map(Number),order=Number(row.orden_ruta||0);check(days.every(d=>Number.isInteger(d)&&d>=0&&d<=6)&&new Set(days).size===days.length&&Number.isSafeInteger(order)&&order>=0&&order<=100000,'Días de visita (0 domingo a 6 sábado) u orden inválidos.');data.customers.push({id:randomUUID(),name,taxId,phone,email,address,contact:'',routeZone:string(row.ruta,100),visitDays:days,routeOrder:order,seller:string(row.vendedor,200),sellerId:'',currency:data.cfg.cur||'C$',notes:'',paymentType:'contado',status:'activo',creditDays:30,creditLimit:0});}
     else data.suppliers.push(validateSupplier(data,{name,taxId,phone,email,address,contact:'',seller:'',currency:data.cfg.cur||'C$',notes:'',paymentType:'contado',active:true,creditDays:30,creditLimit:0}));
    }
   }catch(error){const message='Fila '+(index+2)+': '+(error.publicMessage||error.message);check(false,message)}

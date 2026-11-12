@@ -3,13 +3,13 @@ import {db} from '../../db/index.ts';
 import {companyRoles,companyMembers,sessions} from '../../db/schema.ts';
 import {companyAccess,allowed,accessError,audit,MODULES,validateRolePolicy,safeMember} from './access.mjs';
 import {roleRules} from './policies.mjs';
-const defaults=['cajero','vendedor','supervisor','contador','observador'];
+const defaults=['cajero','vendedor','supervisor','contador','observador',...Object.keys(roleRules.routeRoles)];
 export const requireAccessAdmin=access=>{if(access.support||!allowed(access,'accesibilidad',true))accessError('Solo el dueño o un administrador autorizado administra los accesos.');};
 async function roleList(client,companyId){
   // The caller locks the company, serializing initial seed and all role/member edits.
   let roles=await client.select().from(companyRoles).where(eq(companyRoles.companyId,companyId));
   for(const key of defaults)if(!roles.some(role=>role.key===key)){
-    const [role]=await client.insert(companyRoles).values({companyId,key,name:roles.some(r=>r.name===key)?key+' (base)':key,description:'Cargo inicial. Los accesos previos conservan sus excepciones individuales.',policy:roleRules.preset(key,MODULES)}).returning();roles.push(role);
+    const [role]=await client.insert(companyRoles).values({companyId,key,name:roles.some(r=>r.name===(roleRules.routeRoles[key]||key))?(roleRules.routeRoles[key]||key)+' (base)':roleRules.routeRoles[key]||key,description:'Cargo inicial. Los accesos previos conservan sus excepciones individuales.',policy:roleRules.preset(key,MODULES)}).returning();roles.push(role);
   }
   return roles;
 }
@@ -21,7 +21,7 @@ export async function listCompanyRoles(companyId,session){
     return {owner:access.company.ownerEmail,roles,modules:MODULES,members:members.map(member=>{
       const role=roles.find(r=>r.id===member.roleId);
       const effectivePolicy=role?member.permissionExceptions||role.policy:roleRules.legacyPolicy(member.role,member.permissions,MODULES);
-      return {...safeMember(member),role:role?.name||member.role,effectivePolicy,hasExceptions:!member.roleId||!!member.permissionExceptions};
+      return {...safeMember(member),role:role?.name||member.role,routeRole:roleRules.routeRoles[role?.key]?role.key:null,effectivePolicy,hasExceptions:!member.roleId||!!member.permissionExceptions};
     })};
   });
 }
@@ -41,7 +41,7 @@ export async function manageCompanyRole(companyId,session,body,method){
       for(const m of assigned)validateRolePolicy(m.roleId?m.permissionExceptions||previous.policy:roleRules.legacyPolicy(m.role,m.permissions,MODULES),access);
     }
     if(method==='DELETE'){
-      if(previous.key)accessError('Los cinco cargos iniciales se conservan; puedes editar sus permisos.');
+      if(previous.key)accessError('Los cargos iniciales se conservan; puedes editar sus permisos.');
       const target=roles.find(r=>r.id===body.reassignRoleId&&r.id!==previous.id);
       if(assigned.length&&!target)accessError('Reasigna los accesos a otro cargo antes de borrar.',400);
       if(target)validateRolePolicy(target.policy,access);

@@ -7,14 +7,19 @@ export function commerceSupplierNetCents(unitCents,discount){const bps=Math.roun
 export function commercePromotion(p,q,date){if(!p||p.from>date||p.to<date||q<p.minimum)return 0;if(p.mode==='2x1'){if(!Number.isInteger(q))return 0;return Math.floor(q/2)/q*100}return p.percent}
 export function commerceReplenishment({stock,min,max,pending=0}){return stock+pending<min?commerceQuantity(Math.max(0,Math.round((max-stock-pending)*1000)/1000)):0}
 export function commerceABC(products,entries,from,to){const amounts=new Map(),quantities=new Map(),last=new Map();for(const e of entries){if(!['venta','nota-credito'].includes(e.type)||e.date>to)continue;for(const i of e.items||[]){const sign=e.type==='venta'?1:-1;if(e.type==='venta'&&(!last.get(i.p)||last.get(i.p)<e.date))last.set(i.p,e.date);if(e.date<from)continue;amounts.set(i.p,(amounts.get(i.p)||0)+sign*inventoryLineCostCents(i.q,i.u));quantities.set(i.p,(quantities.get(i.p)||0)+sign*i.q)}}const rows=products.filter(p=>p.kind!=='service').map(p=>({productId:p.id,name:p.name,amountCents:Math.max(0,amounts.get(p.id)||0),q:Math.round((quantities.get(p.id)||0)*1000)/1000,stock:p.stock,last:last.get(p.id)||'',idleDays:last.get(p.id)?Math.floor((Date.parse(to)-Date.parse(last.get(p.id)))/86400000):null})).sort((a,b)=>b.amountCents-a.amountCents);const total=rows.reduce((n,r)=>n+r.amountCents,0);let cumulative=0;return rows.map(r=>{const share=total?cumulative/total:1;cumulative+=r.amountCents;return {...r,abc:!r.amountCents?'C':share<0.8?'A':share<0.95?'B':'C'}})}
-export function commerceRouteCashRows(records,entries,routeId,date){
+export function commerceRouteCashRows(records,entries,routeId,date,workerId=''){
  const route=records.find(r=>r.id===routeId&&r.module==='rutas'),ids=new Set([...(route?.billed||[]).map(b=>b.entryId),...records.filter(r=>r.kind==='commerce-load'&&r.routeId===routeId).flatMap(r=>r.sales||[])]);
+ if(route?.route)for(const e of entries.filter(e=>e.type==='venta'&&e.route===route.route))ids.add(e.id);
+ const used=new Set(records.filter(r=>r.kind==='commerce-route-close'||r.kind==='route-settlement'&&r.status==='Aprobada').flatMap(r=>r.entryIds||[]));
  const linked=new Map();for(const id of ids)for(const e of invoiceLinkedEntries(entries,id)){if(e.date!==date)continue;const old=linked.get(e.id);if(!old)linked.set(e.id,{...e,lines:[...(e.lines||[])]});else if(e.allocationJournal)old.lines.push(...(e.lines||[]));}
- return [...linked.values()].flatMap(e=>{
+ if(workerId)for(const e of entries.filter(e=>e.routeMovement===true&&e.operatorId===workerId&&e.date===date))linked.set(e.id,e);
+ return [...linked.values()].filter(e=>(!workerId||e.operatorId===workerId||e.routeWorkerId===workerId||e.originalOperatorId===workerId)&&!used.has(e.id)&&!used.has(e.id+'@'+routeId)).flatMap(e=>{
   let amountCents=0,bankCents=0;
   if(['venta','nota-credito'].includes(e.type)){const sign=e.type==='nota-credito'?-1:1;amountCents=sign*(e.payments||[]).filter(p=>p.method==='efectivo').reduce((s,p)=>s+moneyCents(p.amount),0);bankCents=sign*(e.payments||[]).filter(p=>['transferencia','tarjeta'].includes(p.method)).reduce((s,p)=>s+moneyCents(p.amount),0);}
   else if(e.lines?.some(l=>l.a==='1201'&&l.c>0)){amountCents=e.lines.filter(l=>['1101','1104'].includes(l.a)).reduce((s,l)=>s+moneyCents(l.d)-moneyCents(l.c),0);bankCents=e.lines.filter(l=>l.a==='1102').reduce((s,l)=>s+moneyCents(l.d)-moneyCents(l.c),0);}
-  return amountCents||bankCents?[{entryId:e.allocationJournal?e.id+'@'+routeId:e.id,journalId:e.id,reference:e.reference||e.desc,date,amountCents,bankCents}]:[];
+  else if(e.routeMovement===true&&e.type==='gasto')amountCents=(e.lines||[]).filter(l=>l.a==='1104').reduce((n,l)=>n+moneyCents(l.d)-moneyCents(l.c),0);
+  const creditCents=['venta','nota-credito'].includes(e.type)?(e.payments||[]).filter(p=>p.method==='credito').reduce((n,p)=>n+moneyCents(p.amount)*(e.type==='nota-credito'?-1:1),0):0;
+  return amountCents||bankCents||creditCents?[{entryId:e.allocationJournal?e.id+'@'+routeId:e.id,journalId:e.id,reference:e.reference||e.desc,date,amountCents,bankCents,...(creditCents?{creditCents}:{}),...(e.type==='abono'?{collectionCents:amountCents+bankCents}:{}),...(e.type==='gasto'?{expenseCents:-amountCents}:{})}]:[];
  });
 }
 

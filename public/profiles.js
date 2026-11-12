@@ -45,7 +45,7 @@
   cartera:{letter:'H',name:'Cartera, préstamos y empeño',group:'Finanzas',flow:'Configura condiciones y cuentas, desembolsa y confirma cada cobro.'},
   contratos:{letter:'I',name:'Contratos y cobros recurrentes',group:'Servicio',flow:'Configura períodos y genera cada cobro con confirmación.'},
   reservas:{letter:'J',name:'Reservas y ocupación',group:'Servicio',flow:'Consulta disponibilidad, reserva y confirma entrada y salida.'},
-  rutas:{letter:'K',name:'Preventa y rutas',group:'Ventas',flow:'Prepara pedidos por vendedor y ruta; confirma entrega y factura.'},
+  rutas:{letter:'K',name:'Rutas y preventa',group:'Ventas',flow:'Prepara pedidos por vendedor y ruta; confirma entrega y factura.'},
   despacho:{letter:'L',name:'Despacho de pedidos',group:'Ventas',flow:'Recibe, prepara y entrega pedidos con tickets correlativos.'},
   comisiones:{letter:'M',name:'Comisiones por servicio',group:'Personal',flow:'Calcula una comisión sobre una venta confirmada y liquídala una sola vez.'},
   aportes:{letter:'N',name:'Donaciones, cuotas y aportes',group:'Finanzas',flow:'Identifica al socio o donante y el fondo; confirma el recibo y su asiento.'},
@@ -55,10 +55,10 @@
  };
  const all=Object.keys(capabilities), common=['panel','facturacion','ventas','clientes','compras','gastos','productos','cobrar','pagar','ajustes','accesibilidad','auditoria'];
  const rows=[
- ['comercio','Comercio general','Comercio',[],[],'cliente','producto','factura','Venta y facturación actuales.','Mercadería','unidad','Artículo de ejemplo'],
- ['minorista','Tienda minorista, pulpería y supermercado','Comercio',['medidas','documentos_venta'],['rutas'],'cliente','artículo','factura','Selecciona artículos o ingresa la medida y confirma el pago.','Abarrotes','kg','Producto a granel'],
+ ['comercio','Comercio general','Comercio',['rutas'],[],'cliente','producto','factura','Venta y facturación actuales.','Mercadería','unidad','Artículo de ejemplo'],
+ ['minorista','Tienda minorista, pulpería y supermercado','Comercio',['medidas','documentos_venta','rutas'],[],'cliente','artículo','factura','Selecciona artículos o ingresa la medida y confirma el pago.','Abarrotes','kg','Producto a granel'],
  ['ropa','Ropa, calzado y accesorios','Comercio',['variantes','documentos_venta'],[],'cliente','artículo','factura','Elige talla y color antes de facturar.','Prendas','unidad','Prenda de ejemplo'],
- ['ferreteria','Ferretería, materiales y repuestos','Comercio',['documentos_venta','variantes'],['rutas'],'cliente','artículo','factura','Prepara el pedido y confirma cantidades y medidas.','Materiales','metro','Material de ejemplo'],
+ ['ferreteria','Ferretería, materiales y repuestos','Comercio',['documentos_venta','variantes','rutas'],[],'cliente','artículo','factura','Prepara el pedido y confirma cantidades y medidas.','Materiales','metro','Material de ejemplo'],
  ['farmacia','Farmacia y productos naturales','Comercio',['lotes','variantes','documentos_venta'],[],'cliente','producto','factura','Comprueba lote y vencimiento antes de vender.','Productos naturales','unidad','Producto de ejemplo'],
  ['tecnologia','Electrónica, celulares y tecnología','Comercio',['variantes','proyectos','documentos_venta'],[],'cliente','artículo','orden','Identifica serie y garantía; recibe reparaciones en una orden.','Equipos','unidad','Equipo de ejemplo'],
  ['restaurante','Restaurante, bar y cafetería','Alimentos',['cuentas_abiertas','despacho','produccion','comisiones','documentos_venta'],[],'comensal','platillo','cuenta','Abre la mesa, acumula consumos, prepara y cobra.','Platillos','porción','Platillo de ejemplo'],
@@ -83,7 +83,7 @@
  ['organizacion','Organizaciones, iglesias y asociaciones','Organizaciones',['aportes','contratos'],[],'donante','aporte','recibo','Identifica al socio, donante y fondo antes de emitir el recibo.','Aportes','cuota','Cuota de ejemplo'],
  ['software','Software, tecnología y agencias','Servicios',['proyectos','contratos','documentos_venta'],['agenda','comisiones'],'cliente','servicio','factura','Cotiza desarrollo, licencias o soporte y confirma la factura de cada entrega o período.','Servicios tecnológicos','hora','Servicio de soporte'],
  ['recurrentes','Suscripciones y servicios recurrentes','Servicios',['contratos','documentos_venta'],['agenda','reservas'],'suscriptor','servicio','factura','Configura el contrato de mantenimiento o membresía y confirma cada factura del período.','Servicios recurrentes','mes','Mantenimiento mensual'],
- ['comercio_electronico','Comercio electrónico y venta en línea','Comercio',['documentos_venta','despacho'],['variantes','rutas'],'cliente','producto','pedido','Prepara el pedido en línea, confirma la factura y registra el despacho.','Catálogo en línea','unidad','Artículo de venta en línea'],
+ ['comercio_electronico','Comercio electrónico y venta en línea','Comercio',['documentos_venta','despacho','rutas'],['variantes'],'cliente','producto','pedido','Prepara el pedido en línea, confirma la factura y registra el despacho.','Catálogo en línea','unidad','Artículo de venta en línea'],
  ['freelance','Freelance y consultoría individual','Servicios',['proyectos','documentos_venta'],['agenda','contratos'],'cliente','servicio','factura','Cotiza horas o entregables y confirma la factura del trabajo realizado.','Consultoría','hora','Sesión de consultoría'],
  ['inmobiliaria','Inmobiliaria e intermediación','Servicios',['proyectos','documentos_venta','comisiones'],['contratos','agenda'],'cliente','servicio','factura','Registra la intermediación, confirma los honorarios y revisa la comisión vinculada.','Intermediación','servicio','Servicio de intermediación'],
  ['seguros','Seguros y corretaje','Servicios',['contratos','documentos_venta','comisiones'],['agenda','proyectos'],'cliente','servicio','factura','Registra el servicio de corretaje, confirma sus honorarios y revisa la comisión.','Corretaje','servicio','Servicio de corretaje'],

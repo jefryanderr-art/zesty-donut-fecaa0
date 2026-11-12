@@ -671,3 +671,7 @@ form[data-k=compra] .purchase-product-name,form[data-k=editcompra] .purchase-pro
  .invoice-products.keyboard-open .product-selected{flex:0 0 28px}
  .invoice-products.keyboard-open.selected-expanded .product-selected{flex:1 0 90px}
 }
+
+/* Route workspace uses the existing typography and palette. */
+.route-workspace{padding-bottom:90px}.route-customer{padding:14px 0;border-bottom:1px solid var(--line)}.route-customer h4{margin:0 0 8px}.route-customer .accounting-actions{flex-wrap:wrap}.route-bottom{position:sticky;bottom:0;display:flex;gap:4px;padding:8px 4px calc(8px + env(safe-area-inset-bottom));background:var(--card,#fff);border-top:1px solid var(--line);z-index:12}.route-bottom button{flex:1;min-height:44px;font:inherit;border:0;border-radius:8px;background:transparent;color:inherit}.route-bottom button[aria-current=page]{font-weight:700;text-decoration:underline}.route-signature{width:100%;max-width:600px;height:160px;border:1px solid var(--line);border-radius:8px;touch-action:none}.route-workspace .btn{min-height:44px}.route-workspace svg[aria-label="Firma de entrega"]{max-width:600px;width:100%}@media(max-width:600px){.route-bottom{bottom:calc(60px + env(safe-area-inset-bottom));font-size:12px}.route-customer .accounting-actions>*{min-height:44px}.route-workspace{padding-bottom:120px}}
+.route-session .bnav{display:none}@media(max-width:600px){.route-session .route-bottom{position:fixed;inset:auto 0 0;bottom:0;background:var(--card)}}

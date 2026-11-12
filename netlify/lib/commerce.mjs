@@ -1,3 +1,4 @@
+import {routeReserved,routeRecordAllowed,routeManager} from './routes.mjs';
 import {operationalType} from './business-profile.mjs';
 import {randomUUID} from 'node:crypto';
 import {commerceQuantity as qty,commerceUnitCents,commerceMeasure,commerceReplenishment,commerceABC,commerceSupplierNetCents,commerceRouteCashRows} from '../../public/commerce-math.mjs';
@@ -15,7 +16,7 @@ export function commercePrice(data,p,customerId,presentation='base'){
  if(unit==null)return p.price;const factor=channel?1:c.presentations.find(s=>s.code===presentation).factor;return commerceUnitCents(unit,factor)/100;
 }
 export function commerceReserved(data,pid,exceptId=''){
- return (data.businessRecords||[]).filter(r=>r.id!==exceptId&&((r.kind==='commerce-order'&&r.reserved===true&&!r.entryId&&r.status!=='Cancelado')||(r.kind==='commerce-load'&&!r.closed))).flatMap(r=>r.kind==='commerce-load'?r.remaining||[]:r.items||[]).filter(i=>i.p===pid).reduce((n,i)=>n+i.q,0);
+ return routeReserved(data,pid,exceptId)+(data.businessRecords||[]).filter(r=>r.id!==exceptId&&((r.kind==='commerce-order'&&r.reserved===true&&!r.entryId&&r.status!=='Cancelado')||(r.kind==='commerce-load'&&!r.closed))).flatMap(r=>r.kind==='commerce-load'?r.remaining||[]:r.items||[]).filter(i=>i.p===pid).reduce((n,i)=>n+i.q,0);
 }
 export function commerceCheckStock(data,body,check,exceptId=''){
  const demand=new Map();for(const i of body.items||[])demand.set(i.p,(demand.get(i.p)||0)+i.q);
@@ -38,18 +39,19 @@ export async function commerceOperation(data,access,session,b,ctx){
  const supplier=id=>{const s=data.suppliers.find(s=>s.id===id&&s.active!==false);check(s,'Proveedor inexistente o inactivo.');return s};
  const own=()=>check(access.owner,'Solo el dueño configura estas condiciones.');
  const cents=n=>{check(Number.isSafeInteger(n)&&n>=0&&n<=99999999900,'Usa centavos enteros válidos.');return n};
- const get=(kind,id=b.id)=>{const r=rows.find(r=>r.id===id&&r.kind===kind&&r.branchId===access.branchId);check(r,'Registro inexistente en esta sucursal.');ctx.permit(access,r.module,true);return r};
+ const get=(kind,id=b.id)=>{const r=rows.find(r=>r.id===id&&r.kind===kind&&r.branchId===access.branchId);check(r&&routeRecordAllowed(access,r),'Registro inexistente en esta sucursal o asignación.');ctx.permit(access,r.module,true);return r};
  const put=(module,kind,match,values)=>{const r=rows.find(r=>r.kind===kind&&match(r));if(r){Object.assign(r,values);r.events.push(event);return r.id}return add(module,kind,values).id};
  if(b.operation==='commerceRouteSettings'){
-  check(operationalType(access.company)==='distribuidora','Configuración exclusiva de distribuidora.');permit('rutas');permit('personal');permit('comisiones');own();const route=rows.find(r=>r.module==='rutas'&&r.id===b.routeId&&!commerceRecord(r));check(route&&!route.entryId&&data.employees.some(e=>e.id===b.employeeId&&e.active!==false),'Selecciona ruta sin facturar y vendedor activo.');const commissionRate=Number(b.commissionRate);check(Number.isFinite(commissionRate)&&commissionRate>=0&&commissionRate<=100,'Comisión inválida.');route.employeeId=b.employeeId;route.seller=data.employees.find(e=>e.id===b.employeeId).name;route.commissionRate=commissionRate;route.route=txt(b.zone,100);route.events.push(event);
+permit('rutas');permit('personal');permit('comisiones');own();const route=rows.find(r=>r.module==='rutas'&&r.id===b.routeId&&!commerceRecord(r));check(route&&!route.entryId&&data.employees.some(e=>e.id===b.employeeId&&e.active!==false),'Selecciona ruta sin facturar y vendedor activo.');const commissionRate=Number(b.commissionRate);check(Number.isFinite(commissionRate)&&commissionRate>=0&&commissionRate<=100,'Comisión inválida.');route.employeeId=b.employeeId;route.seller=data.employees.find(e=>e.id===b.employeeId).name;route.commissionRate=commissionRate;route.route=txt(b.zone,100);route.events.push(event);
   return put('rutas','commerce-route-settings',r=>r.routeId===route.id&&r.date===date,{name:route.name,routeId:route.id,employeeId:b.employeeId,zone:txt(b.zone,100),targetCents:cents(b.targetCents)});
  }
  if(b.operation==='commerceLoad'){
-  check(operationalType(access.company)==='distribuidora','La carga corresponde a distribuidora.');permit('rutas');permit('inventario');const route=rows.find(r=>r.module==='rutas'&&r.id===b.routeId&&!commerceRecord(r));check(route&&Array.isArray(b.items)&&b.items.length&&b.items.length<=200,'Selecciona ruta y productos.');const seen=new Set(),items=b.items.map(i=>{const p=product(i.p),q=qty(i.q);check(p.kind!=='service'&&q>0&&!seen.has(p.id),'Cantidad o producto repetido en carga.');seen.add(p.id);return {p:p.id,q,u:0}});commerceCheckStock(data,{items},check);
-  return add('rutas','commerce-load',{name:'Carga · '+route.name,status:'Preparada',routeId:route.id,items,remaining:structuredClone(items),sales:[],closed:false}).id;
+permit('rutas');check(routeManager(access)||!access.routeRole,'Solo supervisor o dueño prepara cargas.');if(!access.routeRole)permit('inventario');const route=rows.find(r=>r.module==='rutas'&&r.id===b.routeId&&(!commerceRecord(r)||r.kind==='route-definition'));check(route&&Array.isArray(b.items)&&b.items.length&&b.items.length<=200,'Selecciona ruta y productos.');const seen=new Set(),items=b.items.map(i=>{const p=product(i.p),q=qty(i.q);check(p.kind!=='service'&&q>0&&!seen.has(p.id),'Cantidad o producto repetido en carga.');seen.add(p.id);return {p:p.id,q,u:0}});commerceCheckStock(data,{items},check);
+  check(!b.assignedMemberId||ctx.team?.some(m=>m.id===b.assignedMemberId&&m.active&&['route_seller','route_driver'].includes(m.routeRole)&&m.branchIds.includes(access.branchId)),'Selecciona un vendedor o entregador de esta sucursal.');check(['Venta directa','Entregas de preventa','Mixta'].includes(b.loadType||'Venta directa'),'Tipo de salida inválido.');
+  return add('rutas','commerce-load',{operatorId:access.member?.id||session.email,assignedMemberId:b.assignedMemberId||'',route:route.route||route.name,handedBy:session.member?.name||session.email,receivedBy:ctx.team?.find(m=>m.id===b.assignedMemberId)?.name||'',loadType:b.loadType||'Venta directa',reloads:[],name:'Carga · '+route.name,status:'Preparada',routeId:route.id,items,remaining:structuredClone(items),sales:[],closed:false}).id;
  }
  if(b.operation==='commerceLoadReturn'){
-  permit('rutas');permit('inventario');const load=get('commerce-load');check(!load.closed&&txt(b.reason),'La carga ya fue cerrada o falta motivo.');load.returnedItems=structuredClone(load.remaining);load.remaining=[];load.closed=true;load.status='Entregada';load.events.push(event);return load.id;
+  permit('rutas');check(!access.routeRole,'Usa la liquidación de tu camión.');permit('inventario');const load=get('commerce-load');check(!load.closed&&txt(b.reason),'La carga ya fue cerrada o falta motivo.');load.returnedItems=structuredClone(load.remaining);load.remaining=[];load.closed=true;load.status='Entregada';load.events.push(event);return load.id;
  }
  if(b.operation==='commerceExpiredReturn'){
   check(operationalType(access.company)==='farmacia','Esta devolución corresponde al perfil farmacia.');permit('compras');permit('inventario');permit('lotes');permit('documentos_venta');permit('contabilidad');permit('cajas');
@@ -135,7 +137,7 @@ export async function commerceOperation(data,access,session,b,ctx){
  if(b.operation==='commerceRouteClose'){
   permit('rutas');permit('contabilidad');permit('cajas');const r=rows.find(r=>r.id===b.id&&r.module==='rutas'&&!commerceRecord(r));check(r,'Ruta inexistente.');check(!rows.some(x=>x.kind==='commerce-route-close'&&x.routeId===r.id&&x.date===date),'La ruta ya tiene cuadre de esta fecha.');
   const available=commerceRouteCashRows(rows,data.entries,r.id,date),ids=b.entryIds||[];check(Array.isArray(ids)&&ids.length<=1000&&new Set(ids).size===ids.length&&available.length===ids.length&&available.every(e=>ids.includes(e.entryId)),'Incluye todos los cobros y devoluciones de la ruta y fecha.');check(!rows.some(x=>x.kind==='commerce-route-close'&&x.entryIds.some(id=>ids.includes(id))),'Un movimiento ya está incluido en otro cuadre.');
-  const amountCents=available.reduce((n,e)=>n+e.amountCents,0),bankCents=available.reduce((n,e)=>n+e.bankCents,0),counted=cents(b.amountCents);check(txt(b.reason),'Explica el resultado del cuadre.');return add('rutas','commerce-route-close',{name:'Cuadre · '+r.name,status:'Preparada',routeId:r.id,entryIds:ids,cashRows:available,amountCents,bankCents,receivedCents:counted,differenceCents:counted-amountCents}).id;
+  const amountCents=available.reduce((n,e)=>n+e.amountCents,0),bankCents=available.reduce((n,e)=>n+e.bankCents,0),counted=cents(b.amountCents);check(counted===amountCents||routeManager(access),'Las diferencias requieren aprobación del supervisor o dueño.');check(txt(b.reason),'Explica el resultado del cuadre.');return add('rutas','commerce-route-close',{name:'Cuadre · '+r.name,status:'Preparada',routeId:r.id,entryIds:ids,cashRows:available,amountCents,bankCents,receivedCents:counted,differenceCents:counted-amountCents}).id;
  }
  if(b.operation==='commerceClaim'){
   permit('variantes');permit('proveedores');const serial=rows.find(r=>r.id===b.serialId&&r.module==='variantes'&&r.serial);check(serial&&txt(b.reason),'Selecciona serie y motivo.');const s=supplier(b.supplierId);return add('variantes','commerce-claim',{name:'Reclamo · '+serial.serial,status:'Disponible',serialId:serial.id,supplierId:s.id,note:txt(b.reason,1000)}).id;
@@ -167,10 +169,10 @@ export function commerceReservationsValid(data,check){
  for(const p of data.products||[])if(p.kind!=='service')check(data.cfg?.allowNegativeValues===true || commerceReserved(data,p.id)<=p.stock+1e-9,'La operación invade existencias reservadas por pedidos pagados.');
 }
 
-export function commerceLoadSale(data,body,entry,check,permit){
+export function commerceLoadSale(data,body,entry,check,permit,access){
  if(!body.commerceLoadId)return;
  const records=data.businessRecords||[],load=records.find(r=>r.kind==='commerce-load'&&r.id===body.commerceLoadId&&!r.closed);check(load,'Carga no disponible.');permit('rutas');const route=records.find(r=>r.module==='rutas'&&r.id===load.routeId);check(route,'Ruta inexistente.');
  for(const i of entry.items.filter(i=>!i.service)){const remaining=load.remaining.find(r=>r.p===i.p);check(remaining&&remaining.q>=i.q,'La venta supera la cantidad pendiente de la carga.');remaining.q=qty(remaining.q-i.q);}
  load.sales.push(entry.id);entry.commerceLoadId=load.id;load.events.push({date:entry.date,action:'Venta de carga',entryId:entry.id});
- if(route.commissionRate){permit('comisiones');permit('personal');check(data.employees.some(e=>e.id===route.employeeId&&e.active!==false),'Vendedor inactivo.');records.push({id:randomUUID(),module:'comisiones',kind:'ruta',name:txt('Comisión · '+entry.reference),date:entry.date,status:'Pendiente',branchId:load.branchId,employeeId:route.employeeId,saleId:entry.id,rate:route.commissionRate,paid:0,events:[]});}
+ if(route.commissionRate){if(!access?.routeRole){permit('comisiones');permit('personal');}check(data.employees.some(e=>e.id===route.employeeId&&e.active!==false),'Vendedor inactivo.');records.push({id:randomUUID(),module:'comisiones',kind:'ruta',name:txt('Comisión · '+entry.reference),date:entry.date,status:'Pendiente',branchId:load.branchId,employeeId:route.employeeId,saleId:entry.id,rate:route.commissionRate,paid:0,events:[]});}
 }

@@ -9,9 +9,9 @@ const check=(ok,message)=>{if(!ok)throw new Error(message)};
 const context={check,permit:(a,m)=>check(!a.blocked?.includes(m),'Bloqueado: '+m),amount:v=>{moneyCents(Number(v));return Number(v)},date:v=>v,entry:(data,s,record)=>{const e={id:'entry-'+data.entries.length,...record};data.entries.push(e);return e},financialCash:()=>{}};
 const access={owner:true,branchId:'principal',company:{businessType:'comercio',onboardingDone:true,data:{businessRecords:[],products:[]}}};
 const state=()=>({businessRecords:[],entries:[],products:[],accounts:[],customers:[],employees:[],cfg:{}});
-test('33 perfiles únicos y todas las capacidades bloqueables sin cambiar comercio',()=>{
+test('33 perfiles únicos y todas las capacidades bloqueables con rutas disponibles en comercio',()=>{
  assert.equal(catalog.profiles.length,33);assert.equal(new Set(catalog.profiles.map(p=>p.id)).size,33);
- assert.equal(catalog.get('comercio').modules,null);assert.deepEqual(catalog.get('comercio').capabilities,[]);
+ assert.equal(catalog.get('comercio').modules,null);assert.deepEqual(catalog.get('comercio').capabilities,['rutas']);
  for(const id of catalog.all){assert.ok(BLOCKABLE_MODULES.includes(id));assert.throws(()=>requirePlanModule({blockedModules:[id]},id));}
  assert.throws(()=>validateProfile('inventado'));assert.throws(()=>validateProfile('comercio',{labels:{customer:' '}}));
 });

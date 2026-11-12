@@ -1,3 +1,4 @@
+import {ROUTE_OPS,routeOperation,routeOperationGuard,routeSaleGuard,routeCustomerAllowed,routeManager,routeCommission} from './routes.mjs';
 import {guardCash} from './cash-guard.mjs';
 export {guardCash} from './cash-guard.mjs';
 import {correctEntry} from './entry-corrections.mjs';
@@ -55,10 +56,10 @@ import { retainedCompanyData } from './accounting-storage.mjs';
 import { randomUUID, createHash } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
 import { and, eq } from 'drizzle-orm';
-import { companyMembers, siteContent, users } from '../../db/schema.ts';
+import { companyRoles, companyMembers, siteContent, users } from '../../db/schema.ts';
 import { db } from '../../db/index.ts';
 import { allData, companyAccess, projectData, allowed, requireModule, equal, accessError, updateCompany, actorName, audit } from './access.mjs';
-import { OPERATION_ARRAYS, operationalRole, salesAdministrator, supervisor, cashAdministrator, operatorId, receiptRecords } from './policies.mjs';
+import { OPERATION_ARRAYS, operationalRole, salesAdministrator, supervisor, cashAdministrator, roleRules, operatorId, receiptRecords } from './policies.mjs';
 
 const round = value => Math.round((value + Number.EPSILON) * 100) / 100;
 const cents = value => Math.round(value * 100);
@@ -188,12 +189,13 @@ function currentShift(data, access, session, id) {
 const shiftPayments = (data, shift) => {
   const result = { efectivo: 0, tarjeta: 0, transferencia: 0, credito: 0, vale: 0 };
   for (const entry of data.entries.filter(record => record.shiftId === shift.id && ['venta', 'nota-credito'].includes(record.type))) for (const payment of entry.payments || []) result[payment.method] = round(result[payment.method] + payment.amount * (entry.type === 'nota-credito' ? -1 : 1));
+  for(const e of data.entries.filter(e=>e.shiftId===shift.id&&['abono','gasto'].includes(e.type)&&e.routeMovement===true))result.efectivo=round(result.efectivo+(e.lines||[]).filter(l=>l.a==='1104').reduce((n,l)=>n+l.d-l.c,0));
   return result;
 };
 export function guardLedgerMutation(previous, next, access, {restoreServiceConfiguration=false}={}) {
   previous = operationalDocument(previous, access.company?.allowNegativeValues);
   next = operationalDocument(next, access.company?.allowNegativeValues);
-  requireValue(equal((previous?.businessRecords||[]).filter(commerceRecord),(next.businessRecords||[]).filter(commerceRecord)),'Usa las operaciones de comercio.');
+  requireValue(equal((previous?.businessRecords||[]).filter(r=>commerceRecord(r)||r.kind?.startsWith('route-')),(next.businessRecords||[]).filter(r=>commerceRecord(r)||r.kind?.startsWith('route-'))),'Usa las operaciones de comercio.');
   requireValue(equal((previous?.businessRecords||[]).filter(r=>r.foodSettings).map(r=>({id:r.id,foodSettings:r.foodSettings})),(next.businessRecords||[]).filter(r=>r.foodSettings).map(r=>({id:r.id,foodSettings:r.foodSettings}))),'Usa la configuración de recetas.');
   requireValue(equal((previous?.businessRecords||[]).filter(workflowRecord),(next.businessRecords||[]).filter(workflowRecord)),'Usa las operaciones de eventos y encargos.');
   requireValue(equal((previous?.businessRecords||[]).filter(deliveryZoneRecord),(next.businessRecords||[]).filter(deliveryZoneRecord)),'Usa la configuración de zonas de entrega.');
@@ -350,6 +352,7 @@ function registerCost(data, access, session, body) {
 }
 async function makeSale(data, access, session, body, client, companyId, trustedSourceId=null) {
   ensurePrintVersions(data,access.company,session);
+  routeSaleGuard(data,access,body,requireValue);
   requirePermission(access, 'facturacion');
   const invoiceDraft=body.sourceInvoiceDraft?data.invoiceDrafts?.find(row=>row.id===body.sourceInvoiceDraft&&row.branchId===access.branchId):null;
   requireValue(!body.sourceInvoiceDraft||invoiceDraft?.status==='Registrada','La factura registrada no está disponible para aplicar.');
@@ -443,6 +446,7 @@ async function makeSale(data, access, session, body, client, companyId, trustedS
   const quotation=body.sourceQuotation?data.quotations?.find(q=>q.id===body.sourceQuotation):null;
   requireValue(!body.sourceQuotation||quotation?.status==='Pendiente','La cotización no está disponible para convertir.');
   const entry = appendEntry(data, session, { date, due, ...(context?{saleContext:context}:{}), ...(paymentTerms?{paymentTerms}:{}), ...(creditDecision?.exceeded?{creditWarning:{...creditDecision,confirmedBy:actorName(session)}}:{}), reference, series, sequence, type: 'venta', ...commerceSnapshot(body), origin: body.origin === 'ventas' ? 'ventas' : 'facturacion', desc: 'Venta - ' + (customer?.name || text(body.party) || 'Cliente general'), party: customer?.name || text(body.party) || 'Cliente general', customerId: customer?.id || '', customer: customer ? { name: customer.name, taxId: customer.taxId, address: customer.address, phone: customer.phone } : null, operatorId: operatorId(access, session), operatorName: actorName(session), shiftId: shift?.id || null, discount, discountAudit: discount > 0 ? {actor:actorName(session),userId:operatorId(access,session),percent:discount,amountCents:cents(round(invoiceTotals(items.map(item=>({...item,u:item.listPrice}))).total-total)),at:new Date().toISOString()} : null, items, payments, ...(cashTender?{cashTender}:{}), pay: credit ? '1201' : methods.has('efectivo') ? '1104' : '1102', subtotal, vat, total, creditAmount: credit, ...(businessAllocations.length?{businessAllocations}:{}), stock: items.filter(item=>!item.service).map(item => ({ pid: item.p, q: -item.q, unit: item.unit, unitCost: item.cost })), lines });
+  if(customer?.routeZone)entry.route=customer.routeZone;
   redeemGift(gift,entry);
   if(body.previousDay===true)entry.previousDayDiscount=true;
   if(loyalty)entry.loyalty={configId:loyalty.configId,percent:loyalty.percent};
@@ -456,7 +460,9 @@ async function makeSale(data, access, session, body, client, companyId, trustedS
     for(const row of servicePlan.rows){const product=data.products.find(p=>p.id===row.pid);product.stock=Math.round((product.stock-row.q)*1000000)/1000000;}
   }
   for(const a of businessAllocations){const r=data.businessRecords?.find(r=>r.id===a.id);if(r?.module==='variantes'){entry.businessVariants||=[];entry.businessVariants.push({id:r.id,productId:r.productId,serial:r.serial,warranty:r.warranty,size:r.size,color:r.color,model:r.model})}}
-  commerceLoadSale(data,body,entry,requireValue,m=>requirePermission(access,m));
+  commerceLoadSale(data,body,entry,requireValue,m=>requirePermission(access,m),access);
+  if(body.commerceLoadId)entry.routeWorkerId=data.businessRecords.find(r=>r.id===body.commerceLoadId)?.assignedMemberId||entry.operatorId;
+  const routeSource=body.routeOrderId?data.businessRecords.find(r=>r.id===body.routeOrderId&&r.kind==='route-order'):null;routeCommission(data,entry,[operatorId(access,session),...(routeSource?[routeSource.operatorId]:[])]);
   if(quotation){quotation.status='Convertida';quotation.entryId=entry.id;}
   if(invoiceDraft){invoiceDraft.status='Aplicada';invoiceDraft.entryId=entry.id;entry.sourceInvoiceDraft=invoiceDraft.id;}
   for (const [id, quantity] of quantities) { const product = data.products.find(record => record.id === id); product.stock = Math.round((product.stock - quantity) * 1e6) / 1e6; }
@@ -639,12 +645,24 @@ export async function runOperation(companyId, session, body) {
     if(body.format!=='VIEW')await audit(client,companyId,access.member?{...session,member:access.member}:session,'Descarga tesorería '+body.format,[{area:body.module,id:body.id||null,branchId:access.branchId,from,to,version:1}]);
     return {...report,omittedModules:['personal','fiscal','suscripciones','bancos'].filter(m=>!allowed(access,m)),company:access.company.name,branchId:access.branchId,version:1,from,to,currency:data.cfg?.cur||'NIO',revision:access.company.revision,generatedAt:new Date().toISOString(),generatedBy:actorName(access.member?{...session,member:access.member}:session)};
   });
+  if(body.operation==='routeReceivables')return db.transaction(async client=>{
+    const access=await companyAccess(client,companyId,session,true);requireModule(access,'rutas');requireValue(access.routeRole!=='route_preseller','El preventista no cobra.');
+    const data=scopeBranch(access.company.data,access);requireValue(routeCustomerAllowed(data,access,body.customerId),'Cliente fuera de tu ruta.');
+    return {invoices:(data.entries||[]).filter(e=>e.customerId===body.customerId&&['venta','factura'].includes(e.type)&&(e.creditAmount>0||e.pay==='1201')).map(e=>({id:e.id,reference:e.reference,party:e.party,due:e.due,remainingCents:Math.max(0,invoiceLinkedEntries(data.entries||[],e.id).flatMap(x=>x.lines||[]).filter(l=>l.a==='1201').reduce((n,l)=>n+cents(l.d)-cents(l.c),0))})).filter(e=>e.remainingCents>0)};
+  });
+  if(body.operation==='routeTeam')return db.transaction(async client=>{
+    const access=await companyAccess(client,companyId,session);requireModule(access,'rutas');
+    const team=await client.select({id:companyMembers.id,name:companyMembers.name,branchIds:companyMembers.branchIds,active:companyMembers.active,roleKey:companyRoles.key}).from(companyMembers).innerJoin(companyRoles,eq(companyRoles.id,companyMembers.roleId)).where(and(eq(companyMembers.companyId,companyId),eq(companyMembers.active,true)));
+    return {members:team.filter(m=>roleRules.routeRoles[m.roleKey]&&m.branchIds.includes(access.branchId)&&(!access.routeRole||routeManager(access)||m.id===access.member.id)).map(({roleKey,...m})=>({...m,routeRole:roleKey}))};
+  });
   if(body.operation==='customerCredit')return db.transaction(async client=>{
-    const access=await companyAccess(client,companyId,session,true);requirePermission(access,'facturacion');
+    const access=await companyAccess(client,companyId,session,true);requireModule(access,access.routeRole?'rutas':'facturacion');
     const data=scopeBranch(access.company.data,access),customer=data?.customers?.find(c=>c.id===body.customerId&&c.status==='activo');
-    requireValue(customer,'Selecciona un cliente activo.');
+    requireValue(customer&&routeCustomerAllowed(data,access,customer.id),'Selecciona un cliente activo de tu ruta.');
     const balance=customerCreditBalance(customer.id,data.entries||[]);
-    return {customerId:customer.id,limitCents:cents(customer.creditLimit),availableCents:customer.creditLimit>0?Math.max(0,cents(round(customer.creditLimit-balance))):null};
+    const today=new Intl.DateTimeFormat('en-CA',{timeZone:access.company.assistantTimeZone||'America/Managua',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+    const overdueCents=(data.entries||[]).filter(e=>e.customerId===customer.id&&['venta','factura'].includes(e.type)&&e.due&&e.due<today).reduce((n,e)=>n+Math.max(0,invoiceLinkedEntries(data.entries||[],e.id).flatMap(x=>x.lines||[]).filter(l=>l.a==='1201').reduce((t,l)=>t+cents(l.d)-cents(l.c),0)),0);
+    return {customerId:customer.id,paymentType:customer.paymentType,creditDays:customer.creditDays,balanceCents:cents(round(balance)),overdueCents,limitCents:cents(customer.creditLimit),availableCents:customer.creditLimit>0?Math.max(0,cents(round(customer.creditLimit-balance))):null};
   });
   if(body.operation==='invoiceDownload')return db.transaction(async client=>{
     const access=await companyAccess(client,companyId,session,true);
@@ -684,7 +702,7 @@ export async function runOperation(companyId, session, body) {
     accessError('La ampliación de tesorería no está habilitada.',503);
   });
   const addedKeys = [];
-  if((COMMERCE_OPS.includes(body.operation)||DELIVERY_OPS.includes(body.operation)||BAKERY_OPS.includes(body.operation)||FOOD_OPS.includes(body.operation)||BENEFIT_OPS.includes(body.operation)||body.operation==='completeProfile'||WORKFLOW_OPS.includes(body.operation)||PERSONNEL_OPS.includes(body.operation)||CERTIFICATE_OPS.includes(body.operation)||CLIENT_OPS.includes(body.operation)||FISCAL_OPS.includes(body.operation)||INVENTORY_OPS.includes(body.operation)||ANALYSIS_OPS.includes(body.operation)||BUDGET_OPS.includes(body.operation)||TREASURY_OPS.includes(body.operation)||BANK_OPS.includes(body.operation)||RECURRING_OPS.includes(body.operation)||BUSINESS_OPS.includes(body.operation)||['correctEntry','registerAgain','serviceDefinition','economicSector','specializedChart','serviceAccrueCommission'].includes(body.operation))&&!body.operationId)accessError('La operación requiere un identificador único.',400);
+  if((ROUTE_OPS.includes(body.operation)||COMMERCE_OPS.includes(body.operation)||DELIVERY_OPS.includes(body.operation)||BAKERY_OPS.includes(body.operation)||FOOD_OPS.includes(body.operation)||BENEFIT_OPS.includes(body.operation)||body.operation==='completeProfile'||WORKFLOW_OPS.includes(body.operation)||PERSONNEL_OPS.includes(body.operation)||CERTIFICATE_OPS.includes(body.operation)||CLIENT_OPS.includes(body.operation)||FISCAL_OPS.includes(body.operation)||INVENTORY_OPS.includes(body.operation)||ANALYSIS_OPS.includes(body.operation)||BUDGET_OPS.includes(body.operation)||TREASURY_OPS.includes(body.operation)||BANK_OPS.includes(body.operation)||RECURRING_OPS.includes(body.operation)||BUSINESS_OPS.includes(body.operation)||['correctEntry','registerAgain','serviceDefinition','economicSector','specializedChart','serviceAccrueCommission'].includes(body.operation))&&!body.operationId)accessError('La operación requiere un identificador único.',400);
   let output = null;
   if(body.operationId && !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.operationId)) accessError('Identificador de operación inválido.',400);
   const receipt=body.operationId?{id:body.operationId,actor:session.email+':'+(session.memberId||''),hash:createHash('sha256').update(JSON.stringify(body)).digest('hex'),resultId:()=>typeof output==='string'?output:null}:null;
@@ -696,6 +714,8 @@ export async function runOperation(companyId, session, body) {
       }
       const crossBranch=CROSS_BRANCH_OPS.includes(body.operation)||body.operation==='costingMethod';
       const data = body.operation==='completeProfile'?structuredClone(company.data):initializeOperations(structuredClone(crossBranch?access.company.data:company.data));
+      if(access.routeRole)requirePermission(access,'rutas');
+      routeOperationGuard(access,body,requireValue);
       guardFifoOperation(data,body);
       const fifoBefore=structuredClone(data);
       const operationSession = access.member ? { ...session, member: access.member } : session;
@@ -705,14 +725,23 @@ export async function runOperation(companyId, session, body) {
       const operation = body.operation, userId = operatorId(access, session);
       if (['printSettings','settings','creditNote'].includes(operation)) ensurePrintVersions(data, access.company, operationSession);
 
-      if(operation==='completeProfile'){
+      let routeTeam=[];
+      if(ROUTE_OPS.includes(operation)||operation==='commerceLoad')routeTeam=await client.select({id:companyMembers.id,name:companyMembers.name,branchIds:companyMembers.branchIds,active:companyMembers.active,routeRole:companyRoles.key}).from(companyMembers).innerJoin(companyRoles,eq(companyRoles.id,companyMembers.roleId)).where(eq(companyMembers.companyId,companyId));
+      if(ROUTE_OPS.includes(operation))output=await routeOperation(data,access,operationSession,body,{
+        check:requireValue,permit:requirePermission,date:dateValue,team:routeTeam,
+        entry:e=>appendEntry(data,operationSession,e),shift:id=>currentShift(data,access,operationSession,id),
+        cashAvailable:shift=>cents(round(shift.opening+shiftPayments(data,shift).efectivo)),
+        sale:(b,id)=>makeSale(data,access,operationSession,b,client,companyId,id),credit:b=>creditNote(data,access,operationSession,b),
+        adjust:async ({productId,delta,date,reason})=>{const p=data.products.find(p=>p.id===productId);requireValue(p&&p.kind!=='service'&&Number.isFinite(delta)&&delta&&p.stock+delta>=0,'Diferencia de inventario inválida.');requireValue(!data.entries.some(e=>e.date>date&&e.stock?.some(i=>i.pid===p.id)),'La diferencia no puede preceder movimientos posteriores.');const total=invoiceTotals([{q:Math.abs(delta),u:p.cost,vatRate:0}]).total;appendEntry(data,operationSession,{date,type:'ajuste',operatorId:userId,adjustmentReason:'merma',desc:'Liquidación de ruta · '+reason,total,stock:[{pid:p.id,q:delta,unit:p.unit||'unidad',unitCost:p.cost}],lines:total?(delta>0?linesBetween('1301','6107',total):linesBetween('6107','1301',total)):[]});p.stock=Math.round((p.stock+delta)*1000)/1000;}
+      });
+      else if(operation==='completeProfile'){
         requireValue(access.owner,'Solo el dueño completa el perfil.');requirePermission(access,'ajustes');
         const completed=finishCompanyProfile({...company,data:access.company.data},body);
         // Only profile/config/catalog fields change; branch-scoped accounting stays intact.
         businessPatch={name:completed.name,businessType:completed.businessType,businessCustomization:completed.businessCustomization};
         data.cfg=completed.data.cfg;data.accounts=completed.data.accounts;
       }
-      else if(COMMERCE_OPS.includes(operation))output=await commerceOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,date:dateValue,entry:e=>appendEntry(data,operationSession,e),credit:b=>creditNote(data,access,operationSession,b),trade:b=>tradeOperation(data,access,operationSession,b,{requireValue,requirePermission,appendEntry,dateValue,amount,ledgerBalance}),purchase:b=>advancedOperation(data,access,operationSession,b,{requireValue,requirePermission,appendEntry,dateValue,amount,actorName})});
+      else if(COMMERCE_OPS.includes(operation))output=await commerceOperation(data,access,operationSession,body,{team:routeTeam,check:requireValue,permit:requirePermission,date:dateValue,entry:e=>appendEntry(data,operationSession,e),credit:b=>creditNote(data,access,operationSession,b),trade:b=>tradeOperation(data,access,operationSession,b,{requireValue,requirePermission,appendEntry,dateValue,amount,ledgerBalance}),purchase:b=>advancedOperation(data,access,operationSession,b,{requireValue,requirePermission,appendEntry,dateValue,amount,actorName})});
       else if(DELIVERY_OPS.includes(operation))output=deliveryOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,date:dateValue});
       else if(BAKERY_OPS.includes(operation))output=bakeryOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,date:dateValue});
       else if(FOOD_OPS.includes(operation))output=foodOperation(data,access,operationSession,body,{check:requireValue,permit:requirePermission,date:dateValue});

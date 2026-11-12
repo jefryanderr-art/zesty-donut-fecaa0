@@ -13,7 +13,7 @@ function preparePurchaseProductRow(row){
  row.querySelector('[name=u]').placeholder='Costo unitario';
 }
 function openInvoiceProducts(form,opener,mode='factura'){
- const purchase=mode==='compra',container=form.querySelector(purchase?'.items':'#pos-items'),rowSelector=purchase?'.item':'.pos-item';
+ const routeUnreserved=form.dataset.routeDocument==='order',purchase=mode==='compra',container=form.querySelector(purchase?'.items':'#pos-items'),rowSelector=purchase?'.item':'.pos-item';
  const productField=purchase?'p':'posProduct',quantityField=purchase?'q':'posQuantity',priceField=purchase?'u':'posPrice';
  const priceLabel=purchase?'Costo':'Precio',totalLabel=purchase?'Total compra':'Total';
  const dialog=document.createElement('dialog');dialog.className='invoice-products';dialog.dataset.mode=mode;dialog.setAttribute('aria-label',purchase?'Selección de productos para la compra':'Selección de productos para la factura');
@@ -47,11 +47,11 @@ function openInvoiceProducts(form,opener,mode='factura'){
   dialog.querySelector('[data-selected-count]').textContent=rows().length;
   dialog.querySelector('.product-selected>div').innerHTML=rows().map((r,index)=>{const p=prod(r.querySelector(`[name=${productField}]`).value),q=+r.querySelector(`[name=${quantityField}]`).value,u=+r.querySelector(`[name=${priceField}]`).value;return `<div class="product-choice" data-chosen="${index}"><b>${esc(p.name)} <small>· ${esc(p.unit||'unidad')}</small></b><div class="product-quantity"><button type="button" data-delta="-1" aria-label="Restar ${esc(p.name)}">−</button><input type="text" inputmode="decimal" data-decimal autocomplete="off" value="${esc(q)}" aria-label="Cantidad de ${esc(p.name)}"><button type="button" data-delta="1" aria-label="Sumar ${esc(p.name)}">+</button></div>${purchase?`<label class="product-cost">Costo<input type="number" data-cost min="0" step="0.01" required value="${esc(u)}" aria-label="Costo de ${esc(p.name)}"></label>`:''}<span data-line-total>${esc(money(roundedTotal(lineAmount(q,u))))}</span><button type="button" class="lk" data-remove>Quitar</button></div>`}).join('')||`<p class="mut">Agrega productos a la ${purchase?'compra':'factura'}.</p>`;
   let total=0,count=0;for(const r of rows()){const q=+r.querySelector(`[name=${quantityField}]`).value;count+=q;total+=lineAmount(q,+r.querySelector(`[name=${priceField}]`).value);}
-  const insufficient=!purchase&&rows().some(r=>{const p=prod(r.querySelector(`[name=${productField}]`).value);return p?.kind!=='service'&&p?.stock<+r.querySelector(`[name=${quantityField}]`).value;});if(insufficient)tell('Existencias insuficientes'+(S.cfg.allowNegativeValues===true?' · se permite saldo negativo':''));
+  const insufficient=!purchase&&!routeUnreserved&&rows().some(r=>{const p=prod(r.querySelector(`[name=${productField}]`).value);return p?.kind!=='service'&&p?.stock<+r.querySelector(`[name=${quantityField}]`).value;});if(insufficient)tell('Existencias insuficientes'+(S.cfg.allowNegativeValues===true?' · se permite saldo negativo':''));
   dialog.querySelector('footer strong').textContent=`${formatQuantity(count)} productos · ${totalLabel} ${money(roundedTotal(total))}`;
  }
  const stepFor=(p,current)=>{
-  if(purchase||p.kind==='service'||S.cfg.allowNegativeValues===true)return 1;
+  if(purchase||routeUnreserved||p.kind==='service'||S.cfg.allowNegativeValues===true)return 1;
   const remaining=quantityRound(p.stock-current);
   return remaining>0?Math.min(1,remaining):0;
  };
@@ -60,7 +60,7 @@ function openInvoiceProducts(form,opener,mode='factura'){
   if(step===0){tell('Existencias insuficientes: '+product.name);focus();return;}
   const q=quantityRound(current+step);
   if(!row){draft.insertAdjacentHTML('beforeend',purchase?itemRow({p:product.id,q:1,u:product.cost},true):posRow());row=draft.lastElementChild;row.querySelector(`[name=${productField}]`).value=product.id;if(!purchase){row.querySelector(`[name=${priceField}]`).value=form.foodMath?.businessSeasonPrice(product,S.businessRecords,v(form,'date'))??product.price;if(typeof commerceActive==='function'&&commerceActive()&&typeof cmConfig==='function'){const list=cmConfig(product.id)?.customerPrices.find(l=>l.customerIds.includes(v(form,'customerId')));if(list)row.querySelector(`[name=${priceField}]`).value=list.unitCents/100;}}else preparePurchaseProductRow(row);}
-  row.querySelector(`[name=${quantityField}]`).value=quantityRound(q);renderSelected();tell(!purchase&&product.kind!=='service'&&q>product.stock?'Existencias insuficientes · se permite saldo negativo':product.name+' agregado');input.value='';renderCatalog();focus();
+  row.querySelector(`[name=${quantityField}]`).value=quantityRound(q);renderSelected();tell(!purchase&&!routeUnreserved&&product.kind!=='service'&&q>product.stock?'Existencias insuficientes · se permite saldo negativo':product.name+' agregado');input.value='';renderCatalog();focus();
  }
  function scan(code){const p=S.products.find(p=>(p.barcodes||[]).includes(String(code).trim())||p.code===String(code).trim());if(p)add(p);else{tell('El código escaneado no existe.');input.value='';renderCatalog();focus();}}
  function close(){viewport?.removeEventListener('resize',fit);viewport?.removeEventListener('scroll',fit);if(SCANNER)closeScanner();dialog.close();dialog.remove();form.inert=false;opener?.focus();}
@@ -76,19 +76,19 @@ function openInvoiceProducts(form,opener,mode='factura'){
   else if(b.hasAttribute('data-cancel'))close();
   else if(b.hasAttribute('data-done')){
    if(purchase){for(const field of dialog.querySelectorAll('.product-selected input'))if(!field.reportValidity())return;}
-   for(const row of [...draft.children])if(!row.querySelector(`[name=${productField}]`).value)row.remove();container.replaceChildren(...draft.children);if(purchase){container.querySelectorAll('.item').forEach(preparePurchaseProductRow);close();return;}form.dispatchEvent(new Event('input',{bubbles:true}));form.discountAuthorization='';form.querySelector('.discount-feedback').textContent='Autoriza el descuento después de revisar productos y precios.';previewPos(form);close();
+   for(const row of [...draft.children])if(!row.querySelector(`[name=${productField}]`).value)row.remove();container.replaceChildren(...draft.children);if(purchase){container.querySelectorAll('.item').forEach(preparePurchaseProductRow);close();return;}form.dispatchEvent(new Event('input',{bubbles:true}));form.discountAuthorization='';if(form.querySelector('.discount-feedback'))form.querySelector('.discount-feedback').textContent='Autoriza el descuento después de revisar productos y precios.';if(form.routePreview)form.routePreview();else if(!form.dataset.routeDocument)previewPos(form);close();
   }else if(b.hasAttribute('data-scan')){await openScanner(scan);if(SCANNER){dialog.append(SCANNER.host);const physical=SCANNER.host.querySelector('#physical-scan');if(physical){physical.inputMode=coarse?'none':'search';physical.addEventListener('pointerdown',()=>{physical.inputMode='search';});if(!coarse||readerMode.bluetooth)physical.focus();else SCANNER.host.querySelector('button')?.focus();}}}
   else if(b.hasAttribute('data-direction')){direction=-direction;renderCatalog();focus();}
   else if(b.dataset.sort){direction=sort===b.dataset.sort?-direction:1;sort=b.dataset.sort;renderCatalog();focus();}
   else if(b.hasAttribute('data-prev')||b.hasAttribute('data-next')){page+=b.hasAttribute('data-prev')?-1:1;renderCatalog();focus();}
-  else if(b.closest('[data-chosen]')){const choice=b.closest('[data-chosen]'),row=rows()[Number(choice.dataset.chosen)];if(b.hasAttribute('data-remove'))row.remove();else{const p=prod(row.querySelector(`[name=${productField}]`).value),current=+row.querySelector(`[name=${quantityField}]`).value,step=Number(b.dataset.delta)>0?stepFor(p,current):-1;if(step===0){tell('Existencias insuficientes: '+p.name);focus();return;}const next=quantityRound(current+step);if(!purchase&&next>p.stock&&p.kind!=='service'&&S.cfg.allowNegativeValues!==true){tell('Existencias insuficientes: '+p.name);focus();return;}if(next<=0)row.remove();else row.querySelector(`[name=${quantityField}]`).value=next;}renderSelected();focus();}
+  else if(b.closest('[data-chosen]')){const choice=b.closest('[data-chosen]'),row=rows()[Number(choice.dataset.chosen)];if(b.hasAttribute('data-remove'))row.remove();else{const p=prod(row.querySelector(`[name=${productField}]`).value),current=+row.querySelector(`[name=${quantityField}]`).value,step=Number(b.dataset.delta)>0?stepFor(p,current):-1;if(step===0){tell('Existencias insuficientes: '+p.name);focus();return;}const next=quantityRound(current+step);if(!purchase&&!routeUnreserved&&!routeUnreserved&&next>p.stock&&p.kind!=='service'&&S.cfg.allowNegativeValues!==true){tell('Existencias insuficientes: '+p.name);focus();return;}if(next<=0)row.remove();else row.querySelector(`[name=${quantityField}]`).value=next;}renderSelected();focus();}
  });
  dialog.addEventListener('input',e=>{
   const choice=e.target.closest('[data-chosen]');if(!choice)return;
   const row=rows()[Number(choice.dataset.chosen)];if(e.target.hasAttribute('data-cost')){if(!e.target.checkValidity())return;row.querySelector(`[name=${priceField}]`).value=e.target.value;updateSummary(choice,row);return;}const q=Number(e.target.value);if(purchase)e.target.setCustomValidity(Number.isFinite(q)&&q>=0.001?'':'La cantidad mínima es 0.001.');if(!Number.isFinite(q)||q<=0)return;
   try{row.querySelector(`[name=${quantityField}]`).value=inputQuantity(q);}catch(error){tell(error.message);return;}
   updateSummary(choice,row);
-  if(!purchase&&prod(row.querySelector(`[name=${productField}]`).value).kind!=='service'&&q>prod(row.querySelector(`[name=${productField}]`).value).stock)tell('Existencias insuficientes'+(S.cfg.allowNegativeValues===true?' · se permite saldo negativo':''));
+  if(!purchase&&!routeUnreserved&&!routeUnreserved&&prod(row.querySelector(`[name=${productField}]`).value).kind!=='service'&&q>prod(row.querySelector(`[name=${productField}]`).value).stock)tell('Existencias insuficientes'+(S.cfg.allowNegativeValues===true?' · se permite saldo negativo':''));
  });
  function updateSummary(choice,row){
   const q=+row.querySelector(`[name=${quantityField}]`).value;choice.querySelector('[data-line-total]').textContent=money(roundedTotal(lineAmount(q,+row.querySelector(`[name=${priceField}]`).value)));

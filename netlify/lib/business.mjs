@@ -36,7 +36,7 @@ export function validateBusinessRecords(data,check){
  check(Array.isArray(data.businessRecords)&&data.businessRecords.length<=20000,'Registros de negocio inválidos.');const ids=new Set();
  for(const r of data.businessRecords){
   check(r&&typeof r.id==='string'&&/^[a-z0-9-]{1,80}$/.test(r.id)&&!ids.has(r.id)&&(catalog.all.includes(r.module)||r.module==='auditoria_revision'||benefitRecord(r)),'Registro de negocio inválido o duplicado.');ids.add(r.id);
-  check(typeof r.name==='string'&&r.name.trim()&&r.name.length<=200&&(r.module==='auditoria_revision'?r.status==='Conservado':benefitRecord(r)?['Activa','Agotada','Devuelta'].includes(r.status):flows[r.module].includes(r.status)),'Nombre o estado de negocio inválido.');
+  check(typeof r.name==='string'&&r.name.trim()&&r.name.length<=200&&(r.module==='auditoria_revision'?r.status==='Conservado':benefitRecord(r)?['Activa','Agotada','Devuelta'].includes(r.status):(r.module==='rutas'&&['route-','commerce-'].some(k=>r.kind?.startsWith(k))?[...flows[r.module],'Pendiente','Activa','Borrador','Enviado','Preparado','Preparada','En reparto','Entregado','Entregada','Parcial','Cancelado','Sin compra','Realizada','No visitado','No entregado','Cobrado','Registrado','Aprobada']:flows[r.module]).includes(r.status)),'Nombre o estado de negocio inválido.');
   check(/^\d{4}-\d{2}-\d{2}$/.test(r.date||'')&&Number.isFinite(Date.parse(r.date)),'Fecha de negocio inválida.');
   for(const k of ['total','principal','interest','penalty','paid','deposit','valuation','cost','price'])if(r[k]!==undefined)check(moneyCents(r[k])>=0,'Importe de negocio negativo.');
   validateOrganization(r,check);
@@ -112,6 +112,7 @@ export async function businessOperation(data,access,session,body,context){
  check(context.sectorTrusted||!sectorRecord(existing)&&!String(body.kind||'').startsWith('sector-'),'Usa las operaciones sectoriales para conservar controles e historial.');
  if(op!=='businessSave')check(existing,'Registro no encontrado.');
  if(body.date&&op!=='businessSave')check(ctx.date(body.date)>=existing.date,'La operación no puede ser anterior al registro.');
+ check(!String(existing?.kind||body.kind||'').startsWith('route-'),'Usa las operaciones protegidas de Rutas y preventa.');
  check(!organizationRecord(existing||{})&&!String(body.kind||'').startsWith('organization-'),'Usa las operaciones de organizaciones.');
  check(!deliveryZoneRecord(existing||{})&&body.kind!=='delivery-zone','Usa la configuración de zonas.');
  check(existing?.kind!=='bakery-counter'&&body.kind!=='bakery-counter','Usa las operaciones de mostrador.');
