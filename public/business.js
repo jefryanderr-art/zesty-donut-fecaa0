@@ -33,7 +33,7 @@ function businessVisible(route){
  if(!routeAllowed(route))return false;
  if(['panel','ajustes','accesibilidad','auditoria','businessMore'].includes(route))return true;
  const custom=CO.businessCustomization||{};if(custom.hidden?.includes(route))return false;if(custom.shown?.includes(route))return true;
- const p=businessProfile();if(BUSINESS.inventoryRoutes.includes(route)&&!BUSINESS.inventoryVisible(p,typeof S==='undefined'?[]:S?.products))return false;if(p.id==='comercio')return !BUSINESS.all.includes(route);return MENU.some(([,items])=>items.some(([id])=>id===route))||p.modules.includes(route);
+ const p=businessProfile();if(BUSINESS.inventoryRoutes.includes(route)&&!BUSINESS.inventoryVisible(p,typeof S==='undefined'?[]:S?.products))return false;if(p.id==='comercio')return route==='rutas'||!BUSINESS.all.includes(route);return MENU.some(([,items])=>items.some(([id])=>id===route))||p.modules.includes(route);
 }
 const businessChrome=chrome;
 chrome=function(){
@@ -317,7 +317,7 @@ function applyBusinessLabels(root){
 const businessViewBase=view;
 view=function(...args){const result=businessViewBase.apply(this,args);applyBusinessLabels($('#main'));return result};
 const businessModalBase=modal;
-modal=function(...args){const form=businessModalBase(...args);applyBusinessLabels(form);if(form.querySelector('#pos-items')){const serials=businessRecords('variantes').filter(r=>r.serial&&r.status==='Disponible');if(serials.length)form.querySelector('.mb').insertAdjacentHTML('beforeend',`<h4>${esc(uiT("business.58","Series a entregar"))}</h4>`+serials.map(r=>'<label class="ck"><input type="checkbox" name="businessSerial" value="'+esc(r.id)+'"> '+esc(r.serial+' · '+r.name)+'</label>').join(''));}return form};
+modal=function(...args){const form=businessModalBase(...args);applyBusinessLabels(form);if(form.querySelector('#pos-items:not([data-route-lines])')){const serials=businessRecords('variantes').filter(r=>r.serial&&r.status==='Disponible');if(serials.length)form.querySelector('.mb').insertAdjacentHTML('beforeend',`<h4>${esc(uiT("business.58","Series a entregar"))}</h4>`+serials.map(r=>'<label class="ck"><input type="checkbox" name="businessSerial" value="'+esc(r.id)+'"> '+esc(r.serial+' · '+r.name)+'</label>').join(''));}return form};
 function businessCalendar(module,rows){
  const now=BUSINESS_DATE?new Date(BUSINESS_DATE+'T12:00:00'):new Date(),year=now.getFullYear(),month=now.getMonth(),days=new Date(year,month+1,0).getDate(),offset=(new Date(year,month,1).getDay()+6)%7;
  const dayKey=n=>year+'-'+String(month+1).padStart(2,'0')+'-'+String(n).padStart(2,'0');

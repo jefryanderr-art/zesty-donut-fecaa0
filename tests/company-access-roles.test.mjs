@@ -84,7 +84,7 @@ function roleHarness(){
 test('crear, editar y borrar quedan aislados por empresa y exigen revisión y reasignación',async()=>{
  const h=roleHarness();
  const first=await h.list('company-a'),second=await h.list('company-b');
- assert.equal(first.roles.length,5);assert.equal(second.roles.length,5);
+ assert.equal(first.roles.length,9);assert.equal(second.roles.length,9);
  const original=canonical(second.roles);
  const {role}=await h.manage('company-a',{name:'Almacén',description:'Consulta y registro',policy:policy('inventario',['view','create']),confirmed:true},'POST');
  await assert.rejects(()=>h.manage('company-b',{id:role.id,version:0,confirmed:true},'DELETE'),/Recarga/);

@@ -1,6 +1,14 @@
 // Guía editorial de las vistas y formularios reales; sin datos de clientes.
 export const assistantGuide = [
 {
+ id:'rutas-preventa-trabajadores',modulo:'rutas',titulo:'Rutas y preventa: clientes, camión y entregas',
+ palabras_clave:['ruta','preventa','camión','entregador','preventista','liquidación','visitas','crédito cliente'],
+ texto:`1. El dueño abre Accesibilidad y crea un colaborador con usuario, contraseña de al menos ocho caracteres, sucursales y Rol en ruta. El trabajador entra por Ingresar como colaborador en la página principal. Vendedor de ruta, Preventista, Entregador y Supervisor de ruta conservan alcances distintos; cambiar el acceso cierra sus sesiones anteriores. El plan también debe permitir Rutas y preventa.
+2. En Cartera de clientes, Condiciones comerciales permite elegir vendedor, Ruta / zona, Días de visita y Orden en la ruta. Mi ruta de hoy muestra clientes programados y acciones de contacto. Registrar visita distingue Sin compra y su motivo. Las fichas anteriores permanecen válidas y no reciben días automáticamente.
+3. Nuevo pedido de preventa muestra la tarjeta de crédito y una proforma sin valor fiscal. Borrador y Enviado no cobran ni descuentan inventario. El supervisor abre Preparación del día para consolidar pedidos por fecha y zona, asignar entregador y reservar la salida. Un faltante genera una sugerencia de compra, sin registrar compras automáticas.
+4. El vendedor usa Nueva venta de ruta y su turno abierto; el entregador usa Entregar y facturar. Ajusta lo recibido antes de confirmar. Cada entrega genera su factura una sola vez y el resto queda pendiente. Firma y ubicación son opcionales. Mi camión muestra carga, ventas, entregas, devoluciones y saldo. Liquidar camión compara lo contado y requiere aprobación cuando hay diferencias; cerrar turno conserva su operación propia. Las devoluciones requieren nota de crédito aprobada y los dañados o vencidos van a merma. Los avisos permanecen en la aplicación. Si se interrumpe una solicitud, conserva la pestaña abierta hasta recuperar conexión y confirmar su resultado. Verifica con tu contador.`,
+},
+{
  id:'facturas-registradas',modulo:'facturacion',titulo:'Facturas registradas y aplicadas',
  palabras_clave:['registrar factura','facturas registradas','aplicar factura','borrador factura','lector Bluetooth','teclado productos'],
  texto:`1. Abre Facturación y pulsa Crear factura. Selecciona cliente y líneas y pulsa Registrar para conservar una factura Registrada. No necesitas completar pagos ni abrir turno para registrarla. El registro no genera asiento, movimiento de inventario, pago, número fiscal ni movimiento de caja. Tampoco reserva existencias: otro usuario puede vender esos productos mientras la factura está registrada.

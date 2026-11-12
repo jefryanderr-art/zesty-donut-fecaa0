@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { eq, and, desc } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
-import { siteContent, auditEvents } from '../../db/schema.ts';
+import { siteContent, auditEvents, companyMembers, companyRoles } from '../../db/schema.ts';
 import { companyAccess, allowed, accessError, passwordDigest, verifyPassword, audit } from './access.mjs';
 import { invoicePriceAdjustment } from './accounting-engine.mjs';
 import { effectiveFoodPrice } from './food-workflows.mjs';
@@ -47,7 +47,13 @@ export async function discountRoute(id,session,method,body={}){
    return {events:await client.select().from(auditEvents).where(and(eq(auditEvents.companyId,id),eq(auditEvents.action,'Descuentos'))).orderBy(desc(auditEvents.createdAt)).limit(200)};
   }
   if(body.action!=='authorize'||!allowed(access,'facturacion',true))accessError('Sin permiso para aplicar descuentos.');
-  if(!access.owner&&(access.rolePolicy?access.rolePolicy.specials?.discounts!==true:!policy.roles?.includes(operationalRole(access))))accessError('Tu rol no tiene autorización para descuentos.');
+  let routeApprover=null;
+  const supervisorUsername=String(body.routeSupervisor||'').trim().toLowerCase();
+  if(access.routeRole&&supervisorUsername){
+    const [candidate]=await client.select({id:companyMembers.id,name:companyMembers.name,passwordHash:companyMembers.passwordHash,version:companyMembers.version,branchIds:companyMembers.branchIds,exceptions:companyMembers.permissionExceptions,policy:companyRoles.policy}).from(companyMembers).innerJoin(companyRoles,eq(companyRoles.id,companyMembers.roleId)).where(and(eq(companyMembers.companyId,id),eq(companyMembers.username,supervisorUsername),eq(companyMembers.active,true),eq(companyRoles.key,'route_supervisor')));
+    routeApprover=candidate&&candidate.branchIds.includes(access.branchId)&&(candidate.exceptions||candidate.policy)?.specials?.discounts===true?candidate:null;
+  }
+  if(!routeApprover&&!access.owner&&(access.rolePolicy?access.rolePolicy.specials?.discounts!==true:!policy.roles?.includes(operationalRole(access))))accessError('Tu rol requiere la autorización de un supervisor de ruta.');
   const discount=Number(body.discount);
   if(!access.branchId)accessError('Selecciona una sucursal.',400);
   const adjustments=invoiceAdjustments(scopeBranch(access.company.data,access),body,policy);
@@ -57,8 +63,8 @@ export async function discountRoute(id,session,method,body={}){
   const persistAttempt=async()=>client.insert(siteContent).values({id:attemptKey,content:attempt}).onConflictDoUpdate({target:siteContent.id,set:{content:attempt,updatedAt:new Date()}});
   if(attempt.until>Date.now())return {error:'Descuentos bloqueados durante 5 minutos. Intenta más tarde.',status:429};
   if(attempt.until){attempt.count=0;delete attempt.until;}
-  if(!policy.hash)accessError('El dueño debe definir la contraseña de descuentos.',400);
-  if(typeof body.password!=='string'||!await verifyPassword(body.password,policy.hash)){
+  if(!policy.hash&&!routeApprover)accessError('El dueño debe definir la contraseña de descuentos.',400);
+  if(typeof body.password!=='string'||!await verifyPassword(body.password,routeApprover?.passwordHash||policy.hash)){
    attempt.count++;if(attempt.count>=4)attempt.until=Date.now()+300000;
    await persistAttempt();await audit(client,id,session,'Descuentos',[{area:'descuentos',event:attempt.until?'Bloqueo por cuatro contraseñas incorrectas':'Contraseña incorrecta',until:attempt.until||null}]);
    return {error:attempt.until?'Descuentos bloqueados durante 5 minutos.':'Contraseña incorrecta. El descuento no se aplicó.',status:attempt.until?429:400};
@@ -66,7 +72,8 @@ export async function discountRoute(id,session,method,body={}){
   attempt.count=0;delete attempt.until;await persistAttempt();
   if(discount>0&&adjustments.some(Boolean))accessError('No combines un ajuste de precio con otro descuento.',400);
   const token=randomBytes(32).toString('hex'),grantId='discount-grant:'+createHash('sha256').update(token).digest('hex');
-  await client.insert(siteContent).values({id:grantId,content:{companyId:id,actor,branch:access.branchId,version:policy.version||0,fingerprint:fingerprint(body),adjustments:JSON.stringify(adjustments),expires:Date.now()+600000}});
+  await client.insert(siteContent).values({id:grantId,content:{companyId:id,actor,branch:access.branchId,version:policy.version||0,fingerprint:fingerprint(body),adjustments:JSON.stringify(adjustments),...(routeApprover?{routeApproverId:routeApprover.id,routeApproverVersion:routeApprover.version}:{}),expires:Date.now()+600000}});
+  if(routeApprover)await audit(client,id,session,'Descuentos',[{area:'descuentos',event:'Descuento autorizado por supervisor de ruta',approvedBy:routeApprover.name,approvedById:routeApprover.id,operatorId:actor,branchId:access.branchId}]);
   return {token,adjustments};
  });
  if(result.error)accessError(result.error,result.status);return result;
@@ -78,11 +85,13 @@ export async function consumeDiscount(client,id,access,session,body,data=access.
  const attemptKey='discount-attempt:'+id+':'+operatorId(access,session);
  const attempt=(await client.select().from(siteContent).where(eq(siteContent.id,attemptKey)))[0]?.content;
  if(attempt?.until>Date.now())accessError('Descuentos bloqueados durante 5 minutos. Intenta más tarde.',429);
- if(!access.owner&&(access.rolePolicy?access.rolePolicy.specials?.discounts!==true:!policy.roles?.includes(operationalRole(access))))accessError('Tu rol no tiene autorización para descuentos.');
+
  if(Number(body.discount)>(policy.maximum??99))accessError(`El descuento máximo es ${policy.maximum??99}%.`,400);
  const grantId='discount-grant:'+createHash('sha256').update(String(body.discountAuthorization||'')).digest('hex');
  const grant=(await client.select().from(siteContent).where(eq(siteContent.id,grantId)))[0]?.content;
  if(!grant||grant.companyId!==id||grant.actor!==operatorId(access,session)||grant.branch!==access.branchId||grant.version!==(policy.version||0)||grant.expires<Date.now()||grant.fingerprint!==fingerprint(body)||grant.adjustments!==JSON.stringify(adjustments))accessError('Autoriza de nuevo el descuento con la contraseña del dueño.',400);
+ if(grant.routeApproverId){const [approver]=await client.select({version:companyMembers.version,branchIds:companyMembers.branchIds,exceptions:companyMembers.permissionExceptions,policy:companyRoles.policy}).from(companyMembers).innerJoin(companyRoles,eq(companyRoles.id,companyMembers.roleId)).where(and(eq(companyMembers.id,grant.routeApproverId),eq(companyMembers.companyId,id),eq(companyMembers.active,true),eq(companyRoles.key,'route_supervisor')));if(!access.routeRole||!approver||approver.version!==grant.routeApproverVersion||!approver.branchIds.includes(access.branchId)||(approver.exceptions||approver.policy)?.specials?.discounts!==true)accessError('La autorización del supervisor venció. Autoriza de nuevo.');}
+ else if(!access.owner&&(access.rolePolicy?access.rolePolicy.specials?.discounts!==true:!policy.roles?.includes(operationalRole(access))))accessError('Tu rol no tiene autorización para descuentos.');
  await client.delete(siteContent).where(eq(siteContent.id,grantId));
  return adjustments;
 }

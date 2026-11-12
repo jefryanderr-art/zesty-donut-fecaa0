@@ -1,6 +1,6 @@
 'use strict';
 MENU.push(['Herramientas',[['importador','⇧',uiT("imports.extra.1","Importar CSV o Excel")]]]);ROUTE_MODULE.importador='inventario';READ_ACTIONS.add('exportSpreadsheet');READ_ACTIONS.add('importTemplate');
-const IMPORT_HEADERS={products:['codigo','nombre','unidad','costo','precio','existencia','minimo','iva','codigos_barras'],customers:['nombre','ruc','telefono','correo','direccion'],suppliers:['nombre','ruc','telefono','correo','direccion'],accounts:['codigo','nombre','tipo','naturaleza','subtipo'],opening:['cuenta','debe','haber']};
+const IMPORT_HEADERS={products:['codigo','nombre','unidad','costo','precio','existencia','minimo','iva','codigos_barras'],customers:['nombre','ruc','telefono','correo','direccion','ruta','dias_visita','orden_ruta','vendedor'],suppliers:['nombre','ruc','telefono','correo','direccion'],accounts:['codigo','nombre','tipo','naturaleza','subtipo'],opening:['cuenta','debe','haber']};
 const IMPORT_MODULES={products:'inventario',customers:'ventas',suppliers:'proveedores',accounts:'contabilidad',opening:'contabilidad'};
 let IMPORT_PREVIEW=null;
 const importRoute=routeAllowed;routeAllowed=function(route){if(route==='importador')return Object.values(IMPORT_MODULES).some(module=>permission(module,true));return importRoute(route)};
