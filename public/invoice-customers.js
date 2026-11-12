@@ -7,10 +7,18 @@ document.addEventListener('click',event=>{
 function openInvoiceCustomers(form,opener){
  const t=(key,fallback)=>uiT('invoiceCustomers.'+key,fallback);
  const dialog=document.createElement('dialog');dialog.className='invoice-customers';dialog.setAttribute('aria-label',t('title','Buscar cliente'));
- dialog.innerHTML=`<header><h2>${esc(t('title','Buscar cliente'))}</h2><button type="button" class="btn ghost" data-picker-close>${esc(t('close','Cerrar'))}</button></header><div class="invoice-customer-tools"><label>${esc(t('search','Nombre, RUC/cédula o teléfono'))}<input type="search" maxlength="200" autocomplete="off" aria-controls="invoice-customer-list"></label><label>${esc(uiT('customers.12','Tipo'))}<select><option value="">${esc(uiT('customers.13','Todos'))}</option><option value="credito">${esc(uiT('customers.14','Crédito'))}</option><option value="contado">${esc(uiT('customers.15','Contado'))}</option></select></label></div><p role="status" aria-live="polite" data-picker-count></p><div class="invoice-customer-list" id="invoice-customer-list"></div><nav aria-label="${esc(t('pages','Páginas de clientes'))}"><button type="button" class="btn ghost" data-prev>${esc(t('previous','Anterior'))}</button><button type="button" class="btn ghost" data-next>${esc(t('next','Siguiente'))}</button></nav>${actionAllowed('newCustomer')?`<footer><button type="button" class="btn" data-picker-new>${esc(t('new','+ Nuevo cliente'))}</button></footer>`:''}`;
+ dialog.innerHTML=`<header><h2>${esc(t('title','Buscar cliente'))}</h2><button type="button" class="btn ghost" data-picker-close>${esc(t('close','Cerrar'))}</button></header><div class="invoice-customer-tools"><label>${esc(t('search','Nombre, RUC/cédula o teléfono'))}<input type="search" maxlength="200" autocomplete="off" aria-controls="invoice-customer-list"></label><label>${esc(uiT('customers.12','Tipo'))}<select><option value="">${esc(uiT('customers.13','Todos'))}</option><option value="credito">${esc(uiT('customers.14','Crédito'))}</option><option value="contado">${esc(uiT('customers.15','Contado'))}</option></select></label></div><p role="status" aria-live="polite" data-picker-count></p><div class="invoice-customer-list" id="invoice-customer-list"></div><div class="invoice-customer-actions"><nav aria-label="${esc(t('pages','Páginas de clientes'))}"><button type="button" class="btn ghost" data-prev>${esc(t('previous','Anterior'))}</button><button type="button" class="btn ghost" data-next>${esc(t('next','Siguiente'))}</button></nav>${actionAllowed('newCustomer')?`<footer><button type="button" class="btn" data-picker-new>${esc(t('new','+ Nuevo cliente'))}</button></footer>`:''}</div>`;
  const search=dialog.querySelector('input'),filter=dialog.querySelector('select');let page=0;
  filter.value=form.elements.py?.value==='1201'||form.querySelector('[name=usePayment][value=credito]')?.checked?'credito':'';
- function close(){dialog.close();dialog.remove();form.inert=false;opener?.focus({preventScroll:true});}
+ const touchDevice=window.matchMedia('(any-pointer: coarse)').matches;
+ const viewport=window.visualViewport;
+ function fitViewport(){
+  if(!viewport)return;
+  dialog.style.setProperty('--picker-visible-height',viewport.height+'px');
+  dialog.style.setProperty('--picker-visible-top',viewport.offsetTop+'px');
+  dialog.classList.toggle('keyboard-open',touchDevice&&viewport.height<window.innerHeight*0.8);
+ }
+ function close(){viewport?.removeEventListener('resize',fitViewport);viewport?.removeEventListener('scroll',fitViewport);dialog.close();dialog.remove();form.inert=false;opener?.focus({preventScroll:true});}
  function choose(id){
   const customer=customerById(id);if(customer?.status!=='activo')return;
   const select=form.elements.customerId;
@@ -42,5 +50,9 @@ function openInvoiceCustomers(form,opener){
  dialog.addEventListener('click',event=>{const choice=event.target.closest('[data-choose]');if(choice){choose(choice.dataset.choose);return;}const button=event.target.closest('button');if(!button)return;if(button.hasAttribute('data-picker-close'))close();else if(button.dataset.choose)choose(button.dataset.choose);else if(button.hasAttribute('data-picker-new'))create();else if(button.hasAttribute('data-prev')||button.hasAttribute('data-next')){page+=button.hasAttribute('data-prev')?-1:1;render();}});
  dialog.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();close();}},{capture:true});
  dialog.addEventListener('cancel',event=>{event.preventDefault();close();});
- document.body.append(dialog);form.inert=true;dialog.showModal();render();search.focus();
+ // El foco inicial explícito evita que showModal abra el teclado táctil.
+ const initialFocus=touchDevice?dialog.querySelector('[data-picker-close]'):search;
+ initialFocus.setAttribute('autofocus','');
+ document.body.append(dialog);form.inert=true;fitViewport();dialog.showModal();render();initialFocus.focus({preventScroll:true});
+ viewport?.addEventListener('resize',fitViewport);viewport?.addEventListener('scroll',fitViewport);
 }
