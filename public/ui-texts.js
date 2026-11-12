@@ -3063,3 +3063,122 @@ Object.assign(UI_CATALOG, {
     "max": 200
   }
 });
+
+// Búsqueda de clientes en factura y plazos personalizados.
+Object.assign(UI_CATALOG, {
+  "customers.day": {
+    "original": "día",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "customers.days": {
+    "original": "días",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "customers.period.7": {
+    "original": "1 semana",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "customers.period.30": {
+    "original": "1 mes",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "customers.period.180": {
+    "original": "6 meses",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "customers.period.365": {
+    "original": "1 año",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "customers.customTerm": {
+    "original": "Otro (escribir)",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "customers.termDays": {
+    "original": "Días de plazo",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "customers.invalidTerm": {
+    "original": "Escribe un plazo entero de 1 a 3650 días.",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "invoiceCustomers.title": {
+    "original": "Buscar cliente",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "invoiceCustomers.close": {
+    "original": "Cerrar",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "invoiceCustomers.search": {
+    "original": "Nombre, RUC/cédula o teléfono",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "invoiceCustomers.pages": {
+    "original": "Páginas de clientes",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "invoiceCustomers.previous": {
+    "original": "Anterior",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "invoiceCustomers.next": {
+    "original": "Siguiente",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "invoiceCustomers.new": {
+    "original": "+ Nuevo cliente",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "invoiceCustomers.customers": {
+    "original": "clientes",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "invoiceCustomers.page": {
+    "original": "Página",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "invoiceCustomers.selection": {
+    "original": "Selección",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "invoiceCustomers.noTaxId": {
+    "original": "Sin RUC / cédula",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "invoiceCustomers.limit": {
+    "original": "Límite",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "invoiceCustomers.choose": {
+    "original": "Elegir",
+    "group": "Cartera de clientes",
+    "max": 200
+  },
+  "invoiceCustomers.empty": {
+    "original": "No se encontraron clientes activos.",
+    "group": "Cartera de clientes",
+    "max": 200
+  }
+});

@@ -599,3 +599,11 @@ input[data-decimal]{text-align:center}
 .correction-choice .ck{align-items:flex-start;white-space:normal}
 .correction-choice input[type=radio]{flex-shrink:0;width:auto}
 @media(max-width:600px){.settings-backups .backup-actions>*{max-width:100%;white-space:normal}.entry-correction-actions{width:100%}}
+
+/* Selector de clientes: conserva el contexto de la factura en ambos formularios. */
+.sale-customer-picker{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.sale-customer-picker>label{flex:1;min-width:180px}.sale-customer-picker>button{margin-bottom:12px}
+.invoice-customers,.invoice-customer-editor{width:min(880px,96vw);max-height:92dvh;border:1px solid var(--line);border-radius:16px;padding:20px;background:var(--card);color:var(--ink)}
+.invoice-customers::backdrop,.invoice-customer-editor::backdrop{background:rgb(15 30 25 / .55)}
+.invoice-customers[open]{display:flex;flex-direction:column;gap:12px}.invoice-customers header,.invoice-customers nav{display:flex;justify-content:space-between;align-items:center;gap:12px}.invoice-customers h2,.invoice-customers p{margin:0}.invoice-customer-tools{display:grid;grid-template-columns:2fr 1fr;gap:12px}.invoice-customer-list{overflow:auto;min-height:0}.invoice-customers table{width:100%}.invoice-customers footer{text-align:right}.invoice-customers button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.invoice-customer-editor>.mo{position:static;background:none;padding:0;display:block}.invoice-customer-editor .md{width:100%;max-height:none;margin:0;box-shadow:none}.invoice-customer-editor{padding:0}
+@media(max-width:640px){.invoice-customers{width:100%;max-height:96dvh;padding:14px}.invoice-customer-tools{grid-template-columns:1fr}.invoice-customers thead{display:none}.invoice-customers table,.invoice-customers tbody{display:block}.invoice-customers tr{display:block;border:1px solid var(--line);border-radius:10px;margin-bottom:10px;padding:10px}.invoice-customers td{display:block;border:0;padding:5px}.invoice-customers td:last-child{text-align:right}}

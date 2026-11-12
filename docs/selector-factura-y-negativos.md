@@ -17,3 +17,20 @@ Se revisó estáticamente el código y se comprobó sintaxis de los archivos mod
 Tras desplegar, comprobar aislamiento con dos empresas, valor inicial apagado en empresa actual/nueva, rechazo de cambios por colaboradores, soporte de consulta y API manipulada, conflicto de revisión y permanencia tras recargar. Activar en una empresa y verificar venta sin stock, consumibles, gasto/pago sin fondos, abono excedente, Kardex, reportes, PEPS y devolución; contrastar debe/haber y confirmar comportamiento estricto en la otra empresa. Desactivar sin cambiar documentos históricos.
 
 Verificar visualmente a 360, 768, 1024 y 1440 px, con tablet vertical/horizontal, modo oscuro y zoom: ausencia de desplazamiento horizontal, controles de 44 px, encabezado/buscador/escáner y total accesibles, navegación con Tab/flechas/Enter/Escape, cancelar sin cambios, precios editados conservados, cantidad repetida acumulada y autorización de descuento invalidada solo al confirmar cambios. Probar cámara real con permiso concedido/denegado y equipo sin cámara, lector USB y Bluetooth, código inexistente y varios escaneos seguidos. Confirmar emisión, asiento, IVA, totales, numeración y descuento con las pruebas habituales del proyecto.
+
+## Buscar clientes y plazos personalizados
+
+Crear factura y Nueva venta conservan el selector de cartera, Cliente manual / general y Otro (escribir nombre). Buscar cliente abre un diálogo sobre la factura y bloquea temporalmente su formulario. La búsqueda ignora tildes y mayúsculas y consulta nombre, RUC/cédula y teléfono. Los filtros Todos, Crédito y Contado usan el tipo de la ficha; Crédito se preselecciona si la factura ya lo tiene marcado. Se muestran solo clientes activos, 40 por página, con plazo y límite para crédito; en móvil aparecen tarjetas. Elegir un cliente dispara el evento change del selector existente para completar la información y el vencimiento sin duplicar reglas de pago. Cerrar y Escape conservan el borrador y devuelven el foco al botón.
+
+Con permiso de creación, + Nuevo cliente abre la ficha existente sobre el buscador. Guardar incorpora el cliente activo a la selección; cancelar devuelve al buscador. Se conserva el guardado habitual en la nube, con su estado y revisión optimista, sin navegar ni reconstruir la factura. Una ficha creada inactiva o suspendida no se selecciona para una venta nueva.
+
+Cartera de clientes ofrece 1, 3, 7 (1 semana), 15, 30 (1 mes), 45, 60, 90, 180 (6 meses) y 365 días (1 año). Otro (escribir) habilita Días de plazo, un entero entre 1 y 3650. Al editar, un plazo fuera de la lista se abre como Otro con su valor. Se conserva el campo creditDays sin migraciones ni cambios de documentos históricos. La validación del servidor admite el mismo intervalo. La importación de clientes mantiene su valor predeterminado de 30 días y no restringe otros plazos existentes. Verifica con tu contador las condiciones comerciales.
+
+Verificaciones pendientes tras el despliegue (revisión estática, sin ejecutar pruebas, servidores ni compilaciones locales):
+
+1. En Crear factura, abrir Buscar cliente, filtrar Crédito y elegir una ficha; revisar nombre, información y vencimiento. Repetir en Nueva venta contable.
+2. Crear un cliente desde el panel y comprobar que queda seleccionado sin perder fecha, productos, precios, pagos ni descuento. Cancelar la ficha y el buscador con botones y Escape; comprobar retorno de foco.
+3. Guardar clientes con 1, 7, 365 y Otro con 5 días; rechazar vacío, cero, negativos, decimales y más de 3650.
+4. Editar una ficha de 30 días y otra personalizada de 6 días; conservar sus condiciones.
+5. Emitir una venta a crédito con plazo personalizado y revisar el vencimiento guardado.
+6. Comprobar búsqueda con tildes/mayúsculas, RUC y teléfono; paginación con más de 40 clientes; excluir inactivos/suspendidos, permisos de creación, tarjetas móviles y modo oscuro. Elegir contado con crédito previamente marcado conserva la regla de pago existente.
