@@ -30,7 +30,7 @@ const isPersonalEntry=e=>e?.type==='capital-socio'&&(S.partners||[]).some(p=>p.m
 function personalExpenseFields(){return selectField('partnerId','Socio',option('','Selecciona socio')+(S.partners||[]).filter(p=>p.active!==false&&!['inactivo','archivado'].includes(p.status)).map(p=>option(p.id,p.name)).join(''))+selectField('source','Descontar de',Object.entries(personalSourceNames).map(([code,label])=>option(code,label+(code==='3103'?' (recomendado)':''))).join(''))+'<p data-personal-summary role="status"></p>';}
 async function personalExpensePreview(form,totalName){
  form.elements.source.value='3103';
- const math=await import('/accounting-math.mjs?v=db034bab22f82ca0');
+ const math=await import('/accounting-math.mjs?v=10d728cb2562503b');
  const update=()=>{
   const B=bal('0000',v(form,'date')),partner=S.partners.find(p=>p.id===v(form,'partnerId')),total=+v(form,totalName)||0;
   const available=code=>code==='3101'?Math.min(math.partnerCapitalCents(partner,S.entries,v(form,'date'))/100,-((B[code]?.d||0)-(B[code]?.c||0))):-((B[code]?.d||0)-(B[code]?.c||0));

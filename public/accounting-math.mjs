@@ -351,3 +351,62 @@ export function invoicePriceAdjustment(original, final, mode='percent', exchange
 export function partnerCapitalCents(partner,entries,until='9999'){
  return (partner?.movements||[]).filter(m=>m.date<=until&&entries.some(e=>e.id===m.entryId)&&!entries.some(e=>e.reversalOf===m.entryId&&e.date<=until)).reduce((sum,m)=>sum+(m.kind==='aporte'?moneyCents(m.total):m.charge==='3101'?-moneyCents(m.total):0),0);
 }
+
+// Consulta pura: el mayor es la única fuente monetaria; costs aporta clasificación.
+// No suma base/total al asiento y conserva las anulaciones en su fecha contable.
+export function connectedCostReport(data,from,to,{allocation='none'}={}){
+ if(!['none','revenue'].includes(allocation))throw new AccountingValidationError('Criterio de reparto inválido.');
+ const add=(a,b)=>{const n=a+b;if(!Number.isSafeInteger(n))throw new AccountingValidationError('Importe fuera de rango seguro.');return n};
+ const sum=xs=>xs.reduce(add,0),accounts=new Map((data.accounts||[]).map(a=>[a.code,a]));
+ const all=data.entries||[],byId=new Map(all.map(e=>[e.id,e])),costByEntry=new Map((data.costs||[]).map(c=>[c.entryId,c]));
+ const selected=globalThis.AcontecAnnualLedger?.select(all,to)||all;
+ const entries=selected.filter(e=>e.date>=from&&e.date<=to&&!['apertura','apertura-importada','anula-apertura','cierre','cierre-anual','reapertura-anual'].includes(e.type));
+ const groups={},details=[],unassigned='Sin asignar';
+ const dimensions=['type','direct','center','eventId','businessId','customerId','productId','branchId','catalogId','saleId'];
+ for(const d of dimensions)groups[d]=new Map();
+ const get=(d,key)=>{key=key||unassigned;let r=groups[d].get(key);if(!r){r={key,revenueCents:0,cogsCents:0,costCents:0,allocatedCents:0,count:0};groups[d].set(key,r)}return r};
+ const totals={revenueCents:0,cogsCents:0,variableCents:0,fixedCents:0,expensesCents:0,payrollCents:0,depreciationCents:0,otherCents:0};
+ for(const e of entries){
+  const original=byId.get(e.reversalOf)||byId.get(e.type==='nota-credito'?e.invoiceId:null),cost=costByEntry.get(e.id)||costByEntry.get(e.reversalOf),source=original||e;
+  // Recuperar dimensiones históricas de notas y contrasientos sin alterar documentos.
+  const sale=byId.get(cost?.saleId||e.saleId||source.saleId),record=(data.businessRecords||[]).find(r=>r.id===(cost?.businessId||e.businessId||source.businessId));
+  const invoiceRecord=(data.businessRecords||[]).find(r=>r.saleId===(sale?.id||source.id)||(r.billed||[]).some(b=>b.entryId===(sale?.id||source.id)));
+  const links={type:cost?.type,direct:cost&&typeof cost.direct==='boolean'?(cost.direct?'Directo':'Indirecto'):null,center:cost?.center||e.costCenter||source.costCenter,eventId:cost?.eventId||e.eventId||e.organizationEventId||source.eventId||source.organizationEventId||sale?.eventId||sale?.organizationEventId,businessId:cost?.businessId||e.businessId||source.businessId||sale?.businessId||invoiceRecord?.id,customerId:cost?.customerId||e.customerId||source.customerId||sale?.customerId,productId:cost?.productId||e.productId||source.productId,branchId:e.branchId||'principal',catalogId:cost?.catalogId,saleId:['venta','nota-credito'].includes(e.type)?(e.type==='venta'?e.id:e.invoiceId):(cost?.saleId||e.saleId||source.saleId)};
+  if(record?.kind==='organization-event')links.eventId||=record.id;
+  const revenue=sum((e.lines||[]).filter(l=>accounts.get(l.a)?.tipo==='ingreso').map(l=>moneyCents(l.c||0)-moneyCents(l.d||0)));
+  let cogs=0,amount=0;const accountAmounts=[];
+  for(const l of e.lines||[]){if(!['gasto','costo'].includes(accounts.get(l.a)?.tipo))continue;const n=moneyCents(l.d||0)-moneyCents(l.c||0);accountAmounts.push({account:l.a,amountCents:n});
+   if(l.a==='5101'){cogs=add(cogs,n);continue}amount=add(amount,n);
+   const key=cost?(cost.type==='variable'?'variableCents':cost.type==='fijo'?'fixedCents':'otherCents'):source.type==='nomina'?'payrollCents':source.type==='depreciacion'?'depreciationCents':source.type==='gasto'?'expensesCents':'otherCents';totals[key]=add(totals[key],n);
+  }
+  totals.revenueCents=add(totals.revenueCents,revenue);totals.cogsCents=add(totals.cogsCents,cogs);
+  if(!revenue&&!cogs&&!amount)continue;
+  details.push({entryId:e.id,date:e.date,reference:e.reference||e.desc,links,costId:cost?.id,accountAmounts,revenueCents:revenue,cogsCents:cogs,costCents:amount});
+  for(const d of dimensions){
+   if(d==='productId'&&['venta','nota-credito'].includes(e.type)&&(e.items||[]).length){
+    const items=e.items,spread=(total,weights)=>{const base=sum(weights);if(!base)return null;let left=total;return weights.map((w,i)=>{const n=i===weights.length-1?left:Number(BigInt(total)*BigInt(w)/BigInt(base));left-=n;return n})};
+    const incomes=spread(revenue,items.map(i=>Math.max(0,moneyCents(round(i.q*i.u))))),known=items.every(i=>Number.isFinite(i.cost)),costs=known?spread(cogs,items.map(i=>Math.max(0,moneyCents(round(i.q*i.cost))))):null;
+    items.forEach((item,i)=>{const r=get(d,item.p);r.revenueCents=add(r.revenueCents,incomes?.[i]||0);r.cogsCents=add(r.cogsCents,costs?.[i]||0);r.unknownCogs||=!known;r.count++});
+    const rest=get(d,links[d]);if(!incomes)rest.revenueCents=add(rest.revenueCents,revenue);if(!costs)rest.cogsCents=add(rest.cogsCents,cogs);rest.costCents=add(rest.costCents,amount);continue;
+   }
+   const r=get(d,links[d]);r.revenueCents=add(r.revenueCents,revenue);r.cogsCents=add(r.cogsCents,cogs);r.costCents=add(r.costCents,amount);r.count++
+  }
+ }
+ // Reparto de indirectos sin destino, exclusivamente como consulta. Cada dimensión
+ // es una vista alternativa; restos de centavo deterministas al último destino.
+ if(allocation==='revenue')for(const d of ['eventId','businessId','saleId','productId']){
+  const pool=sum(details.filter(r=>r.links.direct==='Indirecto'&&!r.links[d]).map(r=>r.costCents));
+  const targets=[...groups[d].values()].filter(r=>r.key!==unassigned&&r.revenueCents>0).sort((a,b)=>a.key.localeCompare(b.key)),base=sum(targets.map(r=>r.revenueCents));
+  if(pool&&base>0){let left=pool;targets.forEach((r,i)=>{r.allocatedCents=i===targets.length-1?left:Number(BigInt(pool)*BigInt(r.revenueCents)/BigInt(base));left-=r.allocatedCents});get(d,unassigned).allocatedCents=-pool}
+ }
+ const grouped=Object.fromEntries(dimensions.map(d=>[d,[...groups[d].values()].map(r=>({...r,resultCents:sum([r.revenueCents,-r.cogsCents,-r.costCents,-r.allocatedCents])}))]));
+ const outgoingsCents=sum([totals.variableCents,totals.fixedCents,totals.expensesCents,totals.payrollCents,totals.depreciationCents,totals.otherCents]);
+ const fixedActualCents=sum([totals.fixedCents,totals.expensesCents,totals.payrollCents,totals.depreciationCents,totals.otherCents]),contributionCents=sum([totals.revenueCents,-totals.cogsCents,-totals.variableCents]);
+ const pending=(data.costs||[]).filter(c=>c.pay==='2101'&&c.date<=to&&(!c.reversalId||(byId.get(c.reversalId)?.date||'')>to)).map(c=>{
+  const e=byId.get(c.entryId);if(!e)return null;
+  const balance=sum(all.filter(r=>r.date<=to&&(r.id===e.id||r.invoiceId===e.id||r.reversalOf===e.id||r.lines?.some(l=>l.invoiceId===e.id))).flatMap(r=>(r.lines||[]).filter(l=>l.a==='2101'&&(!r.allocationJournal||l.invoiceId===e.id)).map(l=>moneyCents(l.c||0)-moneyCents(l.d||0))));
+  return {costId:c.id,entryId:e.id,supplierId:e.supplierId||'',party:e.party,reference:e.reference,due:e.due,balanceCents:Math.max(0,balance)};
+ }).filter(r=>r&&r.balanceCents>0);
+ const safeRatio=n=>{if(n!==null&&!Number.isSafeInteger(n))throw new AccountingValidationError('Resultado fuera de rango seguro.');return n};
+ return {...totals,grossCents:sum([totals.revenueCents,-totals.cogsCents]),outgoingsCents,fixedActualCents,contributionCents,operatingCents:sum([totals.revenueCents,-totals.cogsCents,-outgoingsCents]),breakEvenCents:safeRatio(totals.revenueCents>0&&contributionCents>0?Number((BigInt(Math.max(0,fixedActualCents))*BigInt(totals.revenueCents)+BigInt(contributionCents)-1n)/BigInt(contributionCents)):null),costSalesPct:totals.revenueCents>0?outgoingsCents/totals.revenueCents*100:null,pendingCents:sum(pending.map(r=>r.balanceCents)),pending,groups:grouped,details,hasData:details.length>0,allocation};
+}
