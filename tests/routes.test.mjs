@@ -313,3 +313,32 @@ test('pending settlement keeps authorized collections and shift expenses availab
  d.entries.push({id:'credit',type:'venta',date:'2026-11-10',customerId:'c',pay:'1201',creditAmount:5,reference:'CR-1',lines:[{a:'1201',d:5,c:0}]});const hooks={shift:()=>({id:'shift'}),cashAvailable:()=>1000,entry:e=>{const row={id:randomUUID(),...e};d.entries.push(row);return row}};
  await run(d,'routeCollect',{invoiceId:'credit',method:'efectivo',amountCents:200,shiftId:'shift'},worker('driver'),hooks);await run(d,'routeExpense',{amountCents:100,reason:'Estacionamiento',shiftId:'shift'},worker('driver'),hooks);assert.equal(d.businessRecords.filter(r=>r.kind==='route-collection').length,1);assert.equal(d.businessRecords.filter(r=>r.kind==='route-expense').length,1);assert.equal(d.businessRecords.find(r=>r.kind==='route-settlement').status,'Pendiente');assert.equal(d.businessRecords.find(r=>r.id===loadId).closed,false);
 });
+
+import {commerceOperation} from '../netlify/lib/commerce.mjs';
+import {projectRouteSettlement} from '../netlify/lib/routes.mjs';
+test('delivery skips a zero line, leaves its remainder and invoices only positive quantities',async()=>{
+ const d=fixture();d.products.push({...d.products[0],id:'p2',unit:'libra'});
+ const id=await run(d,'routeOrder',{customerId:'c',due:'2026-11-12',status:'Enviado',payment:'efectivo',items:[{p:'p',q:2,u:2},{p:'p2',q:1.125,u:2}]},worker('seller','route_preseller'));
+ const loadId=await run(d,'routePrepare',{orderIds:[id],memberId:'driver',deliveryDate:'2026-11-12',zone:'Norte'});await run(d,'routeDispatch',{id:loadId});
+ await run(d,'routeDelivery',{id,deliveryId:randomUUID(),items:[{p:'p',q:1},{p:'p2',q:0}]},worker('driver'));
+ assert.equal(d.entries.length,1);assert.deepEqual(d.entries[0].items.map(i=>i.p),['p']);const order=d.businessRecords.find(r=>r.id===id);assert.equal(order.remaining.find(i=>i.p==='p2').q,1.125);assert.equal(order.status,'Parcial');
+});
+test('all-zero delivery issues no invoice and preserves pending quantities',async()=>{
+ const d=fixture(),{id}=await prepare(d);await assert.rejects(run(d,'routeDelivery',{id,deliveryId:randomUUID(),items:[{p:'p',q:0}]},worker('driver')),/Entrega no realizada/);assert.equal(d.entries.length,0);assert.equal(d.businessRecords.find(r=>r.id===id).remaining[0].q,4);
+});
+test('departure and reload ignore zeros but require a positive product',async()=>{
+ const d=fixture();d.products.push({...d.products[0],id:'p2',unit:'quintal'});
+ const load=b=>commerceOperation(d,owner,{email:'owner@example.test'},{operation:'commerceLoad',operationId:randomUUID(),confirmed:true,date:'2026-11-12',routeId:'r',...b},context(d));
+ await assert.rejects(load({items:[{p:'p',q:0}]}),/mayor que cero/);
+ const id=await load({items:[{p:'p',q:0},{p:'p2',q:1.125}]}),l=d.businessRecords.find(r=>r.id===id);assert.deepEqual(l.items.map(i=>[i.p,i.q]),[['p2',1.125]]);
+ await assert.rejects(run(d,'routeReload',{id,items:[{p:'p',q:0}]}),/mayor que cero/);await run(d,'routeReload',{id,items:[{p:'p',q:0},{p:'p2',q:0.125}]});assert.equal(l.items[0].q,1.25);assert.equal(l.items.length,1);
+});
+test('zero truck return is valid and shortage keeps supervisor approval and reason',async()=>{
+ const d=fixture(),{id,loadId}=await prepare(d);const body={id:loadId,items:[{p:'p',q:0}],countedCents:0,orderReasons:[{orderId:id,reason:'Ausente'}],reason:'No regresó mercadería'};const pending=await run(d,'routeSettle',body,worker('driver'));assert.equal(d.businessRecords.find(r=>r.id===pending).counts[0].q,0);await run(d,'routeApproveSettlement',body,owner,{adjust:async b=>assert.equal(b.delta,-4)});assert.equal(d.businessRecords.find(r=>r.id===loadId).returnedItems[0].q,0);
+});
+test('settlement projection exposes cost and profit exclusively to owner and route supervisor',()=>{
+ const r={kind:'route-settlement',costSoldCents:120,grossProfitCents:80,amountCents:200};for(const a of [worker('seller','route_seller'),worker('driver'),{owner:false}]){const view=projectRouteSettlement(a,r);assert.equal(view.costSoldCents,undefined);assert.equal(view.grossProfitCents,undefined);assert.equal(view.amountCents,200)}for(const a of [owner,worker('boss','route_supervisor')])assert.equal(projectRouteSettlement(a,r).grossProfitCents,80);assert.equal(r.costSoldCents,120);
+});
+test('delivery receipt retry with same operationId returns invoice without another mutation',async()=>{
+ const d=fixture(),{id}=await prepare(d),operationId=randomUUID(),body={id,operationId,deliveryId:randomUUID(),items:[{p:'p',q:1}]};const invoice=await run(d,'routeDelivery',body,worker('driver')),before=structuredClone(d);const result=replayOperationReceipt({actor:'driver',payloadHash:'same',revision:2,resultId:invoice},{id:operationId,hash:'same'},'driver',check);assert.equal(result.resultId,invoice);assert.equal(result.replayed,true);assert.deepEqual(d,before);assert.equal(d.entries.length,1);
+});

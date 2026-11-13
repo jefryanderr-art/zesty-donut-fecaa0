@@ -9,6 +9,7 @@ export const routeManager=a=>a.owner||a.routeRole==='route_supervisor'||!a.route
 export const routeCustomerAllowed=(data,a,id)=>!routeWorker(a)||(data.customers||[]).some(c=>c.id===id&&c.sellerId===a.member.id)||(data.businessRecords||[]).some(r=>r.customerId===id&&r.assignedMemberId===a.member.id);
 export const routeRecordAllowed=(a,r)=>!routeWorker(a)||r.operatorId===a.member.id||r.assignedMemberId===a.member.id;
 export function routePhotoAllowed(records,a,r){const order=records.find(o=>o.id===r.orderId&&o.kind==='route-order');return r.kind==='route-delivery'&&r.branchId===a.branchId&&!!order&&order.branchId===a.branchId&&routeRecordAllowed(a,r)&&routeRecordAllowed(a,order);}
+export function projectRouteSettlement(access,row){const copy=structuredClone(row);if(copy.kind==='route-settlement'&&!access.owner&&access.routeRole!=='route_supervisor'){delete copy.costSoldCents;delete copy.grossProfitCents;}return copy}
 const text=(v,n=200)=>String(v??'').trim().slice(0,n);
 export function routeOperationGuard(a,b,check){
  if(!a.routeRole)return;
@@ -187,14 +188,14 @@ export async function routeOperation(data,a,session,b,h){
   manage();const l=get('commerce-load');unlocked(l);check(!l.closed&&l.status==='Preparada','La salida ya está en reparto o cerrada.');l.status='En reparto';l.departedAt=at;l.events.push(event);for(const id of l.orderIds||[]){const r=get('route-order',id);if(r.status==='Preparado'){r.status='En reparto';r.events.push(event)}}return l.id;
  }
  if(b.operation==='routeReload'){
-  manage();const l=get('commerce-load');check(!l.closed,'Carga cerrada.');unlocked(l);const list=quantities(b.items).filter(i=>i.q>0);check(list.length,'Agrega productos a la recarga.');commerceCheckStock(data,{items:list},check);
+  manage();const l=get('commerce-load');check(!l.closed,'Carga cerrada.');unlocked(l);const list=quantities(b.items).filter(i=>i.q>0);check(list.length,'Indica al menos un producto con cantidad mayor que cero para recargar.');commerceCheckStock(data,{items:list},check);
   for(const i of list){for(const field of ['items','remaining']){const row=l[field].find(x=>x.p===i.p);if(row)row.q=normalizeItemQuantity(row.q+i.q);else l[field].push({...i,u:0})}}
   l.reloads||=[];l.reloads.push({...event,items:list});l.events.push(event);return l.id;
  }
  if(b.operation==='routeDelivery'){
   check(!worker||['route_driver','route_seller'].includes(a.routeRole),'Tu rol no realiza entregas.');const r=get('route-order');check(['En reparto','Parcial'].includes(r.status)&&r.reserved,'El pedido no está en reparto.');
   const deliveryId=text(b.deliveryId,80);check(/^[a-f0-9-]{36}$/.test(deliveryId),'Identificador de entrega inválido.');check(!ofKind('route-delivery').some(x=>x.deliveryId===deliveryId),'Esta entrega ya está registrada; recarga sus documentos.');
-  const actual=quantities(b.items).filter(i=>i.q>0);check(actual.length,'Indica lo recibido.');const list=actual.map(i=>{const pending=r.remaining.find(x=>x.p===i.p);check(pending&&i.q<=pending.q,'La entrega supera lo pendiente.');const submitted=b.items.find(x=>x.p===i.p);check(submitted.u===undefined||moneyCents(submitted.u)===moneyCents(pending.u),'El precio de entrega no coincide con el precio del pedido.');return {...pending,q:i.q}});
+  const actual=quantities(b.items).filter(i=>i.q>0);check(actual.length,'Indica al menos una cantidad mayor que cero; si no hubo entrega, registra Entrega no realizada con motivo.');const list=actual.map(i=>{const pending=r.remaining.find(x=>x.p===i.p);check(pending&&i.q<=pending.q,'La entrega supera lo pendiente.');const submitted=b.items.find(x=>x.p===i.p);check(submitted.u===undefined||moneyCents(submitted.u)===moneyCents(pending.u),'El precio de entrega no coincide con el precio del pedido.');return {...pending,q:i.q}});
   const proof={at,signedBy:text(b.signedBy,160)};if(b.signature){check(Array.isArray(b.signature)&&b.signature.length<=100&&b.signature.flat().length<=1200&&b.signature.every(stroke=>Array.isArray(stroke)&&stroke.every(p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite)&&p[0]>=0&&p[0]<=600&&p[1]>=0&&p[1]<=160)),'Firma inválida.');proof.signature=structuredClone(b.signature);}if(b.location){const {latitude,longitude,accuracy}=b.location;check(Number.isFinite(latitude)&&Math.abs(latitude)<=90&&Number.isFinite(longitude)&&Math.abs(longitude)<=180&&Number.isFinite(accuracy)&&accuracy>=0,'Ubicación inválida.');proof.location={latitude,longitude,accuracy}}
   const l=r.loadId?get('commerce-load',r.loadId):null;check(!l||!l.closed,'La carga fue cerrada; prepara una nueva salida.');
   if(l)unlocked(l);
