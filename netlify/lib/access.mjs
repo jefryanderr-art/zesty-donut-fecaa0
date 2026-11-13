@@ -1,3 +1,5 @@
+import {projectRouteSettlement} from './routes.mjs';
+import {commerceRouteCashRows} from '../../public/commerce-math.mjs';
 import {replayOperationReceipt} from './operation-replay.mjs';
 import {routeNoticeAllowed,routeNoticeContext} from './route-notices.mjs';
 import {supervisor} from './policies.mjs';
@@ -183,6 +185,12 @@ export function projectData(data, access, {includeSpaces=false}={}) {
   if(data)delete data.profileSpaces;
   const serviceEmployeeIds=new Set((data?.employees||[]).map(e=>e.id));
   if (!data) return data;
+  for(const l of data.businessRecords||[])if(l.kind==='commerce-load'){
+    if(!l.closed)l.routeCashPreview=commerceRouteCashRows(data.businessRecords,data.entries,l.routeId,'',(l.assignedMemberId||l.operatorId),l.id);
+    const bills=(data.entries||[]).filter(e=>(l.sales||[]).includes(e.id)),goods=new Map();
+    for(const e of bills)for(const i of e.items||[]){const row=goods.get(i.p)||{p:i.p,sold:0,delivered:0};row[e.routeDeliveryId?'delivered':'sold']+=i.q;goods.set(i.p,row);}
+    l.routeGoodsPreview=[...goods.values()];
+  }
   const routeWorker=access.routeRole&&access.routeRole!=='route_supervisor';
   if(routeWorker)data.customers=(data.customers||[]).filter(c=>c.sellerId===access.member.id||(data.businessRecords||[]).some(r=>r.customerId===c.id&&r.assignedMemberId===access.member.id));
   if(access.owner&&!restrictedPlan(access)){
@@ -190,7 +198,7 @@ export function projectData(data, access, {includeSpaces=false}={}) {
     if(Array.isArray(data.entries))data.entries=data.entries.map(e=>projectServiceEntry(e,true,serviceEmployeeIds));
     return data;
   }
-  const operationalOnly = access.rolePolicy ? access.rolePolicy.ownOperations === true : ['cajero', 'vendedor'].includes(String(access.member?.role).toLowerCase());
+  const operationalOnly = !!routeWorker || (access.rolePolicy ? access.rolePolicy.ownOperations === true : ['cajero', 'vendedor'].includes(String(access.member?.role).toLowerCase()));
   const ownId = access.member?.id;
   const ownShiftIds = new Set((data.shifts || []).filter(shift => shift.operatorId === ownId).map(shift => shift.id));
   const ownFundIds = new Set((data.pettyFunds || []).filter(fund => fund.responsible === ownId).map(fund => fund.id));
@@ -232,7 +240,7 @@ export function projectData(data, access, {includeSpaces=false}={}) {
   for(const [name,module] of Object.entries({...ADVANCED_ARRAYS,...TRADE_ARRAYS})) projected[name]=allowed(access,module)?structuredClone(data[name]||[]):[];
   if(allowed(access,'fiscal'))projected.fiscalCreditReservations=globalThis.AcontecFiscalMath.effectiveDeclarations(data).flatMap(r=>r.frozen.credits||[]).filter(c=>c.source==='iva').map(c=>({period:c.period,amountCents:c.amountCents}));
   projected.fiscalWorkflows=(data.fiscalWorkflows||[]).filter(r=>allowed(access,r.module)&&(['template','configuration'].includes(r.kind)||[...accountingPermissionModules,...new Set((data.businessRecords||[]).filter(b=>['bancos','constancias_laborales','retenciones_fiscales'].includes(b.module)).map(b=>b.module))].every(m=>allowed(access,m))));
-  projected.businessRecords=(data.businessRecords||[]).filter(row=>(!routeWorker||row.module==='rutas'&&(row.kind==='route-notice'?routeNoticeAllowed(data.businessRecords||[],access,row):row.operatorId===ownId||row.assignedMemberId===ownId||row.kind==='route-definition'&&projected.customers.some(c=>c.routeZone===row.route)))&&allowed(access,row.module)&&(row.kind!=='lodging-close'||allowed(access,'ventas')&&allowed(access,'contabilidad'))&&(access.routeRole&&row.module==='rutas'||commerceCanRead(row,m=>allowed(access,m)))&&(row.module!=='auditoria_revision'||row.kind==='settings'||(row.kind==='report'?row:(data.businessRecords||[]).find(r=>r.id===row.reportId))?.scope?.every(m=>allowed(access,m)))).map(row=>structuredClone(row));
+  projected.businessRecords=(data.businessRecords||[]).filter(row=>(!routeWorker||row.module==='rutas'&&(row.kind==='route-notice'?routeNoticeAllowed(data.businessRecords||[],access,row):row.operatorId===ownId||row.assignedMemberId===ownId||row.kind==='route-definition'&&projected.customers.some(c=>c.routeZone===row.route)))&&allowed(access,row.module)&&(row.kind!=='lodging-close'||allowed(access,'ventas')&&allowed(access,'contabilidad'))&&(access.routeRole&&row.module==='rutas'||commerceCanRead(row,m=>allowed(access,m)))&&(row.module!=='auditoria_revision'||row.kind==='settings'||(row.kind==='report'?row:(data.businessRecords||[]).find(r=>r.id===row.reportId))?.scope?.every(m=>allowed(access,m)))).map(row=>projectRouteSettlement(access,row));
   for(const r of projected.businessRecords){if(r.kind==='route-notice')r.relatedId=routeNoticeContext(data.businessRecords||[],r).authority?.id||r.sourceId;if(routeWorker&&r.kind==='route-definition'){delete r.commissions;if(r.workerTargets)r.workerTargets=r.workerTargets.filter(t=>t.memberId===ownId);}if(r.kind==='lodging-unit')for(const t of r.tasks||[]){if(!allowed(access,'costos'))delete t.amountCents;if(!allowed(access,'compras'))delete t.supplierId;}if(!allowed(access,'contabilidad')&&!allowed(access,'finanzas'))delete r.servicePaymentPlans;if(!allowed(access,'personal'))for(const t of r.serviceTime||[])delete t.employeeId;}
   if(!allowed(access,'produccion')||!allowed(access,'inventario'))for(const r of projected.businessRecords){delete r.eventMenu;delete r.eventIngredients;}
   projected.stockTransfers=moduleIncluded(access.billingPlan||{blockedModules:[]},'sucursales')&&allowed(access,'inventario')?structuredClone(data.stockTransfers||[]):[];

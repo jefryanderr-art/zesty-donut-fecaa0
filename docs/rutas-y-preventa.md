@@ -136,3 +136,13 @@ Después del despliegue, verificar en un navegador y una empresa de prueba, con 
 6. Repetir los flujos fiscales con y sin red: no guardar esos documentos en IndexedDB ni presentar una factura como emitida sin respuesta confirmada. Completar la integración de crédito, descuentos/credenciales de supervisor, stock/PEPS, liquidaciones, devoluciones, Database/RLS, permisos/planes, fotografía privada, Excel, teléfono y modo oscuro.
 
 Las verificaciones de integración y rendimiento siguen pendientes; la revisión estática y los casos con hooks no equivalen a una aprobación funcional en producción. La Fase 5 queda implementada para revisión del propietario.
+
+## Salida, entregas y regreso visibles
+
+Cada carga muestra Paso 1 · Salida, Paso 2 · Entregas y Paso 3 · Regreso. Mientras está Preparada, el supervisor encuentra Salir a reparto junto a la mercadería y el receptor; cada pedido muestra cliente, estado y Entregar, o el aviso de salida pendiente. Regreso del camión también está en Mi ruta de hoy y permite elegir cuando hay varias cargas abiertas.
+
+La entrega admite 0 como «no entregado esta vez»: se excluye de la factura y conserva el remanente. Si todas las cantidades son cero, abre Entrega no realizada para registrar motivo. Salida y recarga ignoran líneas cero y exigen alguna positiva. Ventas normales y facturas emitidas conservan sus restricciones. Las cantidades usan la unidad de catálogo y hasta tres decimales, con validación exacta en servidor.
+
+El regreso reúne mercadería, conteo editable (incluido cero), diferencias en vivo, dinero y motivos obligatorios por pedido parcial o no entregado. El resumen requiere confirmación explícita del conteo, muestra porcentajes por producto para no sumar unidades incompatibles y reutiliza las operaciones de liquidación y aprobación existentes. La tarjeta cerrada y la impresión comparten el resumen. La proyección del servidor elimina costo y utilidad de liquidaciones salvo para dueño o supervisor de ruta y conserva el alcance propio de vendedores y entregadores, incluso con permisos personalizados.
+
+Se añadieron casos de prueba para entrega mixta con cero, entrega totalmente cero, salida/recarga con cero, regreso cero, proyección de costo/utilidad y repetición del recibo idempotente. No se ejecutaron pruebas, servidores ni compilaciones locales. Quedan pendientes la ejecución por la plataforma y las comprobaciones funcionales tras desplegar: entrega y factura única con crédito/descuentos, revisión/stock concurrentes, reintento HTTP con el mismo operationId, selección de múltiples cargas, conteo/dinero, impresión, móvil/oscuro y rechazo de acceso cruzado por API.
