@@ -193,7 +193,7 @@ function businessActions(r){
  if(['proyectos','lotes','produccion','reservas','contratos','rutas','aportes'].includes(r.module)&&permission('costos',true))html+=' '+bAction('businessCost',r,'Registrar costo');
  if(r.module==='proyectos'&&permission('compras'))html+=' '+bAction('businessPurchase',r,'Vincular compra');
  if(r.deposit>0)html+=' '+bAction('businessRefund',r,'Devolver depósito');
- if(r.module==='cuentas_abiertas'&&r.status==='Abierta'&&permission('despacho',true))html+=' '+bAction('businessDispatch',r,'Enviar ronda a cocina / barra');
+ if(isFoodBusiness()&&r.module==='cuentas_abiertas'&&r.status==='Abierta'&&permission('despacho',true))html+=' '+bAction('businessDispatch',r,'Enviar ronda a cocina / barra');
  if(r.module==='cuentas_abiertas'&&r.status==='Abierta')html+=' '+bAction('businessConsume',r,'Agregar consumo')+' '+bAction('businessMove',r,'Mover / responsable')+' '+bAction('businessMerge',r,'Unir')+' '+bAction('businessSplit',r,'Dividir')+' '+bAction('businessVoidLine',r,'Anular consumo con motivo');
  if(['agenda','proyectos','produccion','contratos','rutas','despacho','documentos_venta'].includes(r.module)&&!['Cancelada','Cancelado','Finalizado'].includes(r.status))html+=' '+bAction('businessState',r,'Cambiar estado');
  if(r.module==='produccion'&&r.status==='Activa')html+=' '+bAction('businessProduce',r,'Producir');

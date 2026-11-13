@@ -2,7 +2,7 @@
 const foodReportsAllowed=actionAllowed;
 actionAllowed=function(a,d={}){if(a==='foodReports')return permission('facturacion')||permission('ventas');if(a==='quickSale'||a==='quickItem')return permission('facturacion',true);if(a==='quickReady')return permission('despacho');return foodReportsAllowed(a,d);};
 for(const a of ['foodReports','quickReady'])READ_ACTIONS.add(a);
-for(const route of ['ventas','facturacion']){const original=V[route];V[route]=function(){original();$('#main').insertAdjacentHTML('afterbegin','<div class="accounting-actions noprint"><button class="lk" data-a="foodReports">Informes de alimentos</button><button class="lk" data-a="quickSale">Caja rápida por categoría</button><button class="lk" data-a="quickReady">Pedidos listos</button></div>');};}
+for(const route of ['ventas','facturacion']){const original=V[route];V[route]=function(){original();if(!isFoodBusiness())return;$('#main').insertAdjacentHTML('afterbegin','<div class="accounting-actions noprint"><button class="lk" data-a="foodReports">'+esc(uiT('foodBusiness.reports','Informes de alimentos'))+'</button><button class="lk" data-a="quickSale">'+esc(uiT('foodBusiness.quick','Caja rápida por categoría'))+'</button><button class="lk" data-a="quickReady">'+esc(uiT('foodBusiness.ready','Pedidos listos'))+'</button></div>');};}
 ACT.quickSale=async()=>{
  await ACT.venta();const f=document.querySelector('#pos-items')?.closest('form');if(!f)return;f.dataset.quickService='true';f.querySelector('#pos-items').innerHTML='';previewPos(f);
  const categories=[...new Set(S.products.map(p=>p.category||'Sin categoría'))];
@@ -25,3 +25,5 @@ ACT.foodReports=async()=>{
 };
 const foodEnhancementView=view;
 view=function(...args){const result=foodEnhancementView.apply(this,args);enforceAccessUI();return result;};
+
+guardFoodActions(['quickSale', 'quickItem', 'quickReady', 'foodReports']);
