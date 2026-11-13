@@ -346,3 +346,8 @@ export function invoicePriceAdjustment(original, final, mode='percent', exchange
  if(mode==='usd'&&(!Number.isFinite(exchangeRate)||exchangeRate<=0))throw new AccountingValidationError('Define la tasa de cambio del dólar.');
  return {type:finalCents<originalCents?'discount':'increase',mode,originalCents,finalCents,...(mode==='percent'?{percent:round(percent)}:{amountCents:Math.round(Math.abs(finalCents-originalCents)/(mode==='usd'?exchangeRate:1))}),...(mode==='usd'?{exchangeRate}:{})};
 }
+
+// Active historical contributions less capital charged to this partner (never infer ownership from the ledger).
+export function partnerCapitalCents(partner,entries,until='9999'){
+ return (partner?.movements||[]).filter(m=>m.date<=until&&entries.some(e=>e.id===m.entryId)&&!entries.some(e=>e.reversalOf===m.entryId&&e.date<=until)).reduce((sum,m)=>sum+(m.kind==='aporte'?moneyCents(m.total):m.charge==='3101'?-moneyCents(m.total):0),0);
+}

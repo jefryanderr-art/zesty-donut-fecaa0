@@ -1,3 +1,4 @@
+import {moneyCents, partnerCapitalCents} from '../../public/accounting-math.mjs';
 import {invoiceLinkedEntries} from './accounting-engine.mjs';
 import { normalizeItemQuantity } from './accounting-engine.mjs';
 import { randomUUID } from 'node:crypto';
@@ -34,7 +35,28 @@ export function tradeOperation(data,access,session,body,h){
  }else if(op==='partner'){
   permit(access,'contabilidad');check(access.owner&&text(body.name),'Solo el dueño registra socios.');data.partners.push({id:randomUUID(),name:text(body.name),date:when,movements:[]});
  }else if(op==='capitalMovement'){
-  permit(access,'contabilidad');check(access.owner,'Solo el dueño confirma movimientos de capital.');const partner=data.partners.find(p=>p.id===body.partnerId),total=amount(body.total);check(partner&&['aporte','dividendo','retiro','reserva'].includes(body.kind)&&['1101','1102'].includes(body.pay),'Selecciona socio, tipo y cuenta.');ensure('3104','Reserva legal','patrimonio','C');if(['dividendo','reserva'].includes(body.kind))check(-ledgerBalance(data,'3102',when)>=total,'Utilidades acumuladas insuficientes.');let lines;if(body.kind==='aporte')lines=[{a:body.pay,d:total,c:0},{a:'3101',d:0,c:total}];else lines=[{a:body.kind==='retiro'?'3103':'3102',d:total,c:0},{a:body.kind==='reserva'?'3104':body.pay,d:0,c:total}];const e=posting({type:'capital-socio',desc:body.kind+' · '+partner.name,total,lines});partner.movements.push({date:when,kind:body.kind,total,entryId:e.id});
+  permit(access,'contabilidad');check(access.owner,'Solo el dueño confirma movimientos de capital.');
+  const partner=data.partners.find(p=>p.id===body.partnerId),total=amount(body.total),personal=body.kind==='gasto_personal',charge=personal?(body.source??'3103'):body.kind==='retiro'?'3103':'3102';
+  check(partner&&partner.active!==false&&!['inactivo','archivado'].includes(partner.status)&&['aporte','dividendo','retiro','reserva','gasto_personal'].includes(body.kind)&&['1101','1102'].includes(body.pay),'Selecciona socio activo, tipo y cuenta.');
+  const cents=moneyCents(body.total),concept=typeof body.concept==='string'?body.concept.trim():'';
+  if(personal){
+   check(cents>0&&['3101','3102','3103'].includes(charge),'Selecciona un origen patrimonial válido.');
+   check(concept.length>0&&concept.length<=200,'El concepto es obligatorio (máximo 200 caracteres).');
+   check(!(data.cfg?.periodLocks?.[(access.branchId||'principal')+':'+when.slice(0,7)]||data.cfg?.periodLocks?.[when.slice(0,7)])?.closed,'El período está cerrado.');
+   const now=Date.now();check(!(partner.movements||[]).some(m=>m.kind==='gasto_personal'&&moneyCents(m.total)===cents&&m.concept===concept&&m.charge===charge&&data.entries.some(e=>e.id===m.entryId&&now-Date.parse(e.createdAt)>=0&&now-Date.parse(e.createdAt)<10000)),'Este gasto personal acaba de registrarse.');
+   // Check subsequent balances too: a backdated payment must not exhaust later liquidity/equity.
+   for(const cutoff of new Set([when,...data.entries.filter(e=>e.date>=when).map(e=>e.date)])){
+    check(moneyCents(ledgerBalance(data,body.pay,cutoff))>=cents,'Caja o banco insuficiente.');
+    if(charge!=='3103')check(-moneyCents(ledgerBalance(data,charge,cutoff))>=cents,charge==='3102'?'Utilidades acumuladas insuficientes.':'Capital aportado insuficiente.');
+    if(charge==='3101')check(partnerCapitalCents(partner,data.entries,cutoff)>=cents,'Capital aportado por el socio insuficiente.');
+   }
+  }
+  if(['dividendo','reserva'].includes(body.kind))check(-ledgerBalance(data,'3102',when)>=total,'Utilidades acumuladas insuficientes.');
+  ensure('3103','Retiros del propietario','patrimonio','D');ensure('3104','Reserva legal','patrimonio','C');
+  if(personal)check([charge,body.pay].every(code=>data.accounts.some(a=>a.code===code&&a.tipo===(code===charge?'patrimonio':'activo')&&a.nat===(code==='3101'||code==='3102'?'C':'D'))),'Revisa las cuentas patrimoniales y de pago.');
+  const lines=body.kind==='aporte'?[{a:body.pay,d:total,c:0},{a:'3101',d:0,c:total}]:[{a:charge,d:total,c:0},{a:body.kind==='reserva'?'3104':body.pay,d:0,c:total}];
+  const e=posting({type:'capital-socio',desc:personal?'Gasto personal · '+concept+' · '+partner.name:body.kind+' · '+partner.name,total,lines,...(personal?{createdAt:new Date().toISOString()}: {})});
+  (partner.movements||=[]).push({date:when,kind:body.kind,total,entryId:e.id,...(personal?{concept,charge}:{})});return e.id;
  }else if(op==='landedCost'){
   permit(access,'compras');const purchase=original();check(purchase.type==='compra'&&purchase.items?.length&&text(body.name)&&['1101','1102','2101'].includes(body.pay),'Selecciona compra, proveedor del servicio y forma de pago.');const freight=amount(body.freight||0,true),duty=amount(body.duty||0,true),insurance=amount(body.insurance||0,true),total=round(freight+duty+insurance);check(total>0,'Indica costos de desembarque.');const ids=new Set(purchase.items.map(i=>i.p));check(!data.entries.some(e=>e.id!==purchase.id&&e.date>=purchase.date&&e.stock?.some(m=>ids.has(m.pid)&&m.q<0)),'Registra el desembarque antes de ventas o salidas de esos productos.');
   const weights=[...ids].map(id=>{const product=data.products.find(p=>p.id===id),weight=purchase.items.filter(i=>i.p===id).reduce((s,i)=>s+round(i.q*i.u),0);check(product&&product.stock>0&&(access.company.data.products.find(p=>p.id===id)?.stock??product.stock)===product.stock,'El inventario debe estar disponible solamente en la sucursal de la compra.');return {product,weight}}),sum=weights.reduce((s,r)=>s+r.weight,0);check(sum>0,'La compra necesita una base de costo positiva.');const allocation=allocateCents(total,weights.map(r=>r.weight));let valuation=0;const stock=[];

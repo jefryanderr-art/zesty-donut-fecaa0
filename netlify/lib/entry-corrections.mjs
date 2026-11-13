@@ -28,8 +28,10 @@ export function correctEntry(data,access,session,body,{append,date,registerAgain
  if(registerAgain)check(['gasto','compra','manual','abono'].includes(original.type)&&body.replacement,'Este tipo requiere su flujo específico de corrección.');
  check(!['venta','nota-credito'].includes(original.type),'Las ventas se anulan mediante nota de crédito.');
  check(!original.allocationJournal&&!original.treasuryId&&!original.shiftId&&!original.costId,'Esta operación tiene su propio flujo de anulación.');
- check(!original.managed||original.correctionOf||original.type==='apertura-importada','Esta operación tiene su propio flujo de anulación.');
- check(['apertura','apertura-importada','manual','gasto','compra','abono','fiscal-pago','invini'].includes(original.type),'Este tipo requiere su flujo específico de corrección.');
+ const personal=original.type==='capital-socio'&&(data.partners||[]).some(p=>p.movements?.some(m=>m.entryId===original.id&&m.kind==='gasto_personal'));
+ if(personal)check(access.owner&&!body.replacement&&!registerAgain,'Solo el dueño puede anular el gasto personal; anula y registra de nuevo.');
+ check(personal||!original.managed||original.correctionOf||original.type==='apertura-importada','Esta operación tiene su propio flujo de anulación.');
+ check(personal||['apertura','apertura-importada','manual','gasto','compra','abono','fiscal-pago','invini'].includes(original.type),'Este tipo requiere su flujo específico de corrección.');
  check(!original.lines.some(l=>l.a==='1104'||l.a.startsWith('1103-')),'Los turnos y la caja chica se corrigen desde sus módulos.');
  check(!data.entries.some(e=>e.id!==original.id&&active(data,e)&&(e.invoiceId===original.id||e.lines?.some(l=>l.invoiceId===original.id))),'El documento tiene abonos vinculados; corrige primero los abonos.');
  check(!(data.businessRecords||[]).some(r=>r.module==='bancos'&&(r.kind==='statement'&&r.rows?.some(row=>row.entryId===original.id)||r.kind==='movement'&&r.entryId===original.id)),'Des-concilia primero el movimiento; los movimientos en moneda original requieren su operación bancaria.');
@@ -88,5 +90,6 @@ export function correctEntry(data,access,session,body,{append,date,registerAgain
  guardPeriods(previous,data,'Operación: correctEntry');
  check(statement(data,'0000','9999').inventory>=0,'La corrección deja la valoración contable del inventario en negativo.');
  guardCash(previous,data,{strict:true});
+ if(personal)for(const p of data.partners)for(const m of p.movements||[])if(m.entryId===original.id)m.reversalId=reversal.id;
  return {originalId:original.id,reversalId:reversal?.id||null,correctedId:corrected?.id||null,reason,reference};
 }
