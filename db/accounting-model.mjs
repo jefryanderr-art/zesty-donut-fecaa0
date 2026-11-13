@@ -19,7 +19,7 @@ export const collections = {
   pettyVouchers: { table: 'petty_vouchers', text: ['fundId', 'account', 'accruedEntryId'], money: ['base', 'vat', 'total'] },
   cashCounts: { table: 'cash_counts', text: ['fundId', 'account'], money: ['expected', 'counted', 'vouchers', 'difference', 'authorizedFixedAmount'] },
   costCatalog: { table: 'cost_catalog', text: ['name', 'type', 'account', 'center'], money: ['amount'] },
-  costs: { table: 'costs', text: ['entryId', 'catalogId', 'period', 'pay'], money: ['base', 'vat', 'total'] },
+  costs: { table: 'costs', text: ['entryId', 'catalogId', 'period', 'pay','saleId','eventId','businessId','customerId','productId','center','notes','account'], money: ['base', 'vat', 'total'] },
   entries: { table: 'journal_entries', text: ['type', 'desc', 'reference', 'due', 'party', 'pay', 'invoiceId', 'customerId', 'supplierId', 'shiftId'], money: ['subtotal', 'vat', 'total'] },
 };
 for (const name of ['entries','shifts','cashMovements','pettyFunds','pettyVouchers','cashCounts','costs','employees','payrolls','settlements','taxes']) collections[name].text.push('branchId');

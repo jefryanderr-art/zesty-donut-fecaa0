@@ -1,3 +1,4 @@
+import {registerConnectedCost,seedCostCatalog,reverseConnectedCost} from './costs.mjs';
 import {durableRoutePayload} from '../../public/route-queue.mjs';
 import {ROUTE_OPS,routeOperation,routeOperationGuard,routeSaleGuard,routeCustomerAllowed,routeManager,routeCommission,routeCommissionReturn} from './routes.mjs';
 import {guardCash} from './cash-guard.mjs';
@@ -324,33 +325,8 @@ function createVoucher(data, access, session, body, accruedEntryId = null) {
   data.pettyVouchers.push(voucher);
   return voucher;
 }
-function registerCost(data, access, session, body) {
-  const catalog = data.costCatalog.find(record => record.id === body.catalogId && record.active);
-  requireValue(catalog, 'Selecciona un costo activo del catálogo.');
-  const base = amount(body.base ?? catalog.amount), vatRate = Number(body.vatRate || 0);
-  requireValue(Number.isFinite(vatRate) && vatRate >= 0 && vatRate <= 100, 'IVA inválido.');
-  const vat = round(base * vatRate / 100), total = round(base + vat), date = dateValue(body.date);
-  requireValue(text(body.reference), 'El costo necesita un número de recibo o comprobante.');
-  const supplier = data.suppliers.find(record => record.id === body.supplierId);
-  if (body.supplierId) requireValue(supplier?.active, 'Selecciona un proveedor activo.');
-  let pay = body.pay;
-  requireValue(['1101', '1102', '2101', 'petty'].includes(pay), 'Forma de pago inválida.');
-  if (pay === 'petty') pay = '2107';
-  const lines = [{ a: catalog.account, d: base, c: 0 }, { a: pay, d: 0, c: total }];
-  if (vat) lines.push({ a: '1202', d: vat, c: 0 });
-  const entry = appendEntry(data, session, { date, type: 'costo', desc: 'Costo - ' + catalog.name, party: supplier?.name || text(body.party) || catalog.name, supplierId: supplier?.id || '', reference: text(body.reference), due: dateValue(body.due || date), pay, subtotal: base, vat, total, lines });
-  requireValue(entry.due >= date || pay !== '2101', 'El vencimiento no puede ser anterior al costo.');
-  const record = { id: randomUUID(), entryId: entry.id, catalogId: catalog.id, name: catalog.name, type: catalog.type, direct: catalog.direct, center: catalog.center, account: catalog.account, date, period: date.slice(0, 7), base, vat, total, pay: body.pay, reference: entry.reference, beneficiary: entry.party, operatorId: operatorId(access, session), recurringPeriod: body.recurringPeriod || null, saleId: body.saleId || null };
-  if (body.recurringPeriod) {
-    requireValue(/^\d{4}-\d{2}$/.test(body.recurringPeriod) && body.recurringPeriod === date.slice(0, 7) && catalog.recurring && !data.costs.some(cost => cost.catalogId === catalog.id && cost.recurringPeriod === body.recurringPeriod && !cost.reversalId), 'Ese costo recurrente ya se confirmó o el período no corresponde.');
-  }
-  if (body.pay === 'petty') {
-    const voucher = createVoucher(data, access, session, { ...body, base, vatRate, account: catalog.account, category: catalog.name, concept: entry.desc, beneficiary: entry.party }, entry.id);
-    record.voucherId = voucher.id;
-  }
-  data.costs.push(record);
-  return record;
-}
+function registerCost(data,access,session,body){return registerConnectedCost(data,access,session,body,{amount,round,text,dateValue,requireValue,accountExists,appendEntry,operatorId,createVoucher,readPermit:module=>module==='sale'?requireValue(allowed(access,'facturacion')||allowed(access,'ventas'),'No tienes permiso para vincular ventas.'):requireModule(access,module)});}
+
 async function makeSale(data, access, session, body, client, companyId, trustedSourceId=null, trustedRouteOrder=null) {
   ensurePrintVersions(data,access.company,session);
   routeSaleGuard(data,access,body,requireValue);
@@ -1054,12 +1030,14 @@ export async function runOperation(companyId, session, body) {
         await audit(client,companyId,operationSession,operation==='registerAgain'?'Registrar de nuevo':'Corrección de asiento',[{area:'entries',...correction,at:new Date().toISOString()}]);
       } else if (operation === 'costCatalog') {
         requirePermission(access, 'costos');
+        if(body.seed===true){seedCostCatalog(data);}else{
         accountExists(data, body.account, ['gasto', 'costo']);
         const record = { id: body.id || randomUUID(), name: text(body.name), type: body.type, direct: body.direct === true, center: text(body.center) || 'General', account: body.account, amount: amount(body.amount || 0, true), recurring: body.recurring === true, startMonth: text(body.startMonth, 7), active: body.active !== false };
         requireValue(record.name && ['fijo', 'variable'].includes(record.type) && /^\d{4}-(0[1-9]|1[0-2])$/.test(record.startMonth), 'Revisa el nombre, tipo y mes inicial del costo.');
         const index = data.costCatalog.findIndex(cost => cost.id === record.id);
         if (body.id) requireValue(index >= 0, 'Costo no encontrado.');
         if (index < 0) data.costCatalog.push(record); else data.costCatalog[index] = record;
+        output=record.id;}
       } else if (operation === 'cost') {
         requirePermission(access, 'costos');
         const record = registerCost(data, access, operationSession, body);
@@ -1067,15 +1045,7 @@ export async function runOperation(companyId, session, body) {
       } else if (operation === 'reverseCost') {
         requirePermission(access, 'costos');
         if (!supervisor(access)) accessError('Solo el supervisor anula costos.');
-        const cost = data.costs.find(record => record.id === body.id && !record.reversalId), original = data.entries.find(entry => entry.id === cost?.entryId);
-        requireValue(cost && original && text(body.reason) && text(body.reference), 'Costo no encontrado o motivo vacío.');
-        const date = dateValue(body.date);
-        requireValue(date >= original.date, 'La anulación no puede ser anterior al costo.');
-        requireValue(!data.entries.some(entry => entry.invoiceId === original.id||entry.lines?.some(l=>l.invoiceId===original.id)), 'El costo tiene abonos; revierte primero esos pagos mediante un asiento autorizado.');
-        const voucher = data.pettyVouchers.find(record => record.id === cost.voucherId);
-        requireValue(!voucher?.replenishmentId, 'El vale ya fue repuesto; requiere un ajuste autorizado de caja.');
-        const reversal = appendEntry(data, operationSession, { date, type: 'costo', reversalOf: original.id, desc: 'Anulación de costo - ' + text(body.reason), reference: text(body.reference), total: original.total, lines: original.lines.map(line => ({ a: line.a, d: line.c, c: line.d })) });
-        cost.reversalId = reversal.id; if (voucher) voucher.reversalId = reversal.id;
+        reverseConnectedCost(data,operationSession,body,{requireValue,dateValue,text,appendEntry});
       } else if (operation === 'advance') {
         requirePermission(access, 'fiscal');
         const settings = data.cfg.advance;
@@ -1095,7 +1065,7 @@ export async function runOperation(companyId, session, body) {
         const entry = appendEntry(data, operationSession, { date: end, type: 'fiscal-anticipo', desc: 'Anticipo mensual IR - ' + month, total, lines: linesBetween('6108', '2102', total) });
         data.taxes.push({ id: randomUUID(), name: 'Anticipo mensual IR', source: 'anticipo', period: month, date: end, due, base, rate: settings.rate, withholdings, grossAdvance, amount: total, paid: 0, payments: [], entryId: entry.id, expense: '6108', liability: '2102', frequency: 'mensual', country: settings.country });
       } else accessError('Operación no encontrada.', 404);
-      for(const entry of data.entries)if(!beforeIds.has(entry.id)){if(body.costCenter)entry.costCenter=text(body.costCenter,100);if(body.project)entry.project=text(body.project,100);}
+      for(const entry of data.entries)if(!beforeIds.has(entry.id)){if(body.costCenter&&entry.type!=='costo')entry.costCenter=text(body.costCenter,100);if(body.project&&entry.type!=='costo')entry.project=text(body.project,100);}
       if(fifoEnabled(fifoBefore)&&!crossBranch)for(const e of data.entries.filter(e=>!beforeIds.has(e.id))){requireValue(access.branchId||!e.stock?.length,'Selecciona una sucursal para mover inventario PEPS.');if(e.stock?.length)e.branchId=access.branchId;}
       if(operation!=='costingMethod')applyFifo(fifoBefore,data);
       guardCash(crossBranch?access.company.data:company.data, data);
