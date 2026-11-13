@@ -1,5 +1,5 @@
 import {durableRoutePayload} from '../../public/route-queue.mjs';
-import {ROUTE_OPS,routeOperation,routeOperationGuard,routeSaleGuard,routeCustomerAllowed,routeManager,routeCommission} from './routes.mjs';
+import {ROUTE_OPS,routeOperation,routeOperationGuard,routeSaleGuard,routeCustomerAllowed,routeManager,routeCommission,routeCommissionReturn} from './routes.mjs';
 import {guardCash} from './cash-guard.mjs';
 export {guardCash} from './cash-guard.mjs';
 import {correctEntry} from './entry-corrections.mjs';
@@ -354,6 +354,13 @@ function registerCost(data, access, session, body) {
 async function makeSale(data, access, session, body, client, companyId, trustedSourceId=null, trustedRouteOrder=null) {
   ensurePrintVersions(data,access.company,session);
   routeSaleGuard(data,access,body,requireValue);
+  if(body.routeSale||body.routeOrderId||body.commerceLoadId||access.routeRole){
+    requirePermission(access,'rutas');
+    if(body.routeWorkerId&&body.routeWorkerId!==operatorId(access,session)&&body.routeWorkerId!==access.company.ownerEmail){
+      const members=await client.select({id:companyMembers.id,active:companyMembers.active,branchIds:companyMembers.branchIds,roleKey:companyRoles.key}).from(companyMembers).innerJoin(companyRoles,eq(companyRoles.id,companyMembers.roleId)).where(eq(companyMembers.companyId,companyId));
+      requireValue(members.some(m=>m.id===body.routeWorkerId&&m.active&&m.branchIds.includes(access.branchId)&&['route_seller','route_driver','route_supervisor'].includes(m.roleKey)),'Selecciona un trabajador de ruta activo de esta sucursal.');
+    }
+  }
   requirePermission(access, 'facturacion');
   const invoiceDraft=body.sourceInvoiceDraft?data.invoiceDrafts?.find(row=>row.id===body.sourceInvoiceDraft&&row.branchId===access.branchId):null;
   requireValue(!body.sourceInvoiceDraft||invoiceDraft?.status==='Registrada','La factura registrada no está disponible para aplicar.');
@@ -448,7 +455,8 @@ async function makeSale(data, access, session, body, client, companyId, trustedS
   const quotation=body.sourceQuotation?data.quotations?.find(q=>q.id===body.sourceQuotation):null;
   requireValue(!body.sourceQuotation||quotation?.status==='Pendiente','La cotización no está disponible para convertir.');
   const entry = appendEntry(data, session, { date, due, ...(context?{saleContext:context}:{}), ...(paymentTerms?{paymentTerms}:{}), ...(creditDecision?.exceeded?{creditWarning:{...creditDecision,confirmedBy:actorName(session)}}:{}), reference, series, sequence, type: 'venta', ...commerceSnapshot(body), origin: body.origin === 'ventas' ? 'ventas' : 'facturacion', desc: 'Venta - ' + (customer?.name || text(body.party) || 'Cliente general'), party: customer?.name || text(body.party) || 'Cliente general', customerId: customer?.id || '', customer: customer ? { name: customer.name, taxId: customer.taxId, address: customer.address, phone: customer.phone } : null, operatorId: operatorId(access, session), operatorName: actorName(session), shiftId: shift?.id || null, discount, discountAudit: discount > 0 ? {actor:actorName(session),userId:operatorId(access,session),percent:discount,amountCents:cents(round(invoiceTotals(items.map(item=>({...item,u:item.listPrice}))).total-total)),at:new Date().toISOString()} : null, items, payments, ...(cashTender?{cashTender}:{}), pay: credit ? '1201' : methods.has('efectivo') ? '1104' : '1102', subtotal, vat, total, creditAmount: credit, ...(businessAllocations.length?{businessAllocations}:{}), stock: items.filter(item=>!item.service).map(item => ({ pid: item.p, q: -item.q, unit: item.unit, unitCost: item.cost })), lines });
-  if(customer?.routeZone)entry.route=customer.routeZone;
+  if(body.route||customer?.routeZone)entry.route=body.route||customer.routeZone;
+  if(body.routeSale||body.routeOrderId||body.commerceLoadId||access.routeRole)entry.routeWorkerId=body.routeWorkerId||operatorId(access,session);
   redeemGift(gift,entry);
   if(body.previousDay===true)entry.previousDayDiscount=true;
   if(loyalty)entry.loyalty={configId:loyalty.configId,percent:loyalty.percent};
@@ -464,7 +472,7 @@ async function makeSale(data, access, session, body, client, companyId, trustedS
   for(const a of businessAllocations){const r=data.businessRecords?.find(r=>r.id===a.id);if(r?.module==='variantes'){entry.businessVariants||=[];entry.businessVariants.push({id:r.id,productId:r.productId,serial:r.serial,warranty:r.warranty,size:r.size,color:r.color,model:r.model})}}
   commerceLoadSale(data,body,entry,requireValue,m=>requirePermission(access,m),access);
   if(body.commerceLoadId)entry.routeWorkerId=data.businessRecords.find(r=>r.id===body.commerceLoadId)?.assignedMemberId||entry.operatorId;
-  const routeSource=body.routeOrderId?data.businessRecords.find(r=>r.id===body.routeOrderId&&r.kind==='route-order'):null;routeCommission(data,entry,[operatorId(access,session),...(routeSource?[routeSource.operatorId]:[])]);
+  const routeSource=body.routeOrderId?data.businessRecords.find(r=>r.id===body.routeOrderId&&r.kind==='route-order'):null;routeCommission(data,entry,[entry.routeWorkerId||operatorId(access,session),...(routeSource?[routeSource.operatorId]:[])]);
   if(quotation){quotation.status='Convertida';quotation.entryId=entry.id;}
   if(invoiceDraft){invoiceDraft.status='Aplicada';invoiceDraft.entryId=entry.id;entry.sourceInvoiceDraft=invoiceDraft.id;}
   for (const [id, quantity] of quantities) { const product = data.products.find(record => record.id === id); product.stock = Math.round((product.stock - quantity) * 1e6) / 1e6; }
@@ -521,9 +529,15 @@ function creditNote(data, access, session, body) {
   if (cost) lines.push(...linesBetween('1301', '5101', cost));
   const number = (data.invoiceSequences.NC || 0) + 1; data.invoiceSequences.NC = number;
   const note = appendEntry(data, session, { date, type: 'nota-credito', ...commerceSnapshot(original), invoiceId: original.id, ...(original.saleContext?{saleContext:structuredClone(original.saleContext)}:{}), reference: 'NC-' + String(number).padStart(8, '0'), desc: 'Nota de crédito - ' + (original.reference || original.id), party: original.party, customerId: original.customerId || '', reason: text(body.reason, 1000), reasonCategory: body.reasonCategory, supervisor: actorName(session), originalOperatorId: original.operatorId || null, originalOperatorName: original.operatorName || original.actor || 'Histórico', operatorId: operatorId(access, session), shiftId: shift?.id || null, items, payments, debtReduction, refund, subtotal, vat, total, stock: items.filter(item=>!item.service).map(item => ({ pid: item.p, q: item.q, unit: item.unit || 'unidad', unitCost: item.cost })), lines });
+  for(const key of ['route','routeWorkerId','commerceLoadId','routeOrderId'])if(original[key])note[key]=original[key];
+  if(original.commerceLoadId&&body.operation!=='routeReturnApprove'){
+    const load=data.businessRecords.find(r=>r.id===original.commerceLoadId&&r.kind==='commerce-load'&&!r.closed);
+    if(load){requireValue(!data.businessRecords.some(r=>r.kind==='route-settlement'&&r.loadId===load.id&&r.status==='Pendiente'),'Resuelve la liquidación pendiente antes de devolver productos al camión.');for(const i of items.filter(i=>!i.service)){const left=load.remaining.find(r=>r.p===i.p);if(left)left.q=Math.round((left.q+i.q)*1000)/1000;else load.remaining.push({p:i.p,q:i.q,u:0});}load.customerReturns||=[];load.customerReturns.push({entryId:note.id,items:items.filter(i=>!i.service).map(i=>({p:i.p,q:i.q}))});}
+  }
   if(exchangeVoucher){exchangeVoucher.entryId=note.id;exchangeVoucher.events.push({action:'Vale emitido por devolución',date,entryId:note.id,amountCents:exchangeVoucher.originalCents});data.businessRecords.push(exchangeVoucher);note.exchangeVoucher={id:exchangeVoucher.id,amountCents:exchangeVoucher.originalCents};}
   if(giftRestore){giftRestore.r.balanceCents+=giftRestore.amountCents;giftRestore.r.status='Activa';giftRestore.r.events.push({action:'Restitución por nota de crédito',date,entryId:note.id,amountCents:giftRestore.amountCents});note.giftRestoration={id:giftRestore.r.id,amountCents:giftRestore.amountCents};}
   for (const item of items.filter(item=>!item.service)) { const product = data.products.find(record => record.id === item.p), value = product.stock * product.cost + item.q * item.cost; product.stock = Math.round((product.stock + item.q) * 1e6) / 1e6; product.cost = round(value / product.stock); }
+  if(original.route||original.commerceLoadId||original.routeOrderId)routeCommissionReturn(data,original,note,e=>appendEntry(data,session,e),requireValue);
   restoreBusinessReturn(data,access,original,note,body,{check:requireValue,permit:requirePermission});
   return note;
 }
@@ -1086,6 +1100,7 @@ export async function runOperation(companyId, session, body) {
       if(operation!=='costingMethod')applyFifo(fifoBefore,data);
       guardCash(crossBranch?access.company.data:company.data, data);
       if(operation==='settings'&&Object.hasOwn(body,'allowNegativeValues')){/* Changing policy preserves existing balances. */}else if(crossBranch){for(const branch of data.branches||[])commerceReservationsValid(scopeBranch(data,{...access,branchId:branch.id}),requireValue);}else commerceReservationsValid(data,requireValue);
+      if(['commerceLoad','routeReload','routePrepare'].includes(operation)){const records=data.businessRecords.filter(r=>r.id===output);const shortages=records.flatMap(r=>operation==='routeReload'?(r.events?.at(-1)?.shortages||r.events?.at(-2)?.shortages||[]):r.stockShortages||[]);if(shortages.length)await audit(client,companyId,operationSession,'Carga con faltantes autorizados',[{area:'rutas',branchId:access.branchId,operationId:body.operationId,shortages}]);}
       validateBusinessRecords(data,requireValue);
       validateConfiguredServices(data,serviceEmployees(access.company.data,company.data,data));
       validateEconomicSector(data);

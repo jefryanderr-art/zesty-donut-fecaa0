@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {routeOperation,routeOperationGuard,routeSaleGuard,routeCustomerAllowed,routeOrderPriceLines} from '../netlify/lib/routes.mjs';
+import {routeOperation,routeOperationGuard,routeSaleGuard,routeCustomerAllowed,routeOrderPriceLines,routeCommissionReturn} from '../netlify/lib/routes.mjs';
 import {routeNoticeAllowed,routeNoticeContext} from '../netlify/lib/route-notices.mjs';
-import {commerceReserved,commerceLoadSale} from '../netlify/lib/commerce.mjs';
+import {commerceReserved,commerceLoadSale,commerceCheckStock} from '../netlify/lib/commerce.mjs';
 import '../public/role-permissions.js';
 import {invoiceTotals} from '../public/accounting-math.mjs';
 import {commerceRouteCashRows,commerceRouteProfit,commerceRouteApprovalMatches} from '../public/commerce-math.mjs';
@@ -69,7 +69,7 @@ test('pending settlement blocks deliveries, sales and reloads; rejection require
  const settlement=await run(d,'routeSettle',{id:loadId,items:[{p:'p',q:4}],countedCents:1,reason:'Revisar efectivo',orderReasons:[{orderId:id,reason:'Ausente'}]},worker('driver'));
  await assert.rejects(run(d,'routeDelivery',{id,deliveryId:randomUUID(),items:[{p:'p',q:1}]},worker('driver')),/pendiente/);
  await assert.rejects(run(d,'routeReload',{id:loadId,items:[{p:'p',q:1}]}),/pendiente/);
- assert.throws(()=>routeSaleGuard(d,owner,{operationId:randomUUID(),commerceLoadId:loadId},check),/pendiente/);
+ assert.throws(()=>routeSaleGuard(d,owner,{operationId:randomUUID(),customerId:'c',commerceLoadId:loadId},check),/pendiente/);
  await assert.rejects(run(d,'routeRejectSettlement',{id:settlement,reason:'Recontar'},worker('driver')));
  await assert.rejects(run(d,'routeRejectSettlement',{id:settlement}));
  await run(d,'routeRejectSettlement',{id:settlement,reason:'Recontar al regreso'});
@@ -177,9 +177,9 @@ test('server-loaded price approvals bind order, customer, branch, policy, price 
  for(const bad of [{...body,customerId:'other'},{...body,items:[{p:'p',q:1,u:1.4}]},{...body,items:[{p:'p',q:5,u:1.5}]},{...body,items:[{p:'other',q:1,u:1.5}]}])assert.equal(commerceRouteApprovalMatches(approval,order,bad,'principal',2),false);
  assert.equal(commerceRouteApprovalMatches(approval,order,body,'other',2),false);assert.equal(commerceRouteApprovalMatches(approval,order,body,'principal',3),false);assert.equal(commerceRouteApprovalMatches(approval,{id:'other'},body,'principal',2),false);assert.equal(commerceRouteApprovalMatches(null,order,body,'principal',2),false);
 });
-test('sales without load remain allowed by default and follow company/route overrides',async()=>{
+test('sales without load require explicit company/route permission',async()=>{
  const d=fixture(),seller=worker('seller','route_seller'),body={operationId:randomUUID(),customerId:'c'};
- assert.doesNotThrow(()=>routeSaleGuard(d,seller,body,check));
+ assert.throws(()=>routeSaleGuard(d,seller,body,check),/sin carga/);
  await run(d,'routePolicy',{requireCreditApproval:false,allowSaleWithoutLoad:false});assert.throws(()=>routeSaleGuard(d,seller,body,check),/sin carga/);
  await run(d,'routePolicy',{id:'r',requireCreditApproval:null,allowSaleWithoutLoad:true});assert.doesNotThrow(()=>routeSaleGuard(d,seller,body,check));
  await run(d,'routePolicy',{id:'r',requireCreditApproval:null,allowSaleWithoutLoad:null});assert.throws(()=>routeSaleGuard(d,seller,body,check));
@@ -341,4 +341,32 @@ test('settlement projection exposes cost and profit exclusively to owner and rou
 });
 test('delivery receipt retry with same operationId returns invoice without another mutation',async()=>{
  const d=fixture(),{id}=await prepare(d),operationId=randomUUID(),body={id,operationId,deliveryId:randomUUID(),items:[{p:'p',q:1}]};const invoice=await run(d,'routeDelivery',body,worker('driver')),before=structuredClone(d);const result=replayOperationReceipt({actor:'driver',payloadHash:'same',revision:2,resultId:invoice},{id:operationId,hash:'same'},'driver',check);assert.equal(result.resultId,invoice);assert.equal(result.replayed,true);assert.deepEqual(d,before);assert.equal(d.entries.length,1);
+});
+
+test('owner sales resolve the only load by zone and reject ambiguous or foreign loads',async()=>{
+ const d=fixture(),{loadId}=await prepare(d);const b={routeSale:true,customerId:'c',operationId:randomUUID()};
+ routeSaleGuard(d,owner,b,check);assert.equal(b.commerceLoadId,loadId);assert.equal(b.route,'Norte');assert.equal(b.routeWorkerId,'driver');
+ d.businessRecords.push({...structuredClone(d.businessRecords.find(r=>r.id===loadId)),id:'second'});
+ assert.throws(()=>routeSaleGuard(d,owner,{routeSale:true,customerId:'c',operationId:randomUUID()},check),/varias cargas/);
+ const second=d.businessRecords.find(r=>r.id==='second');second.branchId='otra';
+ assert.throws(()=>routeSaleGuard(d,owner,{routeSale:true,commerceLoadId:'second',customerId:'c',operationId:randomUUID()},check),/sucursal/);
+});
+test('authorized loadless sale keeps zone and selected worker',()=>{
+ const d=fixture();d.cfg.routePolicy={allowSaleWithoutLoad:true};const body={routeSale:true,customerId:'c',routeWorkerId:'seller',operationId:randomUUID()};
+ routeSaleGuard(d,owner,body,check);assert.equal(body.route,'Norte');assert.equal(body.routeWorkerId,'seller');
+});
+test('direct sales cannot consume goods committed to other preorders',async()=>{
+ const d=fixture(),{loadId}=await prepare(d);assert.throws(()=>commerceLoadSale(d,{commerceLoadId:loadId},{id:'sale',date:'2026-11-12',items:[{p:'p',q:1}]},check,()=>{}),/reservado/);
+ assert.equal(d.businessRecords.find(r=>r.id===loadId).remaining[0].q,4);
+});
+test('negative stock policy returns product shortages instead of suppressing them',()=>{
+ const d=fixture();assert.throws(()=>commerceCheckStock(d,{items:[{p:'p',q:12}]},check),/faltan 2/);
+ d.cfg.allowNegativeValues=true;assert.deepEqual(commerceCheckStock(d,{items:[{p:'p',q:12}]},check),[{p:'p',name:'Producto',q:2}]);
+});
+test('route credit notes reverse accrued commission only once and preserve payment history',()=>{
+ const d=fixture(),sale={id:'sale',subtotal:100},note={id:'note',type:'nota-credito',invoiceId:'sale',subtotal:40,date:'2026-11-12',reference:'NC-1'};
+ d.entries=[sale,note];const r={id:'commission',module:'comisiones',kind:'ruta',saleId:'sale',entryId:'accrual',total:10,paid:10,rate:10,expenseAccount:'6101',liabilityAccount:'2101',events:[]};d.businessRecords.push(r);
+ const posted=[];const post=e=>{posted.push(e);return {...e,id:'reversal'}};
+ routeCommissionReturn(d,sale,note,post,check);assert.equal(r.total,6);assert.equal(r.paid,10);assert.equal(posted[0].total,4);assert.deepEqual(posted[0].lines,[{a:'2101',d:4,c:0},{a:'6101',d:0,c:4}]);
+ routeCommissionReturn(d,sale,note,post,check);assert.equal(posted.length,1);
 });
