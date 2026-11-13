@@ -1,3 +1,4 @@
+import {connectedCostReport} from '../../public/accounting-math.mjs';
 import {accountingEntries} from './accounting-engine.mjs';
 import {catalog} from './business-profile.mjs';
 import {randomUUID} from 'node:crypto';
@@ -41,6 +42,9 @@ export function financialSnapshot(data,from,to,mapping=DEFAULT_MAPPING){
  const values={dso,dpo,dio,cashCycle:dso!==null&&dpo!==null&&dio!==null?dso+dio-dpo:null,grossMargin:margin,netMargin:div(net,sales),breakEven: mapping.fixed.length&&margin>0?Math.ceil(debit('fixed')/margin):null,liquidity:div(end('currentAssets'),-end('currentLiabilities')),debt:div(-end('liabilities'),end('assets')),turnover:div(sales,avg('assets')),inventoryTurnover:div(cogs,avg('inventory')),ebitda:mapping.depreciation.length&&mapping.interest.length&&mapping.tax.length?sum([net,debit('depreciation'),debit('interest'),debit('tax')]):null,freeOperatingFlow:null,roe:div(net,-avg('equity')),roa:div(net,avg('assets'))};
  // Método indirecto; exige clasificación explícita de depreciación e inversión.
  if(mapping.depreciation.length&&mapping.capex.length)values.freeOperatingFlow=sum([net,debit('depreciation'),-(end('receivables')-balance('receivables',before)),-(end('inventory')-balance('inventory',before)),-(end('payables')-balance('payables',before)),-debit('capex')]);
+ const connected=connectedCostReport(data,from,to);
+ values.breakEven=connected.breakEvenCents;
+ values.connectedCostSalesPct=connected.costSalesPct;values.connectedPending=connected.pendingCents;values.connectedOutgoings=connected.outgoingsCents;
  return {values,statement:{sales,cogs,expenses,net,assets:end('assets'),liabilities:-end('liabilities'),equity:-end('equity')}};
 }
 export function abcReport(data,pools=[]){
@@ -60,6 +64,7 @@ export function analysisReport(data,access,body,canRead){
  if(['indicadores_financieros','notas_financieras'].includes(m)){
   check(canRead('contabilidad')&&canRead('finanzas'),'Se requiere lectura de Contabilidad y Finanzas.');
   const mapping=r.mapping||DEFAULT_MAPPING,current=financialSnapshot(data,body.from,body.to,mapping),days=(Date.parse(body.to)-Date.parse(body.from))/86400000+1,previousTo=new Date(Date.parse(body.from)-86400000).toISOString().slice(0,10),previousFrom=new Date(Date.parse(body.from)-days*86400000).toISOString().slice(0,10),previous=financialSnapshot(data,previousFrom,previousTo,mapping);
+  if(!canRead('costos'))for(const snapshot of [current,previous]){snapshot.values.breakEven=null;snapshot.values.connectedCostSalesPct=null;snapshot.values.connectedPending=null;snapshot.values.connectedOutgoings=null;}
   const serviceFirst=catalog.get(access.company?.businessType).serviceFirst;
   if(serviceFirst&&!entries.some(e=>(e.items||[]).some(i=>!i.service))){for(const snapshot of [current,previous]){snapshot.values.dio=null;snapshot.values.inventoryTurnover=null;snapshot.values.cashCycle=null}}
   result.settings={mapping,template:r.template||'1. Bases de preparación\n2. Políticas contables\n3. Estimaciones y riesgos\n4. Hechos posteriores\n5. Observaciones'};result.previousFrom=previousFrom;result.previousTo=previousTo;
@@ -74,5 +79,6 @@ export function analysisReport(data,access,body,canRead){
   if(canRead('cajas')&&role!=='vendedor')result.rows.push({key:'cashCounts',value:(data.cashCounts||[]).filter(c=>c.date>=body.from&&c.date<=body.to&&(!operational||c.responsible===access.member?.id)).length,unit:'count'});
   if(!operational&&canRead('contabilidad')&&canRead('finanzas'))for(const [key,value]of Object.entries(financialSnapshot(data,body.from,body.to).statement))result.rows.push({key,value,unit:'money'});
  }
+ if(!access.rolePolicy?.ownOperations&&!['cajero','vendedor'].includes(String(access.member?.role).toLowerCase())&&['costos','contabilidad','gastos','personal','ventas'].every(canRead)){const c=connectedCostReport(data,body.from,body.to);result.connectedCosts=c; if(m==='tableros_rol'&&!access.rolePolicy?.ownOperations)for(const [key,value,unit]of [['connectedOutgoings',c.outgoingsCents,'money'],['connectedPending',c.pendingCents,'money']])result.rows.push({key,value,unit});}
  return result;
 }

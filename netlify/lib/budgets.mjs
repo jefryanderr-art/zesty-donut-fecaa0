@@ -1,3 +1,4 @@
+import {connectedCostReport} from '../../public/accounting-math.mjs';
 import {randomUUID} from 'node:crypto';
 import {recurringDay} from './accounting-engine.mjs';
 import {managuaDay} from './billing-rules.mjs';
@@ -6,7 +7,7 @@ import {budgetActuals,budgetVariance} from '../../public/advanced-math.mjs';
 export const BUDGET_MODULES=['presupuestos'];
 export const BUDGET_NOTICE='Informe interno de apoyo; no es asesoría fiscal. Verifica con tu contador.';
 export const BUDGET_OPS=['budEnable','budCreate','budRevise','budArchive'];
-export const DIMENSIONS=['cuenta','centro','proyecto','sucursal'];
+export const DIMENSIONS=['cuenta','centro','proyecto','sucursal','catalogo'];
 const check=(value,message)=>{if(!value)throw Object.assign(new Error(message),{publicMessage:message,status:400})};
 const txt=(v,n=200)=>String(v??'').trim().slice(0,n);
 const rows=(data,kind)=>(data.businessRecords||[]).filter(r=>r.module==='presupuestos'&&(!kind||r.kind===kind));
@@ -19,6 +20,7 @@ export function validateBudgetRecord(r,check){
 const parseLines=(list,dimension,data)=>{
  check(Array.isArray(list)&&list.length>=1&&list.length<=500,'Agrega entre 1 y 500 líneas.');const seen=new Set();
  return list.map(l=>{const key=txt(l.key,100),cents=l.amountCents;check(key&&!seen.has(key)&&centsOk(cents),'Línea duplicada o importe inválido (centavos enteros).');
+  if(dimension==='catalogo')check((data.costCatalog||[]).some(c=>c.id===key),'El costo no existe en el catálogo.');
   if(dimension==='cuenta')check((data.accounts||[]).some(a=>a.code===key||a.id===key)||!data.accounts,'La cuenta no existe en el catálogo.');seen.add(key);return {key,amountCents:cents}});
 };
 export async function budgetOperation(data,access,session,body,ctx){
@@ -37,13 +39,14 @@ export async function budgetOperation(data,access,session,body,ctx){
  const mine=()=>rows(data,'budget').filter(r=>r.branchId===access.branchId);
  const byId=id=>{const r=mine().find(r=>r.id===id);check(r,'Presupuesto no encontrado en la sucursal activa.');return r};
  if(op==='budCreate'){
+  if(body.dimension==='catalogo')ctx.permit(access,'costos');
   const dimension=body.dimension,year=Number(body.year),name=txt(body.name,120);
   check(DIMENSIONS.includes(dimension)&&Number.isInteger(year)&&year>=2000&&year<=2100&&name,'Revisa nombre, año y dimensión.');
   check(!mine().some(b=>b.status==='Activa'&&b.dimension===dimension&&b.year===year&&b.name.toLowerCase()===name.toLowerCase()),'Ya existe un presupuesto activo igual.');
   const lines=parseLines(body.lines,dimension,data),r={id:randomUUID(),module:'presupuestos',kind:'budget',name,dimension,year,status:'Activa',date,branchId:access.branchId,version:1,lines,versions:[{version:1,lines,reason,at:event.at,actor:event.actor}],events:[event]};
   records.push(r);return r.id;
  }
- const r=byId(body.id);check(r.status==='Activa','El presupuesto está archivado.');
+ const r=byId(body.id);if(r.dimension==='catalogo')ctx.permit(access,'costos');check(r.status==='Activa','El presupuesto está archivado.');
  if(op==='budRevise'){const lines=parseLines(body.lines,r.dimension,data);r.version+=1;r.lines=lines;r.versions.push({version:r.version,lines,reason,at:event.at,actor:event.actor});r.events.push(event);return r.id}
  if(op==='budArchive'){r.status='Archivada';r.events.push(event);return r.id}
  check(false,'Operación no disponible.');
@@ -53,7 +56,7 @@ export function budgetReport(data,body){
  const result={enabled:config?.status==='Activa',notice:BUDGET_NOTICE,thresholdPct:threshold,records:rows(data),budgets:[]};
  if(!result.enabled)return result;
  for(const b of rows(data,'budget').filter(b=>b.status==='Activa')){
-  const f=from&&from.slice(0,4)===String(b.year)?from:b.year+'-01-01',t=to&&to.slice(0,4)===String(b.year)?to:b.year+'-12-31',actual=budgetActuals(data.entries,b.dimension,f,t);
+  const f=from&&from.slice(0,4)===String(b.year)?from:b.year+'-01-01',t=to&&to.slice(0,4)===String(b.year)?to:b.year+'-12-31',actual=b.dimension==='catalogo'?new Map(connectedCostReport(data,f,t).groups.catalogId.map(r=>[r.key,r.costCents+r.cogsCents])):budgetActuals(data.entries,b.dimension,f,t);
   result.budgets.push({id:b.id,name:b.name,dimension:b.dimension,year:b.year,version:b.version,from:f,to:t,lines:b.lines.map(l=>({key:l.key,budgetCents:l.amountCents,actualCents:actual.get(l.key)||0,...budgetVariance(l.amountCents,actual.get(l.key)||0,threshold)}))});
  }
  return result;

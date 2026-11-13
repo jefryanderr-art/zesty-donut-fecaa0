@@ -1,3 +1,4 @@
+import {connectedCostReport} from '../../public/accounting-math.mjs';
 import {randomUUID} from 'node:crypto';
 import {recurringDay,recurringBoundary,moneyCents} from './accounting-engine.mjs';
 export const ORGANIZATION_OPS=['organizationSave','organizationContribution','organizationExpense'];
@@ -41,7 +42,8 @@ export function organizationReport(data,from,to){
  const tagged=(e,key,id)=>(e[key]||(data.entries||[]).find(o=>o.id===e.reversalOf)?.[key])===id;
  const totals=es=>es.reduce((out,e)=>{for(const l of e.lines||[]){const type=accounts.get(l.a);if(type==='ingreso')out.incomeCents+=moneyCents(l.c)-moneyCents(l.d);if(['costo','gasto'].includes(type))out.expenseCents+=moneyCents(l.d)-moneyCents(l.c);}return out;},{incomeCents:0,expenseCents:0});
  const funds=rows.filter(r=>r.kind==='organization-fund').map(r=>({...r,...totals(entries.filter(e=>tagged(e,'organizationFundId',r.id))),progressCents:totals((data.entries||[]).filter(e=>e.date<=to&&tagged(e,'organizationFundId',r.id))).incomeCents}));
- const events=rows.filter(r=>r.kind==='organization-event').map(r=>({...r,...totals(entries.filter(e=>tagged(e,'organizationEventId',r.id)))}));
+ const eventResults=connectedCostReport(data,from,to).groups.eventId;
+ const events=rows.filter(r=>r.kind==='organization-event').map(r=>{const c=eventResults.find(c=>c.key===r.id);return {...r,incomeCents:c?.revenueCents||0,expenseCents:(c?.costCents||0)+(c?.cogsCents||0)}});
  const members=rows.filter(r=>r.kind==='organization-member').map(r=>{const history=contributions.filter(c=>c.memberId===r.id&&c.date>=from),dues=[];if(r.amountCents)for(let i=0;i<1200;i++){const due=recurringBoundary(r.anchor,r.months,i);if(due>to)break;const paidCents=contributions.filter(c=>c.memberId===r.id&&c.period===i).reduce((n,c)=>n+c.amountCents,0);if(paidCents<r.amountCents)dues.push({period:i,due,amountCents:r.amountCents,paidCents,remainingCents:r.amountCents-paidCents,late:due<to});}return {...r,history,dues,totalCents:history.reduce((n,c)=>n+c.amountCents,0)};});
  return {from,to,funds,events,members,teams:rows.filter(r=>['organization-volunteer','organization-committee'].includes(r.kind)),contributions:contributions.filter(r=>r.date>=from)};
 }

@@ -4,7 +4,7 @@ const sxModule=()=>({construccion:'proyectos',agro:'lotes',manufactura:'producci
 const sxRows=()=>S.businessRecords||[];
 const sxRecord=id=>sxRows().find(r=>r.id===id);
 const sxIs=r=>String(r?.kind||'').startsWith('sector-');
-const sxMath=()=>import('./sector-math.mjs?v=abcfd351f11244d3');
+const sxMath=()=>import('./sector-math.mjs?v=23d9d8ceee8a3ff5');
 const sxBtn=(a,label,id='',module=sxModule())=>`<button type="button" class="btn ghost" data-a="${esc(a)}" data-id="${esc(id)}" data-module="${esc(module)}">${esc(label)}</button>`;
 const sxTable=(headers,rows)=>accountingTable(headers,rows.map(row=>'<tr>'+row.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join(''));
 const sxSelect=(name,label,rows,value='')=>bSelect(name,label,rows.map(r=>[r.id,r.name]),value);

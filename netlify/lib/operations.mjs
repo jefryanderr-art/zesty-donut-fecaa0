@@ -1,3 +1,4 @@
+import {connectedCostReport} from '../../public/accounting-math.mjs';
 import {registerConnectedCost,seedCostCatalog,reverseConnectedCost} from './costs.mjs';
 import {durableRoutePayload} from '../../public/route-queue.mjs';
 import {ROUTE_OPS,routeOperation,routeOperationGuard,routeSaleGuard,routeCustomerAllowed,routeManager,routeCommission,routeCommissionReturn} from './routes.mjs';
@@ -577,6 +578,18 @@ export async function runOperation(companyId, session, body) {
     if(body.format!=='VIEW')await audit(client,companyId,session,'Descarga personal '+body.format,[{area:body.module,from:body.from,to:body.to,branchId:access.branchId,version:1}]);
     return {...report,company:access.company.name,branchId:access.branchId,from:body.from,to:body.to,generatedAt:new Date().toISOString(),generatedBy:actorName(session),revision:access.company.revision,version:1};
   });
+  if(body.operation==='connectedCostReport')return db.transaction(async client=>{
+    const access=await companyAccess(client,companyId,session,true);
+    for(const module of ['costos','contabilidad','gastos','personal','ventas'])requireModule(access,module);
+    requireValue(!(access.rolePolicy?.ownOperations||access.routeRole&&access.routeRole!=='route_supervisor'||!access.rolePolicy&&['cajero','vendedor'].includes(String(access.member?.role).toLowerCase())),'El análisis completo requiere acceso contable sin restricción a operaciones propias.');
+    dateValue(body.from);dateValue(body.to);requireValue(body.from<=body.to,'Período invertido.');
+    requireValue(['none','revenue'].includes(body.allocation||'none'),'Criterio de reparto inválido.');
+    const data=projectData(scopeBranch(access.company.data,access),access);
+    const priorDate=body.from.startsWith('0000')?new Date():new Date(body.from+'T12:00:00Z');priorDate.setUTCMonth(priorDate.getUTCMonth()-1,1);
+    const previousFrom=priorDate.toISOString().slice(0,10),previousTo=new Date(Date.UTC(priorDate.getUTCFullYear(),priorDate.getUTCMonth()+1,0)).toISOString().slice(0,10);
+    const previous=connectedCostReport(data,previousFrom,previousTo);
+    return {...connectedCostReport(data,body.from,body.to,{allocation:body.allocation||'none'}),previous:{from:previousFrom,to:previousTo,outgoingsCents:previous.outgoingsCents,operatingCents:previous.operatingCents,groups:previous.groups},revision:access.company.revision,branchId:access.branchId,from:body.from,to:body.to};
+  });
   if(body.operation==='analysisReport')return db.transaction(async client=>{
     requireValue(ANALYSIS_MODULES.includes(body.module)&&['VIEW','PDF','CSV'].includes(body.format),'Informe inválido.');
     const access=await companyAccess(client,companyId,session,true);requireModule(access,body.module);
@@ -592,6 +605,7 @@ export async function runOperation(companyId, session, body) {
     requireValue(access.branchId&&['VIEW','PDF','CSV'].includes(body.format),'Informe inválido.');
     const scoped=scopeBranch(access.company.data,access);requireValue(scoped&&Array.isArray(scoped.entries),'Abre primero la empresa.');const data=projectData(scoped,access);
     const actor=actorName(access.member?{...session,member:access.member}:session);
+    if((data.businessRecords||[]).some(r=>r.module==='presupuestos'&&r.dimension==='catalogo'))requireModule(access,'costos');
     const report=budgetReport(data,body);
     if(body.format!=='VIEW')await audit(client,companyId,access.member?{...session,member:access.member}:session,'Descarga presupuesto vs real '+body.format,[{area:'presupuestos',branchId:access.branchId,from:body.from||body.date,to:body.to||body.date,version:1}]);
     return {...report,company:access.company.name,currency:data.cfg?.cur||'NIO',branchId:access.branchId,from:body.from||body.date,to:body.to||body.date,generatedAt:new Date().toISOString(),generatedBy:actor,revision:access.company.revision,version:1};

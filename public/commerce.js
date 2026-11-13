@@ -4,7 +4,7 @@ const COMMERCE_TYPES=['comercio','minorista','ropa','ferreteria','farmacia','tec
 const commerceActive=()=>COMMERCE_TYPES.includes(businessOperationalType());
 const cmRows=kind=>(S.businessRecords||[]).filter(r=>r.kind===kind);
 const cmConfig=id=>cmRows('commerce-product').find(r=>r.productId===id);
-const cmMath=()=>import('/commerce-math.mjs?v=b8dfb6e51cf2ffc5');
+const cmMath=()=>import('/commerce-math.mjs?v=d24ede8af8495ded');
 const cmBtn=(action,label,id='')=>`<button type="button" class="btn ghost" data-a="${action}" data-id="${esc(id)}">${esc(label)}</button>`;
 const cmSelect=(name,label,rows,value='')=>selectField(name,label,option('','Selecciona')+rows.map(([id,label])=>option(id,label,id===value)).join(''));
 const cmProducts=()=>S.products.filter(p=>p.kind!=='service').map(p=>[p.id,(p.code?p.code+' · ':'')+p.name]);
