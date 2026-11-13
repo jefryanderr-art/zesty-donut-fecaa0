@@ -183,6 +183,7 @@ export const pettyFunds = recordTable(collections.pettyFunds);
 export const pettyVouchers = recordTable(collections.pettyVouchers);
 export const cashCounts = recordTable(collections.cashCounts);
 export const costCatalog = recordTable(collections.costCatalog);
+// Los vínculos y el centro de costos usan columnas aditivas del contrato compartido.
 export const costs = recordTable(collections.costs);
 export const journalEntries = recordTable(collections.entries);
 export const journalLines = recordTable(children.lines, true);

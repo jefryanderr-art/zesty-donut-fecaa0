@@ -91,7 +91,7 @@ export async function lodgingOperation(data,access,session,b,ctx){
   check(r.kind==='lodging-unit','Selecciona una unidad.');permit('costos');permit('contabilidad');permit('cajas');ctx.financialCash(access);
   const task=r.tasks?.find(t=>t.id===b.taskId&&t.type==='Mantenimiento');check(task&&!task.entryId,'Selecciona mantenimiento sin costo confirmado.');
   check(['1101','1102','2101'].includes(b.pay),'Cuenta de pago inválida.');
-  if(task.supplierId)ctx.readPermit(access,'compras');const cost=ctx.registerCost(data,access,session,{...b,supplierId:task.supplierId||''}),entry=data.entries.find(e=>e.id===cost.entryId);entry.businessId=r.id;cost.businessId=r.id;task.entryId=entry.id;task.amountCents=moneyCents(cost.total);event(r,'Costo de mantenimiento confirmado');return entry.id;
+  if(task.supplierId)ctx.readPermit(access,'compras');const cost=ctx.registerCost(data,access,session,{...b,businessId:r.id,supplierId:task.supplierId||''}),entry=data.entries.find(e=>e.id===cost.entryId);entry.businessId=r.id;cost.businessId=r.id;task.entryId=entry.id;task.amountCents=moneyCents(cost.total);event(r,'Costo de mantenimiento confirmado');return entry.id;
  }
  if(b.operation==='lodgingTask'){
   const u=r.kind==='lodging-unit'?r:unit(r.unitId);permit('reservas');u.tasks||=[];
