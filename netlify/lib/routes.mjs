@@ -1,6 +1,6 @@
 import {routeNoticeAllowed} from './route-notices.mjs';
 import {randomUUID} from 'node:crypto';
-import {invoiceTotals,moneyCents,normalizeItemQuantity,customerCreditBalance,invoiceLinkedEntries} from './accounting-engine.mjs';
+import {invoiceTotals,moneyCents,businessCommission,normalizeItemQuantity,customerCreditBalance,invoiceLinkedEntries} from './accounting-engine.mjs';
 import {commerceRouteCashRows,commerceRouteProfit,commerceQuantity as qty} from '../../public/commerce-math.mjs';
 import {commerceReserved,commerceCheckStock} from './commerce.mjs';
 export const ROUTE_OPS=['routeTargets','routeArchive','routeVisitOrder','routeNoticeAck','routeNoticeRefresh','routeDefinition','routePolicy','routeApproveOrder','routeCustomer','routeOrder','routeOrderState','routeReschedule','routePrepare','routeDispatch','routeDelivery','routeNotDelivered','routeVisit','routeReload','routeSettle','routeApproveSettlement','routeRejectSettlement','routeReturnRequest','routeReturnApprove','routeCollect','routeExpense','routeAssign','routeReassignLoad'];
@@ -20,19 +20,26 @@ export function routeOperationGuard(a,b,check){
  const list=a.routeRole==='route_supervisor'?supervisor:a.routeRole==='route_preseller'?common:a.routeRole==='route_driver'?[...common.filter(x=>!['routeOrder','routeOrderState'].includes(x)),...selling.filter(x=>x!=='sale'),...driver]:[...common,...selling];
  check(list.includes(b.operation),'Esta operación no corresponde a tu rol en ruta.');
 }
-export function routePolicy(data,zone){const route=(data.businessRecords||[]).find(r=>r.kind==='route-definition'&&r.route===zone);return {requireCreditApproval:false,allowSaleWithoutLoad:true,...data.cfg?.routePolicy,...route?.routePolicy};}
+export function routePolicy(data,zone){const route=(data.businessRecords||[]).find(r=>r.kind==='route-definition'&&r.route===zone);return {requireCreditApproval:false,allowSaleWithoutLoad:false,...data.cfg?.routePolicy,...route?.routePolicy};}
 export function routeOrderPriceLines(data,body,normalPrice=(d,p)=>p.price){return body.items.map(i=>{const p=data.products.find(p=>p.id===i.p),normalPriceCents=moneyCents(normalPrice(data,p,body)),unitPriceCents=moneyCents(i.u);return {productId:i.p,normalPriceCents,unitPriceCents,specialPrice:normalPriceCents!==unitPriceCents}})}
 export function routeSaleGuard(data,a,body,check){
- if(a.routeRole||body.commerceLoadId||body.routeOrderId)check(body.operationId,'La venta de ruta requiere identificador único.');
- if(body.commerceLoadId)check(!(data.businessRecords||[]).some(r=>r.kind==='route-settlement'&&r.loadId===body.commerceLoadId&&r.status==='Pendiente'),'La carga tiene una liquidación pendiente.');
- const zone=(data.businessRecords||[]).find(r=>r.id===body.commerceLoadId)?.route||(data.customers||[]).find(c=>c.id===body.customerId)?.routeZone;
- if((a.routeRole||body.routeOrderId||body.routeSale)&&!body.commerceLoadId)check(routePolicy(data,zone).allowSaleWithoutLoad!==false,'Esta ruta no permite vender del inventario general sin carga.');
- if(!a.routeRole)return;
- check(a.routeRole!=='route_preseller','El preventista no factura ni cobra.');
- check(routeCustomerAllowed(data,a,body.customerId),'Cliente fuera de tu ruta.');
- const loads=(data.businessRecords||[]).filter(r=>r.kind==='commerce-load'&&!r.closed&&r.assignedMemberId===a.member?.id);
- if(routeWorker(a)&&loads.length){check(body.commerceLoadId&&loads.some(l=>l.id===body.commerceLoadId),'Selecciona tu carga activa; no puedes vender del inventario mientras tienes carga.');}
- if(body.commerceLoadId){const l=(data.businessRecords||[]).find(r=>r.id===body.commerceLoadId);check(l&&routeRecordAllowed(a,l),'Carga fuera de tu asignación.');}
+ const routed=!!(a.routeRole||body.commerceLoadId||body.routeOrderId||body.routeSale);
+ if(!routed){delete body.route;delete body.routeWorkerId;return;}
+ check(body.operationId,'La venta de ruta requiere identificador único.');
+ const records=data.businessRecords||[],customer=(data.customers||[]).find(c=>c.id===body.customerId);
+ const order=records.find(r=>r.kind==='route-order'&&r.id===body.routeOrderId);
+ const zone=order?.route||customer?.routeZone;
+ check(zone,'Selecciona un cliente con ruta/zona asignada.');
+ const loads=records.filter(r=>r.kind==='commerce-load'&&!r.closed&&r.branchId===a.branchId&&r.route===zone&&routeRecordAllowed(a,r));
+ if(!body.commerceLoadId&&loads.length===1)body.commerceLoadId=loads[0].id;
+ check(body.commerceLoadId||loads.length===0,'Hay varias cargas abiertas para esta zona; selecciona la carga.');
+ const load=body.commerceLoadId?loads.find(l=>l.id===body.commerceLoadId):null;
+ if(body.commerceLoadId)check(load,'La carga no pertenece a esta ruta, sucursal o asignación, o está cerrada.');
+ else check(routePolicy(data,zone).allowSaleWithoutLoad===true,'No hay carga abierta para esta ruta. Prepara una salida o solicita al dueño o supervisor autorizar la venta sin carga en Políticas.');
+ if(load)check(!records.some(r=>r.kind==='route-settlement'&&r.loadId===load.id&&r.status==='Pendiente'),'La carga tiene una liquidación pendiente.');
+ if(a.routeRole){check(a.routeRole!=='route_preseller','El preventista no factura ni cobra.');check(routeCustomerAllowed(data,a,body.customerId),'Cliente fuera de tu ruta.');}
+ body.route=zone;
+ body.routeWorkerId=load?.assignedMemberId||order?.assignedMemberId||(routeWorker(a)?a.member.id:body.routeWorkerId)||a.member?.id||'';
 }
 export function routeReserved(data,pid,exceptId=''){
  return (data.businessRecords||[]).filter(r=>r.id!==exceptId&&r.kind==='route-order'&&r.reserved&&!r.loadId&&!['Cancelado','Entregado'].includes(r.status)).flatMap(r=>r.remaining||r.items||[]).filter(i=>i.p===pid).reduce((n,i)=>n+i.q,0);
@@ -141,7 +148,7 @@ export async function routeOperation(data,a,session,b,h){
  if(b.operation==='routeOrderState'){
   const r=get('route-order');const cancelPrepared=manager&&r.status==='Preparado'&&b.status==='Cancelado'&&!(r.deliveries||[]).length;
   check(cancelPrepared||['Borrador','Enviado','Pendiente de aprobación'].includes(r.status)&&!(r.deliveries||[]).length&&['Enviado','Cancelado'].includes(b.status),'El pedido ya fue preparado, facturado o cancelado.');
-  if(cancelPrepared){const load=get('commerce-load',r.loadId);check(!load.closed&&load.status==='Preparada','La carga ya salió; registra el regreso en su liquidación.');for(const i of r.remaining.filter(i=>i.q>0)){const left=load.remaining.find(x=>x.p===i.p);check(left&&left.q>=i.q,'Saldo de carga insuficiente para liberar el pedido.');left.q=qty(left.q-i.q)}load.unloaded||=[];load.unloaded.push({...event,orderId:r.id,items:structuredClone(r.remaining)});load.orderIds=(load.orderIds||[]).filter(id=>id!==r.id);load.events.push(event);r.reserved=false;r.loadId='';}
+  if(cancelPrepared){const load=get('commerce-load',r.loadId);check(!load.closed&&load.status==='Preparada','La carga ya salió; registra el regreso en su liquidación.');for(const i of r.remaining.filter(i=>i.q>0)){const left=load.remaining.find(x=>x.p===i.p);check(left&&left.q>=i.q,'Saldo de carga insuficiente para liberar el pedido.');left.q=qty(Math.round((left.q-i.q)*1000)/1000)}load.unloaded||=[];load.unloaded.push({...event,orderId:r.id,items:structuredClone(r.remaining)});load.orderIds=(load.orderIds||[]).filter(id=>id!==r.id);load.events.push(event);r.reserved=false;r.loadId='';}
 
   check(b.status!=='Cancelado'||text(b.reason),'Indica el motivo de cancelación.');r.status=b.status;if(r.status==='Enviado'&&(creditPending(r)||priceLines(r).some(i=>i.specialPrice)&&!r.priceApproval))r.status='Pendiente de aprobación';r.events.push(event);if(b.status==='Enviado')notice('pedido',r.id,'Pedido enviado · '+r.name);return r.id;
  }
@@ -178,17 +185,18 @@ export async function routeOperation(data,a,session,b,h){
   for(const r of orders)await checkOrderReady(r);
   const demand=new Map();for(const r of orders)for(const i of r.remaining.filter(i=>i.q>0))demand.set(i.p,normalizeItemQuantity((demand.get(i.p)||0)+i.q));
   const shortages=[...demand].map(([p,q])=>({p,q:Math.max(0,qty(Math.max(0,q+commerceReserved(data,p)-data.products.find(x=>x.id===p).stock)))})).filter(i=>i.q>0);
-  if(shortages.length){const existing=ofKind('route-purchase-suggestion').find(r=>r.due===b.deliveryDate&&r.route===b.zone&&r.status==='Pendiente');if(existing){existing.items=shortages.map(i=>({...i,u:0}));existing.events.push(event);return existing.id}return add('route-purchase-suggestion',{name:'Sugerencia de compra · '+b.zone,due:h.date(b.deliveryDate),route:text(b.zone,100),items:shortages.map(i=>({...i,u:0}))}).id;}
+  if(shortages.length&&data.cfg?.allowNegativeValues!==true){const existing=ofKind('route-purchase-suggestion').find(r=>r.due===b.deliveryDate&&r.route===b.zone&&r.status==='Pendiente');if(existing){existing.items=shortages.map(i=>({...i,u:0}));existing.events.push(event);return existing.id}return add('route-purchase-suggestion',{name:'Sugerencia de compra · '+b.zone,due:h.date(b.deliveryDate),route:text(b.zone,100),items:shortages.map(i=>({...i,u:0}))}).id;}
   const route=ofKind('route-definition').find(r=>r.route===b.zone);check(route,'Registra primero la ruta/zona.');
   for(const plan of plans)applyReschedule(plan);
   const load=add('commerce-load',{name:'Salida · '+b.zone,status:'Preparada',routeId:route.id,route:text(b.zone,100),assignedMemberId:m.id,receivedBy:m.name,handedBy:event.actor,loadType:'Entregas de preventa',items:[...demand].map(([p,q])=>({p,q,u:0})),remaining:[...demand].map(([p,q])=>({p,q,u:0})),sales:[],closed:false,reloads:[],pickingOrders:orders.map((r,i)=>({orderId:r.id,customerId:r.customerId,deliveryOrder:i+1,items:r.remaining.filter(i=>i.q>0).map(i=>({p:i.p,q:i.q}))})),orderIds:orders.map(r=>r.id)});
+  if(shortages.length){load.stockShortages=shortages;load.events.push({...event,action:'Carga con faltantes autorizados',shortages});}
   for(const [index,r] of orders.entries()){r.status='Preparado';r.assignedMemberId=m.id;r.deliveryOrder=index+1;r.loadId=load.id;r.reserved=true;r.events.push(event);notice('listo',r.id,'Pedido listo · '+r.name)}return load.id;
  }
  if(b.operation==='routeDispatch'){
   manage();const l=get('commerce-load');unlocked(l);check(!l.closed&&l.status==='Preparada','La salida ya está en reparto o cerrada.');l.status='En reparto';l.departedAt=at;l.events.push(event);for(const id of l.orderIds||[]){const r=get('route-order',id);if(r.status==='Preparado'){r.status='En reparto';r.events.push(event)}}return l.id;
  }
  if(b.operation==='routeReload'){
-  manage();const l=get('commerce-load');check(!l.closed,'Carga cerrada.');unlocked(l);const list=quantities(b.items).filter(i=>i.q>0);check(list.length,'Indica al menos un producto con cantidad mayor que cero para recargar.');commerceCheckStock(data,{items:list},check);
+  manage();const l=get('commerce-load');check(!l.closed,'Carga cerrada.');unlocked(l);const list=quantities(b.items).filter(i=>i.q>0);check(list.length,'Indica al menos un producto con cantidad mayor que cero para recargar.');const stockShortages=commerceCheckStock(data,{items:list},check);if(stockShortages.length)l.events.push({...event,action:'Recarga con faltantes autorizados',shortages:stockShortages});
   for(const i of list){for(const field of ['items','remaining']){const row=l[field].find(x=>x.p===i.p);if(row)row.q=normalizeItemQuantity(row.q+i.q);else l[field].push({...i,u:0})}}
   l.reloads||=[];l.reloads.push({...event,items:list});l.events.push(event);return l.id;
  }
@@ -197,12 +205,14 @@ export async function routeOperation(data,a,session,b,h){
   const deliveryId=text(b.deliveryId,80);check(/^[a-f0-9-]{36}$/.test(deliveryId),'Identificador de entrega inválido.');check(!ofKind('route-delivery').some(x=>x.deliveryId===deliveryId),'Esta entrega ya está registrada; recarga sus documentos.');
   const actual=quantities(b.items).filter(i=>i.q>0);check(actual.length,'Indica al menos una cantidad mayor que cero; si no hubo entrega, registra Entrega no realizada con motivo.');const list=actual.map(i=>{const pending=r.remaining.find(x=>x.p===i.p);check(pending&&i.q<=pending.q,'La entrega supera lo pendiente.');const submitted=b.items.find(x=>x.p===i.p);check(submitted.u===undefined||moneyCents(submitted.u)===moneyCents(pending.u),'El precio de entrega no coincide con el precio del pedido.');return {...pending,q:i.q}});
   const proof={at,signedBy:text(b.signedBy,160)};if(b.signature){check(Array.isArray(b.signature)&&b.signature.length<=100&&b.signature.flat().length<=1200&&b.signature.every(stroke=>Array.isArray(stroke)&&stroke.every(p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite)&&p[0]>=0&&p[0]<=600&&p[1]>=0&&p[1]<=160)),'Firma inválida.');proof.signature=structuredClone(b.signature);}if(b.location){const {latitude,longitude,accuracy}=b.location;check(Number.isFinite(latitude)&&Math.abs(latitude)<=90&&Number.isFinite(longitude)&&Math.abs(longitude)<=180&&Number.isFinite(accuracy)&&accuracy>=0,'Ubicación inválida.');proof.location={latitude,longitude,accuracy}}
-  const l=r.loadId?get('commerce-load',r.loadId):null;check(!l||!l.closed,'La carga fue cerrada; prepara una nueva salida.');
-  if(l)unlocked(l);
-  const bill=await h.sale({...b,items:list,customerId:r.customerId,commerceLoadId:l?.id||'',discount:0,loyalty:false,previousDay:false,commercePresentations:[],routeOrderId:r.id},l?null:r.id,r);
+  const saleBody={...b,items:list,customerId:r.customerId,commerceLoadId:r.loadId||b.commerceLoadId||'',discount:0,loyalty:false,previousDay:false,commercePresentations:[],routeOrderId:r.id};
+  routeSaleGuard(data,a,saleBody,check);
+  const l=saleBody.commerceLoadId?get('commerce-load',saleBody.commerceLoadId):null;check(!l||!l.closed,'La carga fue cerrada; prepara una nueva salida.');
+  if(l){unlocked(l);r.loadId=l.id;}
+  const bill=await h.sale(saleBody,l?null:r.id,r);
   if(b.photo){check(h.storePhoto,'No está disponible el adjunto privado.');proof.photo=await h.storePhoto(b.photo);}
   const d=add('route-delivery',{name:'Entrega · '+r.name,deliveryId,orderId:r.id,customerId:r.customerId,route:r.route,assignedMemberId:r.assignedMemberId,entryId:bill.id,items:list,proof,status:'Entregado',...invoiceTotals(list)});
-  bill.routeOrderId=r.id;bill.routeDeliveryId=d.id;bill.route=r.route;for(const i of actual){const left=r.remaining.find(x=>x.p===i.p);left.q=qty(left.q-i.q)}r.deliveries||=[];r.deliveries.push(d.id);r.status=r.remaining.some(i=>i.q>0)?'Parcial':'Entregado';r.reserved=r.status==='Parcial';r.events.push({...event,entryId:bill.id,deliveryId:d.id});return bill.id;
+  bill.routeOrderId=r.id;bill.routeDeliveryId=d.id;bill.route=r.route;for(const i of actual){const left=r.remaining.find(x=>x.p===i.p);left.q=qty(Math.round((left.q-i.q)*1000)/1000)}r.deliveries||=[];r.deliveries.push(d.id);r.status=r.remaining.some(i=>i.q>0)?'Parcial':'Entregado';r.reserved=r.status==='Parcial';r.events.push({...event,entryId:bill.id,deliveryId:d.id});return bill.id;
  }
  if(b.operation==='routeNotDelivered'){
   const r=get('route-order');check(['En reparto','Parcial'].includes(r.status)&&['ausente','rechazó','sin dinero','dirección incorrecta'].includes(b.reason),'Indica un motivo válido.');const d=add('route-delivery',{name:'No entregado · '+r.name,orderId:r.id,customerId:r.customerId,route:r.route,assignedMemberId:r.assignedMemberId,status:'No entregado',reason:b.reason,proof:{at}});r.events.push(event);notice('no-entregado',d.id,d.name+' · '+b.reason);return d.id;
@@ -247,7 +257,7 @@ export async function routeOperation(data,a,session,b,h){
   manage();const r=get('route-return');check(r.status==='Pendiente'&&!r.entryId,'Devolución ya procesada.');const note=await h.credit({...b,id:r.invoiceId,items:r.items,reason:r.reason,reasonCategory:'devolución'});
   if(r.destination==='merma')for(const i of note.items.filter(i=>!i.service))await h.adjust({productId:i.p,delta:-i.q,date,reason:'Devolución '+r.reason});
   if(r.destination==='camion'){const l=get('commerce-load',r.loadId);check(!l.closed,'La carga está cerrada.');for(const i of note.items.filter(i=>!i.service)){const left=l.remaining.find(x=>x.p===i.p);if(left)left.q=normalizeItemQuantity(left.q+i.q);else l.remaining.push({p:i.p,q:i.q,u:0});}l.customerReturns||=[];l.customerReturns.push({entryId:note.id,items:r.items});}
-  r.status='Aprobada';r.entryId=note.id;r.events.push(event);note.routeReturnId=r.id;note.route=r.route;note.commerceLoadId=data.entries.find(e=>e.id===r.invoiceId)?.commerceLoadId||'';return r.id;
+  r.status='Aprobada';r.entryId=note.id;r.events.push(event);note.routeReturnId=r.id;note.route=r.route;note.routeWorkerId=data.entries.find(e=>e.id===r.invoiceId)?.routeWorkerId||'';note.commerceLoadId=data.entries.find(e=>e.id===r.invoiceId)?.commerceLoadId||'';return r.id;
  }
  check(false,'Operación de ruta desconocida.');
 }
@@ -258,5 +268,18 @@ export function routeCommission(data,entry,memberIds){
  for(const config of route?.commissions||[]){if(!memberIds.includes(config.memberId)||!config.rate||!data.employees.some(e=>e.id===config.employeeId&&e.active!==false))continue;
   if(data.businessRecords.some(r=>r.module==='comisiones'&&r.saleId===entry.id&&r.employeeId===config.employeeId))continue;
   data.businessRecords.push({id:randomUUID(),module:'comisiones',kind:'ruta',name:'Comisión · '+entry.reference,date:entry.date,status:'Pendiente',branchId:entry.branchId,employeeId:config.employeeId,saleId:entry.id,routeMemberId:config.memberId,rate:config.rate,paid:0,events:[{date:entry.date,action:'Propuesta de comisión de ruta',entryId:entry.id}]});
+ }
+}
+
+// Reverse only route commissions already accrued; proposals use net sales when accrued.
+export function routeCommissionReturn(data,original,note,post,check){
+ const returned=data.entries.filter(e=>e.type==='nota-credito'&&e.invoiceId===original.id).reduce((n,e)=>n+moneyCents(e.subtotal),0);
+ for(const r of data.businessRecords.filter(r=>r.module==='comisiones'&&r.kind==='ruta'&&r.saleId===original.id&&r.entryId)){
+  const target=businessCommission(Math.max(0,moneyCents(original.subtotal)-returned)/100,r.rate),delta=moneyCents(r.total)-moneyCents(target);
+  if(delta<=0)continue;
+  check(r.expenseAccount&&r.liabilityAccount,'La comisión histórica requiere conciliar sus cuentas antes de devolver.');
+  const entry=post({date:note.date,type:'comision-reversion',desc:'Reversión de comisión · '+note.reference,invoiceId:original.id,total:delta/100,lines:[{a:r.liabilityAccount,d:delta/100,c:0},{a:r.expenseAccount,d:0,c:delta/100}]});
+  r.total=target;r.events||=[];r.events.push({date:note.date,action:'Reversión por nota de crédito',entryId:entry.id,noteId:note.id,amountCents:delta});
+  note.commissionReversalIds||=[];note.commissionReversalIds.push(entry.id);
  }
 }

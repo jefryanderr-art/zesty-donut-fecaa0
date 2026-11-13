@@ -57,7 +57,7 @@ test('paid orders cannot dispatch before an invoice and branch ids are server-co
 });
 test('route loading reserves availability and returns unsold goods without a second stock entry',async()=>{
  const d=fixture(),a={...access,company:{businessType:'distribuidora'}};d.businessRecords.push({id:'route',module:'rutas',name:'Ruta',items:[],events:[]});
- const id=await run(d,{operation:'commerceLoad',routeId:'route',items:[{p:'article',q:10}]},a);assert.equal(d.products[0].stock,20);assert.equal(commerceReserved(d,'article'),10);
+ const id=await run(d,{operation:'commerceLoad',routeId:'route',assignedMemberId:'__self__',items:[{p:'article',q:10}]},a);assert.equal(d.products[0].stock,20);assert.equal(commerceReserved(d,'article'),10);
  commerceSaleGuard(d,{commerceLoadId:id,items:[{p:'article',q:3}]},check,null,()=>{});
  commerceLoadSale(d,{commerceLoadId:id},{id:'sale',date:'2026-11-05',items:[{p:'article',q:3}]},check,()=>{});assert.equal(commerceReserved(d,'article'),7);
  await run(d,{operation:'commerceLoadReturn',id,reason:'Recibido todo el sobrante'},a);assert.equal(commerceReserved(d,'article'),0);assert.equal(d.products[0].stock,20);assert.equal(d.businessRecords.find(r=>r.id===id).returnedItems[0].q,7);
@@ -78,4 +78,11 @@ test('route cash reconciliation includes load sales, credit collections and cash
 });
 test('installments allocate actual invoice debt reductions without generating another credit',()=>{
  const record={entryId:'s',installments:[{due:'2026-12-01',amountCents:500},{due:'2027-01-01',amountCents:500}]},entries=[{id:'s',type:'venta',creditAmount:10,lines:[{a:'1201',d:10,c:0}]},{id:'payment',invoiceId:'s',lines:[{a:'1201',d:0,c:6}]}],rows=commerceInstallmentBalances(record,entries);assert.equal(rows[0].remainingCents,0);assert.equal(rows[1].remainingCents,400);
+});
+
+test('truck receiver is required and owner can receive without route employees',async()=>{
+ const d=fixture();d.businessRecords.push({id:'route',module:'rutas',name:'Ruta',items:[],events:[]});
+ await assert.rejects(run(d,{operation:'commerceLoad',routeId:'route',items:[{p:'article',q:1}]}),/Selecciona/);
+ const id=await run(d,{operation:'commerceLoad',routeId:'route',assignedMemberId:'__self__',items:[{p:'article',q:1}]});
+ assert.equal(d.businessRecords.find(r=>r.id===id).assignedMemberId,session.email);
 });
