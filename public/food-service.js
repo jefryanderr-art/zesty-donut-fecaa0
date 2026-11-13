@@ -5,7 +5,7 @@ READ_ACTIONS.add('foodBoard');
 const diningRows=()=>((S.businessRecords)||[]).filter(r=>r.module==='cuentas_abiertas');
 const diningTables=()=>diningRows().filter(r=>r.kind==='dining-table');
 const foodOriginalView=businessView;
-businessView=function(module){foodOriginalView(module);if(module==='cuentas_abiertas')$('#main').insertAdjacentHTML('afterbegin','<div class="accounting-actions noprint"><button class="btn ghost" data-a="foodBoard">Mesas y reservas</button></div>');};
+businessView=function(module){foodOriginalView(module);if(isFoodBusiness()&&module==='cuentas_abiertas')$('#main').insertAdjacentHTML('afterbegin','<div class="accounting-actions noprint"><button class="btn ghost" data-a="foodBoard">Mesas y reservas</button></div>');};
 function foodElapsed(r){if(!r?.openedAt)return 'Sin hora histórica';return Math.max(0,Math.floor((Date.now()-Date.parse(r.openedAt))/60000))+' min';}
 ACT.foodBoard=()=>{
  const rows=diningRows(),tables=diningTables(),now=new Date().toISOString();
@@ -22,3 +22,5 @@ ACT.foodArrive=d=>{const r=diningRows().find(r=>r.id===d.id);if(!r)return;modal(
 ACT.foodAccount=d=>{const r=diningRows().find(r=>r.id===d.id);if(!r)return;modal('Atención · '+r.name,field('responsible','Mesero',r.responsible||'','text','maxlength="200"')+field('guests','Comensales',r.guests||1,'number','min="1" required')+selectField('readyToPay','Estado',option('false','Ocupada',!r.readyToPay)+option('true','Por cobrar',r.readyToPay)),async f=>{await operate('foodAccount',{id:r.id,responsible:v(f,'responsible'),guests:+v(f,'guests'),readyToPay:v(f,'readyToPay')==='true',confirmed:true});view()},'Guardar atención');};
 
 ACT.foodCancel=d=>modal('Cancelar reserva',field('reason','Motivo','','text','required maxlength="500"'),async f=>{await operate('foodCancel',{id:d.id,reason:v(f,'reason'),confirmed:true});view()},'Confirmar cancelación');
+
+guardFoodActions(['foodBoard', 'foodTable', 'foodReserve', 'foodSeat', 'foodArrive', 'foodAccount', 'foodCancel']);

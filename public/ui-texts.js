@@ -3182,3 +3182,119 @@ Object.assign(UI_CATALOG, {
     "max": 200
   }
 });
+
+// Búsqueda de proveedores y accesos de alimentos.
+Object.assign(UI_CATALOG, {
+  "invoiceSuppliers.title": {
+    "original": "Buscar proveedor",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "invoiceSuppliers.close": {
+    "original": "Cerrar",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "invoiceSuppliers.search": {
+    "original": "Nombre, RUC o teléfono",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "invoiceSuppliers.pages": {
+    "original": "Páginas de proveedores",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "invoiceSuppliers.previous": {
+    "original": "Anterior",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "invoiceSuppliers.next": {
+    "original": "Siguiente",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "invoiceSuppliers.new": {
+    "original": "+ Nuevo proveedor",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "invoiceSuppliers.suppliers": {
+    "original": "proveedores",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "invoiceSuppliers.page": {
+    "original": "Página",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "invoiceSuppliers.identification": {
+    "original": "Proveedor / identificación",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "invoiceSuppliers.selection": {
+    "original": "Selección",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "invoiceSuppliers.noTaxId": {
+    "original": "Sin RUC / cédula",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "invoiceSuppliers.days": {
+    "original": "días",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "invoiceSuppliers.limit": {
+    "original": "Límite",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "invoiceSuppliers.choose": {
+    "original": "Elegir",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "invoiceSuppliers.empty": {
+    "original": "No se encontraron proveedores activos.",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "invoiceSuppliers.manual": {
+    "original": "Proveedor manual / general",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "invoiceSuppliers.denied": {
+    "original": "No tienes permiso para guardar proveedores.",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "invoiceSuppliers.savePending": {
+    "original": "No se pudo confirmar el proveedor guardado.",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "foodBusiness.reports": {
+    "original": "Informes de alimentos",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "foodBusiness.quick": {
+    "original": "Caja rápida por categoría",
+    "group": "Compras y alimentos",
+    "max": 200
+  },
+  "foodBusiness.ready": {
+    "original": "Pedidos listos",
+    "group": "Compras y alimentos",
+    "max": 200
+  }
+});
+
+Object.assign(UI_CATALOG, {"invoiceSuppliers.register": {original:"Registrar proveedor",group:"Compras y alimentos",max:200}});
