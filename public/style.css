@@ -682,3 +682,11 @@ form[data-k=compra] .purchase-product-name,form[data-k=editcompra] .purchase-pro
 .route-surplus { color: var(--success, #24734b); font-weight: 700; }
 .route-customer h4 { scroll-margin-top: 1rem; }
 .route-customer [data-a="routeDispatch"], .route-customer [data-a="routeSettle"] { border: 2px solid currentColor; font-weight: 700; }
+
+/* Gastos personales: controles legibles en ambos temas y en la hoja móvil. */
+[data-personal-fields]{min-width:0}
+[data-personal-summary]{color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;line-height:1.6;overflow-wrap:anywhere}
+[data-partner-form]{min-width:0;margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px;color:var(--ink)}
+[data-partner-form] .btn{max-width:100%;white-space:normal}
+[data-personal-fields] select{min-width:0;max-width:100%}
+[data-partner-error]{color:var(--ink)}
