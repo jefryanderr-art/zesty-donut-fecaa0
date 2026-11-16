@@ -27,22 +27,43 @@ ACT.capitalMovement=async()=>{const form=modal('Movimiento de capital',selectFie
 
 const personalSourceNames={'3103':'Retiros del propietario','3101':'Capital aportado por el socio','3102':'Utilidades acumuladas'};
 const isPersonalEntry=e=>e?.type==='capital-socio'&&(S.partners||[]).some(p=>p.movements?.some(m=>m.entryId===e.id&&m.kind==='gasto_personal'));
-function personalExpenseFields(){return selectField('partnerId','Socio',option('','Selecciona socio')+(S.partners||[]).filter(p=>p.active!==false&&!['inactivo','archivado'].includes(p.status)).map(p=>option(p.id,p.name)).join(''))+selectField('source','Descontar de',Object.entries(personalSourceNames).map(([code,label])=>option(code,label+(code==='3103'?' (recomendado)':''))).join(''))+'<p data-personal-summary role="status"></p>';}
+function personalExpenseChoice(){return selectField('assumption','¿Quién asume este gasto?',option('business','El negocio')+`<option value="personal" ${CO.owner?'':'disabled'}>Gasto personal del socio</option>`)+(!CO.owner?'<p class="mut">Solo el dueño puede registrar gastos personales</p>':'');}
+function personalExpenseFields(){return (!((S.partners||[]).some(p=>p.active!==false&&!['inactivo','archivado'].includes(p.status)))?'<div data-personal-register><p>Primero registra un socio</p><button type="button" class="btn ghost" data-register-partner>Registrar socio</button><fieldset data-partner-form hidden><legend>Registrar socio</legend>'+field('personalPartnerName','Nombre','','text','maxlength="200"')+'<button type="button" class="btn" data-save-partner>Guardar socio y volver al gasto</button><p data-partner-error role="alert"></p></fieldset></div>':'')+ selectField('partnerId','Socio',option('','Selecciona socio')+(S.partners||[]).filter(p=>p.active!==false&&!['inactivo','archivado'].includes(p.status)).map(p=>option(p.id,p.name)).join(''))+selectField('source','Descontar de',['3103','3101','3102'].map(code=>option(code,personalSourceNames[code]+(code==='3103'?' (recomendado)':''))).join(''))+'<p data-personal-summary role="status"></p>';}
 async function personalExpensePreview(form,totalName){
  form.elements.source.value='3103';
+ const register=form.querySelector('[data-register-partner]');
+ if(register){register.onclick=()=>{form.querySelector('[data-partner-form]').hidden=false;form.elements.personalPartnerName.focus();};
+ form.querySelector('[data-save-partner]').onclick=async()=>{
+  const button=form.querySelector('[data-save-partner]'),error=form.querySelector('[data-partner-error]'),name=v(form,'personalPartnerName').trim();
+  if(!name){error.textContent='Escribe el nombre.';return;}
+  button.disabled=true;const submit=form.querySelector('.mf button:last-child');if(submit)submit.disabled=true;const ids=new Set(S.partners.map(p=>p.id));
+  try{await operate('partner',{name,date:v(form,'date')});const partner=S.partners.find(p=>!ids.has(p.id));if(!partner)throw Error('Recarga la empresa para consultar el socio registrado.');
+   form.elements.partnerId.insertAdjacentHTML('beforeend',option(partner.id,partner.name));form.elements.partnerId.value=partner.id;form.querySelector('[data-personal-register]').hidden=true;form.dispatchEvent(new Event('change'));
+  }catch(e){error.textContent=e.message;}finally{button.disabled=false;if(submit)submit.disabled=false;}
+ };}
  const math=await import('/accounting-math.mjs?v=10d728cb2562503b');
  const update=()=>{
   const B=bal('0000',v(form,'date')),partner=S.partners.find(p=>p.id===v(form,'partnerId')),total=+v(form,totalName)||0;
   const available=code=>code==='3101'?Math.min(math.partnerCapitalCents(partner,S.entries,v(form,'date'))/100,-((B[code]?.d||0)-(B[code]?.c||0))):-((B[code]?.d||0)-(B[code]?.c||0));
-  for(const opt of form.elements.source.options){const code=opt.value;opt.textContent=personalSourceNames[code]+(code==='3103'?' (recomendado; sin límite patrimonial) · Saldo: '+money((B[code]?.d||0)-(B[code]?.c||0)):' · Disponible: '+money(available(code)));}
+  for(const opt of form.elements.source.options){const code=opt.value;opt.disabled=code!=='3103'&&math.moneyCents(available(code))<math.moneyCents(total);opt.textContent=personalSourceNames[code]+(code==='3103'?' (recomendado; sin límite patrimonial) · Saldo: '+money((B[code]?.d||0)-(B[code]?.c||0)):' · Disponible: '+money(available(code)));}
+  if(form.elements.source.selectedOptions[0]?.disabled)form.elements.source.value='3103';
+  const [from,to]=rg(),period=bal(from,to,true),profit=tot(period,'ingreso')-tot(period,'costo')-tot(period,'gasto');
   const source=v(form,'source'),pay=v(form,'pay'),cash=(B[pay]?.d||0)-(B[pay]?.c||0),personal=form.elements.assumption?v(form,'assumption')==='personal':v(form,'kind')==='gasto_personal';
-  const summary=form.querySelector('[data-personal-summary]');summary.textContent=(pay==='1101'?'Caja':'Banco')+': −'+money(total)+' · '+personalSourceNames[source]+': '+(source==='3103'?'+':'−')+money(total)+' · Utilidad: sin cambio. Saldo de '+(pay==='1101'?'caja':'banco')+': '+money(cash)+(source!=='3103'&&available(source)-total<=Math.max(available(source)*0.1,0)?' · Atención: el origen queda en cero o por debajo del 10%.':'');
+  const summary=form.querySelector('[data-personal-summary]');summary.textContent=(pay==='1101'?'Caja':'Banco')+': −'+money(total)+' · '+personalSourceNames[source]+': '+(source==='3103'?'+':'−')+money(total)+' · Utilidad: sin cambio. Saldo de '+(pay==='1101'?'caja':'banco')+': '+money(cash)+(total>cash?' · Caja o banco insuficiente.':'')+(math.moneyCents(total)>math.moneyCents(profit)?' · Este gasto es mayor que la utilidad del período; se descontará del patrimonio, no de la utilidad':'')+' · No deducible, sin IVA. Verifica con tu contador.'+(source!=='3103'&&available(source)-total<=Math.max(available(source)*0.1,0)?' · Atención: el origen queda en cero o por debajo del 10%.':'');
   const wrap=form.querySelector('[data-personal-fields]');if(wrap){wrap.hidden=!personal;for(const el of wrap.querySelectorAll('input,select'))el.disabled=!personal;}
  };
  form.addEventListener('input',update);form.addEventListener('change',update);update();
 }
 async function submitPersonalExpense(form,total){
+ if(!CO.owner)return 'Solo el dueño puede registrar gastos personales';
+ if(!v(form,'partnerId'))return 'Primero registra un socio';
  if(!['1101','1102'].includes(v(form,'pay')))return 'Selecciona caja o banco; el gasto personal no admite crédito.';
  if(total>=10000&&!confirm('Confirmar gasto personal de '+money(total)+' que se descuenta del patrimonio y no de la utilidad.'))return 'Operación cancelada.';
  await operate('capitalMovement',{kind:'gasto_personal',partnerId:v(form,'partnerId'),source:v(form,'source'),concept:v(form,form.elements.concept?'concept':'description'),date:v(form,'date'),pay:v(form,'pay'),total});view();
+}
+
+function personalExpensesSection(from,to){
+ const entries=S.entries.filter(e=>isPersonalEntry(e)&&e.date>=from&&e.date<=to).sort((a,b)=>b.date.localeCompare(a.date));
+ const total=entries.filter(e=>!entryIsAnnulled(e)).reduce((sum,e)=>sum+Math.round(e.total*100),0);
+ return '<section aria-label="Gastos personales del socio"><h3>Gastos personales del socio</h3>'+notice('Se descuentan del patrimonio. No se suman a los gastos del negocio ni reducen la utilidad. No deducibles, sin IVA.')+entries.map(e=>entryCard(e,true)).join('')+'<div class="card"><p class="tt">Total personal vigente: <b>'+money(total/100)+'</b></p><small>Excluye los registros anulados, que se conservan para consulta.</small></div></section>';
 }
