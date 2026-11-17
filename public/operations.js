@@ -518,13 +518,13 @@ const productsForOperations=V.productos;
 V.productos=()=>{productsForOperations();if(!CO.owner&&(CO.rolePolicy?CO.rolePolicy.ownOperations:['cajero','vendedor'].includes(String(CO.role).toLowerCase()))){for(const row of $$('#main table tr')){if(row.parentElement.tagName==='TFOOT'){row.hidden=true;continue}for(const index of [2,5])if(row.cells[index])row.cells[index].hidden=true}}};
 function correctionBlockReason(e,{again=false}={}){
  if(!e)return uiT('corrections.missing','El asiento no existe en esta sucursal o ya está anulado.');
- if(!isSupervisor())return uiT('corrections.permission','Necesitas el permiso especial Correcciones.');
+ if(!isSupervisor()&&!ownPartnerCorrection(e))return uiT('corrections.permission','Necesitas el permiso especial Correcciones.');
  if(!CO.branchId||CO.support||CO.readOnlyLimit)return uiT('corrections.branch','Selecciona una sucursal activa; el consolidado es de consulta.');
  if(e.reversalOf)return uiT('corrections.inverse','El contrasiento se conserva; consulta el documento original.');
  if(!again&&entryIsAnnulled(e))return uiT('corrections.already','El asiento ya está anulado.');
  if(['venta','nota-credito'].includes(e.type))return uiT('corrections.sales','Las ventas se anulan mediante nota de crédito.');
  if(e.lines?.some(l=>l.a==='1104'||l.a.startsWith('1103-')))return uiT('corrections.cash','Los turnos y la caja chica se corrigen desde sus módulos.');
- const personal=isPersonalEntry(e);if(personal&&!CO.owner)return 'Solo el dueño anula gastos personales.';
+ const personal=isPersonalEntry(e)||e.type==='capital-socio'&&(S.partners||[]).some(p=>p.movements?.some(m=>m.entryId===e.id&&m.kind==='retiro'));if(personal&&!CO.owner&&!ownPartnerCorrection(e))return 'Solo el dueño o el socio autorizado anula su propio registro.';
  if(!personal&&(e.allocationJournal||e.treasuryId||e.shiftId||e.costId||e.managed&&!e.correctionOf&&e.type!=='apertura-importada'))return uiT('corrections.ownFlow','Esta operación tiene su propio flujo de anulación.');
  if(!personal&&!['apertura','apertura-importada','manual','gasto','compra','abono','fiscal-pago','invini'].includes(e.type))return uiT('corrections.typeFlow','Este tipo requiere su flujo específico de corrección.');
  if((S.cfg.periodLocks?.[(e.branchId||'principal')+':'+e.date.slice(0,7)]||S.cfg.periodLocks?.[e.date.slice(0,7)])?.closed)return uiT('corrections.closed','El período está cerrado. Solo el dueño puede reabrirlo.');
@@ -546,7 +546,7 @@ ACT.registerAgain=data=>{
  if(e.type==='abono'&&e.invoiceId)return correctPaymentForm(e,true);
  return entryModal(e.type,e,false,true);
 };
-ACT.correctEntry=data=>{const e=S.entries.find(e=>e.id===data.id);if(!isSupervisor()||!canCorrectEntry(e))throw new Error(uiT('corrections.denied','Este asiento requiere permiso de Correcciones o su flujo específico de anulación.'));if(e.type==='compra')return invoiceForm(e,false,true);if(e.type==='gasto')return expenseForm(e,true);if(isPersonalEntry(e)||['fiscal-pago','invini'].includes(e.type)||e.type==='abono'&&!e.invoiceId)return annulCorrectionForm(e);if(e.type==='abono')return correctPaymentForm(e);entryModal(e.type,e,true)};
+ACT.correctEntry=data=>{const e=S.entries.find(e=>e.id===data.id);if((!isSupervisor()&&!ownPartnerCorrection(e))||!canCorrectEntry(e))throw new Error(uiT('corrections.denied','Este asiento requiere permiso de Correcciones o su flujo específico de anulación.'));if(e.type==='compra')return invoiceForm(e,false,true);if(e.type==='gasto')return expenseForm(e,true);if(e.type==='capital-socio'||['fiscal-pago','invini'].includes(e.type)||e.type==='abono'&&!e.invoiceId)return annulCorrectionForm(e);if(e.type==='abono')return correctPaymentForm(e);entryModal(e.type,e,true)};
 READ_ACTIONS.add('correctionDetail');
 ACT.correctionDetail=data=>{const e=S.entries.find(e=>e.id===data.id);if(e)modal(uiT('corrections.detail','Asiento relacionado'),entryCard(e,false),()=>{},uiT('corrections.close','Cerrar'))};
 

@@ -18,7 +18,7 @@ export async function listCompanyRoles(companyId,session){
     const access=await companyAccess(client,companyId,session,true,false);requireAccessAdmin(access);
     const roles=await roleList(client,companyId);
     const members=await client.select().from(companyMembers).where(eq(companyMembers.companyId,companyId)).orderBy(companyMembers.createdAt);
-    return {owner:access.company.ownerEmail,roles,modules:MODULES,members:members.map(member=>{
+    return {partners:(access.company.data?.partners||[]).map(p=>({id:p.id,name:p.name,active:p.active,status:p.status})),owner:access.company.ownerEmail,roles,modules:MODULES,members:members.map(member=>{
       const role=roles.find(r=>r.id===member.roleId);
       const effectivePolicy=role?member.permissionExceptions||role.policy:roleRules.legacyPolicy(member.role,member.permissions,MODULES);
       return {...safeMember(member),role:role?.name||member.role,routeRole:roleRules.routeRoles[role?.key]?role.key:null,effectivePolicy,hasExceptions:!member.roleId||!!member.permissionExceptions};
@@ -46,7 +46,7 @@ export async function manageCompanyRole(companyId,session,body,method){
       if(assigned.length&&!target)accessError('Reasigna los accesos a otro cargo antes de borrar.',400);
       if(target)validateRolePolicy(target.policy,access);
       for(const m of assigned){
-        await client.update(companyMembers).set({roleId:target.id,role:target.name,permissions:roleRules.levels(target.policy),permissionExceptions:null,version:m.version+1}).where(eq(companyMembers.id,m.id));await revoke(client,m);
+        await client.update(companyMembers).set({roleId:target.id,role:target.name,permissions:{...roleRules.levels(target.policy),partnerAccess:m.permissions?.partnerAccess},permissionExceptions:null,version:m.version+1}).where(eq(companyMembers.id,m.id));await revoke(client,m);
       }
       await client.delete(companyRoles).where(and(eq(companyRoles.companyId,companyId),eq(companyRoles.id,previous.id)));
       await audit(client,companyId,session,'Cargo eliminado',[{area:'accesibilidad',before:previous,reassigned:assigned.map(m=>m.id),targetRoleId:target?.id||null}]);return {deleted:true};

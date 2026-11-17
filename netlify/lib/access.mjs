@@ -1,3 +1,4 @@
+import {partnerGrant,partnerAuthorized,validatePartnerGrant} from './partner-access.mjs';
 import {projectRouteSettlement} from './routes.mjs';
 import {commerceRouteCashRows} from '../../public/commerce-math.mjs';
 import {replayOperationReceipt} from './operation-replay.mjs';
@@ -56,9 +57,9 @@ export const allowed = (access, module, write = false, action = null) => {
   const level = access.permissions?.[module] ?? (module==='auditoria_revision'&&access.member?.role?.toLowerCase()==='contador'?'escritura':undefined) ?? (access.member?.role?.toLowerCase() === 'contador' ? access.permissions?.[fallback[module]] : undefined);
   return !!roleAllows(access, module) && !(write && roleAllows(access, module) === 'lectura') && (level === 'escritura' || (!write && level === 'lectura'));
 };
-export const allData = (access, write = false) => (access.company?.data?.businessRecords||[]).every(r=>allowed(access,r.module,write)) && (access.company?.data?.fiscalWorkflows||[]).every(r=>allowed(access,r.module,write)) && access.unrestrictedBranches !== false && !(access.billingPlan?.blockedModules||[]).some(m=>['control_personal','decisiones'].includes(m)) && salesAdministrator(access) && [...DATA_MODULES, 'ventas', 'facturacion', 'cajas', 'costos', 'proveedores'].every(module => allowed(access, module, write));
+export const allData = (access, write = false) => (access.owner||!partnerGrant(access.member).partnerId) && (access.company?.data?.businessRecords||[]).every(r=>allowed(access,r.module,write)) && (access.company?.data?.fiscalWorkflows||[]).every(r=>allowed(access,r.module,write)) && access.unrestrictedBranches !== false && !(access.billingPlan?.blockedModules||[]).some(m=>['control_personal','decisiones'].includes(m)) && salesAdministrator(access) && [...DATA_MODULES, 'ventas', 'facturacion', 'cajas', 'costos', 'proveedores'].every(module => allowed(access, module, write));
 export const actorName = session => session.member ? `${session.member.name} (${session.member.username || session.email})` : session.email;
-export const safeMember = member => ({ id: member.id, email: member.email, username: member.username, name: member.name, role: member.role, roleId: member.roleId, permissionExceptions: member.permissionExceptions, permissions: member.permissions, branchIds: member.branchIds, active: member.active, version: member.version });
+export const safeMember = member => ({ partnerAccess:partnerGrant(member), id: member.id, email: member.email, username: member.username, name: member.name, role: member.role, roleId: member.roleId, permissionExceptions: member.permissionExceptions, permissions: member.permissions, branchIds: member.branchIds, active: member.active, version: member.version });
 export function accessError(message, status = 403) {
   const error = new Error(message);
   error.publicMessage = message;
@@ -137,6 +138,7 @@ export async function companyAccess(client, companyId, session, lock = false, lo
     return finish({company,owner:false,support:true,supportExpiresAt:grant.expiresAt,permissions:Object.fromEntries(MODULES.map(m=>[m,'lectura'])),member:{role:'contador'}});
   }
   if (lock && loadAccounting === true) company.data = await readAccounting(client, company);
+  member = {...member,partnerAccess:partnerGrant(member)};
   let rolePolicy = null;
   if (member.roleId) {
     const [role] = await client.select().from(companyRoles).where(and(eq(companyRoles.id,member.roleId),eq(companyRoles.companyId,companyId)));
@@ -167,6 +169,9 @@ export function entryModule(entry) {
 const paymentModule = (entry,data) => {const invoice=data?.entries?.find(e=>e.id===entry.invoiceId);return invoice?.pay==='1201'?'ventas':invoice?.pay==='2101'?'compras':'contabilidad'};
 const entryAccessModule = (entry,data) => (entry.type==='abono'||entry.type==='correccion-anulacion'&&entry.originalType==='abono')?paymentModule(entry,data):entry.type==='factura'?'contabilidad':entryModule(entry);
 const visibleEntry = (access, entry, data) => {
+ const capitalId=entry.reversalOf||entry.id;
+ const partner=(data.partners||[]).find(p=>p.movements?.some(m=>m.entryId===capitalId));
+ if(partner&&!access.owner&&partnerGrant(access.member).partnerId){const movement=partner.movements.find(m=>m.entryId===capitalId);return partnerAuthorized(access,partner,'statement')||movement.registeredBy===access.member?.id&&partnerAuthorized(access,partner,movement.kind);}
  const module=(entry.type==='abono'||entry.type==='correccion-anulacion'&&entry.originalType==='abono')?paymentModule(entry,data):entryModule(entry);
  // Un libro o estado autorizado conserva todos sus asientos de origen. Fiscal
  // por sí solo no concede ese acceso al plan operativo.
@@ -203,11 +208,13 @@ export function projectData(data, access, {includeSpaces=false}={}) {
   const ownShiftIds = new Set((data.shifts || []).filter(shift => shift.operatorId === ownId).map(shift => shift.id));
   const ownFundIds = new Set((data.pettyFunds || []).filter(fund => fund.responsible === ownId).map(fund => fund.id));
   const ownInvoiceIds = new Set((data.entries || []).filter(entry => entry.type === 'venta' && (entry.operatorId === ownId || entry.routeWorkerId === ownId || ownShiftIds.has(entry.shiftId))).map(entry => entry.id));
-  const canSeeEntry = entry => operationalOnly ? (allowed(access,'facturacion') && ['venta', 'nota-credito'].includes(entry.type) && (entry.operatorId === ownId || entry.routeWorkerId === ownId || ownShiftIds.has(entry.shiftId) || ownInvoiceIds.has(entry.invoiceId))) : visibleEntry(access, entry, data);
+  const ownPartner=(data.partners||[]).find(p=>p.id===partnerGrant(access.member).partnerId);
+  const partnerEntry=entry=>ownPartner?.movements?.some(m=>m.entryId===(entry.reversalOf||entry.id));
+  const canSeeEntry = entry => partnerEntry(entry)&&visibleEntry(access,entry,data) ? true : operationalOnly ? (allowed(access,'facturacion') && ['venta', 'nota-credito'].includes(entry.type) && (entry.operatorId === ownId || entry.routeWorkerId === ownId || ownShiftIds.has(entry.shiftId) || ownInvoiceIds.has(entry.invoiceId))) : visibleEntry(access, entry, data);
   const visibleIds = new Set((data.entries || []).filter(canSeeEntry).map(entry => entry.id));
   const entries = (data.entries || []).filter(entry => visibleIds.has(entry.id) || (!operationalOnly && entry.invoiceId && visibleIds.has(entry.invoiceId) && visibleEntry(access,entry,data)) || (!operationalOnly && allowed(access, 'inventario') && entry.stock?.length)).map(entry => {
     if (visibleIds.has(entry.id) || (entry.invoiceId && visibleIds.has(entry.invoiceId) && visibleEntry(access,entry,data))) {
-      if (!operationalOnly) return projectServiceEntry(entry,allowed(access,'personal'),serviceEmployeeIds);
+      if (partnerEntry(entry)||!operationalOnly) return projectServiceEntry(entry,allowed(access,'personal'),serviceEmployeeIds);
       const copy = structuredClone(projectServiceEntry(entry,allowed(access,'personal'),serviceEmployeeIds)); copy.lines = []; copy.stock = [];
       for (const item of copy.items || []) delete item.cost;
       return copy;
@@ -238,6 +245,7 @@ export function projectData(data, access, {includeSpaces=false}={}) {
     const copy = { ...record }; if(!access.owner)delete copy.receipt; return copy;
   }) : [];
   for(const [name,module] of Object.entries({...ADVANCED_ARRAYS,...TRADE_ARRAYS})) projected[name]=allowed(access,module)?structuredClone(data[name]||[]):[];
+  if(!access.owner&&partnerGrant(access.member).partnerId)projected.partners=(data.partners||[]).filter(p=>p.id===partnerGrant(access.member).partnerId).map(p=>({...structuredClone(p),movements:(p.movements||[]).filter(m=>partnerAuthorized(access,p,'statement')||m.registeredBy===access.member?.id&&partnerAuthorized(access,p,m.kind))}));
   if(allowed(access,'fiscal'))projected.fiscalCreditReservations=globalThis.AcontecFiscalMath.effectiveDeclarations(data).flatMap(r=>r.frozen.credits||[]).filter(c=>c.source==='iva').map(c=>({period:c.period,amountCents:c.amountCents}));
   projected.fiscalWorkflows=(data.fiscalWorkflows||[]).filter(r=>allowed(access,r.module)&&(['template','configuration'].includes(r.kind)||[...accountingPermissionModules,...new Set((data.businessRecords||[]).filter(b=>['bancos','constancias_laborales','retenciones_fiscales'].includes(b.module)).map(b=>b.module))].every(m=>allowed(access,m))));
   projected.businessRecords=(data.businessRecords||[]).filter(row=>(!routeWorker||row.module==='rutas'&&(row.kind==='route-notice'?routeNoticeAllowed(data.businessRecords||[],access,row):row.operatorId===ownId||row.assignedMemberId===ownId||row.kind==='route-definition'&&projected.customers.some(c=>c.routeZone===row.route)))&&allowed(access,row.module)&&(row.kind!=='lodging-close'||allowed(access,'ventas')&&allowed(access,'contabilidad'))&&(access.routeRole&&row.module==='rutas'||commerceCanRead(row,m=>allowed(access,m)))&&(row.module!=='auditoria_revision'||row.kind==='settings'||(row.kind==='report'?row:(data.businessRecords||[]).find(r=>r.id===row.reportId))?.scope?.every(m=>allowed(access,m)))).map(row=>projectRouteSettlement(access,row));
@@ -619,6 +627,9 @@ export async function manageMember(companyId, session, body) {
       permissions = roleRules.levels(policy);
     } else if (!previous || body.applyRole === true) accessError('Selecciona un cargo de esta empresa.',400);
     else { assignedName = previous.role; if (body.permissions && !equal(body.permissions,previous.permissions)) permissions = validatePermissions(body.permissions,access,previous.role); }
+    const members=await client.select().from(companyMembers).where(eq(companyMembers.companyId,companyId));
+    const grant=validatePartnerGrant({owner:access.owner,previous:partnerGrant(previous),requested:body.partnerAccess,partners:access.company.data?.partners||[],members,memberId:previous?.id,check:(ok,message)=>{if(!ok)accessError(message,403)}});
+    permissions={...permissions,partnerAccess:grant};
     const values = { roleId, permissionExceptions, branchIds, name, role: assignedName, email, username, permissions, active: body.active !== false, passwordHash: username ? passwordHash || previous?.passwordHash : null };
     const [member] = previous ? await client.update(companyMembers).set({ ...values, version: previous.version + 1 }).where(eq(companyMembers.id, previous.id)).returning() : await client.insert(companyMembers).values({ ...values, companyId }).returning();
     if (previous) await client.delete(sessions).where(or(eq(sessions.memberId, previous.id), ...(previous.email ? [eq(sessions.email, previous.email)] : [])));

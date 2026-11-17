@@ -23,12 +23,17 @@ export function annualPreview(data,year){
  const selected=accountingEntries(data.entries,to),net=new Map();for(const e of selected)for(const l of e.lines)net.set(l.a,(net.get(l.a)||0)+moneyCents(l.d)-moneyCents(l.c));
  const closing=[];let result=0;for(const a of data.accounts.filter(a=>['ingreso','costo','gasto'].includes(a.tipo))){const n=net.get(a.code)||0;if(n){closing.push({a:a.code,d:n<0?-n/100:0,c:n>0?n/100:0});result+=n;}}
  if(result)closing.push({a:'3198',d:result>0?result/100:0,c:result<0?-result/100:0});
- const profit=-result,transfer=profit?[{a:'3198',d:profit>0?profit/100:0,c:profit<0?-profit/100:0},{a:'3102',d:profit<0?-profit/100:0,c:profit>0?profit/100:0}]:[];
+ const profit=result===0?0:-result,transfer=profit?[{a:'3198',d:profit>0?profit/100:0,c:profit<0?-profit/100:0},{a:'3102',d:profit<0?-profit/100:0,c:profit>0?profit/100:0}]:[];
+ const withdrawals=net.get('3103')||0;
+ if(withdrawals){
+  if(!data.accounts.some(a=>a.code==='3103'&&a.tipo==='patrimonio'))pending.push('Configurar 3103 como retiros del propietario.');
+  transfer.push({a:'3103',d:withdrawals<0?-withdrawals/100:0,c:withdrawals>0?withdrawals/100:0},{a:'3102',d:withdrawals>0?withdrawals/100:0,c:withdrawals<0?-withdrawals/100:0});
+ }
  for(const l of [...closing,...transfer])net.set(l.a,(net.get(l.a)||0)+moneyCents(l.d)-moneyCents(l.c));
  const opening=[];for(const a of data.accounts.filter(a=>['activo','pasivo','patrimonio'].includes(a.tipo))){const n=net.get(a.code)||0;if(n)opening.push({a:a.code,d:n>0?n/100:0,c:n<0?-n/100:0});}
  const diff=opening.reduce((s,l)=>s+moneyCents(l.d)-moneyCents(l.c),0);if(diff)pending.push(`La apertura no cuadra: ${diff} centavos.`);
  for(const a of data.accounts.filter(a=>['activo','pasivo','patrimonio'].includes(a.tipo))){const n=opening.filter(l=>l.a===a.code).reduce((s,l)=>s+moneyCents(l.d)-moneyCents(l.c),0);if(n!==(net.get(a.code)||0))pending.push(`Apertura distinta al cierre en ${a.code}.`);}
  const openingDate=(+year+1)+'-01-01',nextMovements=data.entries.filter(e=>e.date>=openingDate).length;
- const content={year,from,to,months,pending:[...new Set(pending)],closing,transfer,opening,openingDate,nextMovements,profitCents:profit,notice:nextMovements?'Hay movimientos en el año siguiente. Se conservan; la apertura sustituye únicamente la acumulación de saldos anteriores.':'Los reportes posteriores parten de la apertura contabilizada.',reopenProcedure:'Solo el dueño puede reabrir con motivo. Se agregan contrasientos que revierten cierre, traspaso y apertura; no se borra ni modifica el historial. El mismo cierre automático no se vuelve a ejecutar; los ajustes posteriores requieren revisión del contador.'};
+ const content={year,from,to,months,pending:[...new Set(pending)],closing,transfer,opening,openingDate,nextMovements,profitCents:profit,withdrawalsCents:withdrawals,withdrawalsNotice:'El saldo de 3103 se cancela contra 3102 con líneas propias. Reduce las utilidades acumuladas sin cambiar el resultado del ejercicio; la apertura siguiente inicia 3103 en cero. Verifica con tu contador.',notice:nextMovements?'Hay movimientos en el año siguiente. Se conservan; la apertura sustituye únicamente la acumulación de saldos anteriores.':'Los reportes posteriores parten de la apertura contabilizada.',reopenProcedure:'Solo el dueño puede reabrir con motivo. Se agregan contrasientos que revierten cierre, traspaso y apertura; no se borra ni modifica el historial. El mismo cierre automático no se vuelve a ejecutar; los ajustes posteriores requieren revisión del contador.'};
  return {...content,hash:documentHash(content)};
 }

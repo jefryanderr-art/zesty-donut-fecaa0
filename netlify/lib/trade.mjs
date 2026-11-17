@@ -1,3 +1,5 @@
+import {partnerAuthorized,requirePartnerPlan} from './partner-access.mjs';
+import {statement} from './reporting.mjs';
 import {moneyCents, partnerCapitalCents} from '../../public/accounting-math.mjs';
 import {invoiceLinkedEntries} from './accounting-engine.mjs';
 import { normalizeItemQuantity } from './accounting-engine.mjs';
@@ -35,10 +37,14 @@ export function tradeOperation(data,access,session,body,h){
  }else if(op==='partner'){
   permit(access,'contabilidad');check(access.owner&&text(body.name),'Solo el dueño registra socios.');data.partners.push({id:randomUUID(),name:text(body.name),date:when,movements:[]});
  }else if(op==='capitalMovement'){
-  permit(access,'contabilidad');check(access.owner,'Solo el dueño confirma movimientos de capital.');
+  requirePartnerPlan(access,body.kind);if(access.owner)permit(access,body.kind==='gasto_personal'?'gastos':'contabilidad');
   const partner=data.partners.find(p=>p.id===body.partnerId),total=amount(body.total),personal=body.kind==='gasto_personal',charge=personal?(body.source??'3103'):body.kind==='retiro'?'3103':'3102';
   check(partner&&partner.active!==false&&!['inactivo','archivado'].includes(partner.status)&&['aporte','dividendo','retiro','reserva','gasto_personal'].includes(body.kind)&&['1101','1102'].includes(body.pay),'Selecciona socio activo, tipo y cuenta.');
+  check(access.owner||partnerAuthorized(access,partner,body.kind),'Solo el dueño o el socio autorizado registra sus propios movimientos.');
   const cents=moneyCents(body.total),concept=typeof body.concept==='string'?body.concept.trim():'';
+  if(personal||body.kind==='retiro'){
+   check(!(data.cfg?.periodLocks?.[(access.branchId||'principal')+':'+when.slice(0,7)]||data.cfg?.periodLocks?.[when.slice(0,7)])?.closed,'El período está cerrado.');
+  }
   if(personal){
    check(cents>0&&['3101','3102','3103'].includes(charge),'Selecciona un origen patrimonial válido.');
    check(concept.length>0&&concept.length<=200,'El concepto es obligatorio (máximo 200 caracteres).');
@@ -54,9 +60,13 @@ export function tradeOperation(data,access,session,body,h){
   if(['dividendo','reserva'].includes(body.kind))check(-ledgerBalance(data,'3102',when)>=total,'Utilidades acumuladas insuficientes.');
   ensure('3103','Retiros del propietario','patrimonio','D');ensure('3104','Reserva legal','patrimonio','C');
   if(personal)check([charge,body.pay].every(code=>data.accounts.some(a=>a.code===code&&a.tipo===(code===charge?'patrimonio':'activo')&&a.nat===(code==='3101'||code==='3102'?'C':'D'))),'Revisa las cuentas patrimoniales y de pago.');
+  if(personal||body.kind==='retiro'){
+   const report=statement(data,'0000',when),equityCents=moneyCents(report.equity)+moneyCents(report.profit);
+   check(equityCents-cents>=0||body.confirmNegativeEquity===true,'El patrimonio total quedará negativo. Confirma explícitamente para continuar.');
+  }
   const lines=body.kind==='aporte'?[{a:body.pay,d:total,c:0},{a:'3101',d:0,c:total}]:[{a:charge,d:total,c:0},{a:body.kind==='reserva'?'3104':body.pay,d:0,c:total}];
-  const e=posting({type:'capital-socio',desc:personal?'Gasto personal · '+concept+' · '+partner.name:body.kind+' · '+partner.name,total,lines,...(personal?{createdAt:new Date().toISOString()}: {})});
-  (partner.movements||=[]).push({date:when,kind:body.kind,total,entryId:e.id,...(personal?{concept,charge}:{})});return e.id;
+  const e=posting({type:'capital-socio',desc:personal?'Gasto personal · '+concept+' · '+partner.name:body.kind+' · '+partner.name,total,lines,partnerId:partner.id,capitalKind:body.kind,registeredBy:access.member?.id||session.email,...(personal?{createdAt:new Date().toISOString()}: {})});
+  (partner.movements||=[]).push({date:when,kind:body.kind,total,entryId:e.id,registeredBy:access.member?.id||session.email,registeredAt:new Date().toISOString(),...(personal?{concept,charge}:{})});return e.id;
  }else if(op==='landedCost'){
   permit(access,'compras');const purchase=original();check(purchase.type==='compra'&&purchase.items?.length&&text(body.name)&&['1101','1102','2101'].includes(body.pay),'Selecciona compra, proveedor del servicio y forma de pago.');const freight=amount(body.freight||0,true),duty=amount(body.duty||0,true),insurance=amount(body.insurance||0,true),total=round(freight+duty+insurance);check(total>0,'Indica costos de desembarque.');const ids=new Set(purchase.items.map(i=>i.p));check(!data.entries.some(e=>e.id!==purchase.id&&e.date>=purchase.date&&e.stock?.some(m=>ids.has(m.pid)&&m.q<0)),'Registra el desembarque antes de ventas o salidas de esos productos.');
   const weights=[...ids].map(id=>{const product=data.products.find(p=>p.id===id),weight=purchase.items.filter(i=>i.p===id).reduce((s,i)=>s+round(i.q*i.u),0);check(product&&product.stock>0&&(access.company.data.products.find(p=>p.id===id)?.stock??product.stock)===product.stock,'El inventario debe estar disponible solamente en la sucursal de la compra.');return {product,weight}}),sum=weights.reduce((s,r)=>s+r.weight,0);check(sum>0,'La compra necesita una base de costo positiva.');const allocation=allocateCents(total,weights.map(r=>r.weight));let valuation=0;const stock=[];

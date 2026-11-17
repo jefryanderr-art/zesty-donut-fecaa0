@@ -10,6 +10,7 @@ export const WORKFLOW_OPS=['workflowEnable','workflowLoss','workflowTemplate','w
 export const workflowModule=body=>['workflowClose','workflowReopen'].includes(body.operation)?'cierre_anual':body.operation==='workflowEnable'||body.operation==='workflowPackage'?body.module:'declaraciones';
 export const accountingPermissionModules=['contabilidad','fiscal','personal','inventario','ventas','compras','gastos','cajas','costos','proveedores'];
 export function permitPackage(access,permit,data){
+ check(access.owner||!(access.member?.partnerAccess?.partnerId||access.member?.permissions?.partnerAccess?.partnerId),'El acceso vinculado a un socio no puede consultar paquetes completos con movimientos de otros socios.');
  for(const m of accountingPermissionModules)permit(access,m,false);
  // Un paquete contiene también anexos de los módulos que estén presentes.
  for(const m of new Set((data?.businessRecords||[]).filter(r=>['bancos','constancias_laborales','retenciones_fiscales'].includes(r.module)).map(r=>r.module)))permit(access,m,false);
