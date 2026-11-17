@@ -46,5 +46,6 @@
     }));
     return legacyPolicy(role,permissions,modules);
   }
-  globalThis.AcontecRoles=Object.freeze({actions,specials,legacyPolicy,levels,permits,within,preset,routeRoles});
+  const partnerGrant=value=>({partnerId:typeof value?.partnerId==='string'?value.partnerId:'',personalExpenses:value?.personalExpenses===true,withdrawals:value?.withdrawals===true,statement:value?.statement===true});
+  globalThis.AcontecRoles=Object.freeze({partnerGrant,actions,specials,legacyPolicy,levels,permits,within,preset,routeRoles});
 })();

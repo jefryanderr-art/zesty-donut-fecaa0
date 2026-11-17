@@ -1,3 +1,4 @@
+import {partnerAuthorized,requirePartnerPlan} from './partner-access.mjs';
 import {statement} from './reporting.mjs';
 import {guardCash} from './cash-guard.mjs';
 import {guardPeriods} from './period-controls.mjs';
@@ -20,7 +21,11 @@ function stockEffect(data,effects){
  for(const [id,m]of changes){const p=data.products.find(p=>p.id===id),q=Math.round((p.stock+m.q)*1e6)/1e6,v=p.stock*p.cost+m.v;check(q>=0&&v>=-0.001&&(q!==0||Math.abs(v)<0.011),'La corrección deja existencias o valoración negativas o valor sin existencias.');p.stock=q;if(!m.q&&!m.v)continue;p.cost=q?Math.round(v/q*100)/100:0;}
 }
 export function correctEntry(data,access,session,body,{append,date,registerAgain=false}){
- if(!supervisor(access))fail('Necesitas el permiso especial Correcciones.',403);
+ const capitalPartner=(data.partners||[]).find(p=>p.movements?.some(m=>m.entryId===body.id&&['gasto_personal','retiro'].includes(m.kind)));
+ const capitalMovement=capitalPartner?.movements.find(m=>m.entryId===body.id);
+ const ownCapital=!!capitalMovement&&partnerAuthorized(access,capitalPartner,capitalMovement.kind)&&capitalMovement.registeredBy===access.member?.id;
+ if(capitalMovement)requirePartnerPlan(access,capitalMovement.kind);
+ if(!supervisor(access)&&!ownCapital)fail('Necesitas el permiso especial Correcciones.',403);
  check(access.branchId,'Selecciona una sucursal activa; el consolidado es de consulta.');
  const previous=structuredClone(data);
  const original=data.entries.find(e=>e.id===body.id&&(e.branchId||'principal')===access.branchId);
@@ -28,8 +33,8 @@ export function correctEntry(data,access,session,body,{append,date,registerAgain
  if(registerAgain)check(['gasto','compra','manual','abono'].includes(original.type)&&body.replacement,'Este tipo requiere su flujo específico de corrección.');
  check(!['venta','nota-credito'].includes(original.type),'Las ventas se anulan mediante nota de crédito.');
  check(!original.allocationJournal&&!original.treasuryId&&!original.shiftId&&!original.costId,'Esta operación tiene su propio flujo de anulación.');
- const personal=original.type==='capital-socio'&&(data.partners||[]).some(p=>p.movements?.some(m=>m.entryId===original.id&&m.kind==='gasto_personal'));
- if(personal)check(access.owner&&!body.replacement&&!registerAgain,'Solo el dueño puede anular el gasto personal; anula y registra de nuevo.');
+ const personal=original.type==='capital-socio'&&!!capitalMovement;
+ if(personal)check((access.owner||ownCapital)&&!body.replacement&&!registerAgain,'Solo el dueño o el socio autorizado puede anular su propio registro; anula y registra de nuevo.');
  check(personal||!original.managed||original.correctionOf||original.type==='apertura-importada','Esta operación tiene su propio flujo de anulación.');
  check(personal||['apertura','apertura-importada','manual','gasto','compra','abono','fiscal-pago','invini'].includes(original.type),'Este tipo requiere su flujo específico de corrección.');
  check(!original.lines.some(l=>l.a==='1104'||l.a.startsWith('1103-')),'Los turnos y la caja chica se corrigen desde sus módulos.');

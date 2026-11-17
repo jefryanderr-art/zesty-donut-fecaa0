@@ -1,3 +1,4 @@
+import {partnerAuthorized} from './partner-access.mjs';
 import {connectedCostReport} from '../../public/accounting-math.mjs';
 import {registerConnectedCost,seedCostCatalog,reverseConnectedCost} from './costs.mjs';
 import {durableRoutePayload} from '../../public/route-queue.mjs';
@@ -792,7 +793,7 @@ export async function runOperation(companyId, session, body) {
       else if(operation==='economicSector')output=configureEconomicSector(data,access,body,{permit:requirePermission});
       else if(operation==='countryTemplate'){requirePermission(access,'fiscal');let template;try{template=countryTemplate(body)}catch(error){accessError(error.message,400)}data.cfg.countryTemplate=template;data.cfg.fiscal={...data.cfg.fiscal,...template.fiscal};for(const [code,name,tipo,nat]of [['6109','Aportes patronales','gasto','D'],['2112','Aportes patronales por pagar','pasivo','C']])if(!data.accounts.some(a=>a.code===code))data.accounts.push({code,name,tipo,nat,sub:''});}
       else if(crossBranch){output=transferOperation(data,access,operationSession,body,{requireValue,requirePermission,appendEntry,dateValue,amount,ledgerBalance,guardCash});}
-      else if(TRADE_OPS.includes(operation)){output=tradeOperation(data,access,operationSession,body,{requireValue,requirePermission,appendEntry,dateValue,amount,ledgerBalance,guardCash});}
+      else if(TRADE_OPS.includes(operation)){output=tradeOperation(data,access,operationSession,body,{requireValue,requirePermission,appendEntry,dateValue,amount,ledgerBalance,guardCash});if(operation==='capitalMovement')await audit(client,companyId,operationSession,'Movimiento de socio registrado',[{area:'partners',partnerId:body.partnerId,kind:body.kind,entryId:output,at:new Date().toISOString(),negativeEquityConfirmed:body.confirmNegativeEquity===true}]);}
       else if(operation==='importRecords'){ output=importRecords(data,access,operationSession,body,{requireValue,requirePermission,appendEntry,dateValue,validateSupplier}); }
       else if (handlesAdvanced(operation)) {
         if(operation==='invoiceDraft')body={...body,priceAdjustments:await consumeDiscount(client,companyId,access,operationSession,body,data)};
@@ -1038,7 +1039,9 @@ export async function runOperation(companyId, session, body) {
         record.reversalId = reversal.id;
       } else if (operation === 'correctEntry' || operation === 'registerAgain' || operation === 'reverseLegacyCash') {
         const original=data.entries.find(e=>e.id===body.id);
-        if(original)requireModule(access,original.type==='compra'?'compras':original.type==='gasto'?'gastos':original.type==='invini'?'inventario':original.type==='fiscal-pago'?'fiscal':original.type==='abono'?(data.entries.find(e=>e.id===original.invoiceId)?.pay==='1201'?'ventas':data.entries.find(e=>e.id===original.invoiceId)?.pay==='2101'?'compras':'contabilidad'):'contabilidad');
+        const ownCapital=(data.partners||[]).some(p=>p.movements?.some(m=>m.entryId===body.id&&m.registeredBy===access.member?.id&&partnerAuthorized(access,p,m.kind)));
+        const personalCapital=(data.partners||[]).some(p=>p.movements?.some(m=>m.entryId===body.id&&m.kind==='gasto_personal'));
+        if(original&&!ownCapital)requireModule(access,personalCapital?'gastos':original.type==='compra'?'compras':original.type==='gasto'?'gastos':original.type==='invini'?'inventario':original.type==='fiscal-pago'?'fiscal':original.type==='abono'?(data.entries.find(e=>e.id===original.invoiceId)?.pay==='1201'?'ventas':data.entries.find(e=>e.id===original.invoiceId)?.pay==='2101'?'compras':'contabilidad'):'contabilidad');
         const correction=correctEntry(data,access,operationSession,body,{append:appendEntry,date:dateValue,registerAgain:operation==='registerAgain'});
         output=correction.correctedId||correction.reversalId;
         await audit(client,companyId,operationSession,operation==='registerAgain'?'Registrar de nuevo':'Corrección de asiento',[{area:'entries',...correction,at:new Date().toISOString()}]);

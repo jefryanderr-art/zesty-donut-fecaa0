@@ -74,3 +74,19 @@ test('no admite opciones internas del navegador en ajustes',async()=>{const d=en
 test('aportes históricos ausentes no se convierten en cero declarado',()=>{const d=company(),t=configuredTemplate();delete d.payrolls[0].employerSocial;const calculation=declarationCalculation(d,t,t.declarations.find(r=>r.id==='seguridad'),'2025-01');assert.ok(calculation.missing.length);assert.equal(calculation.amountCents,null);});
 test('flujo por cuenta incorpora la apertura como saldo inicial',()=>{const d=company(),r=financialReports(d,'2025-01-01','2025-12-31');assert.equal(r.cash.find(a=>a.account==='1101').openingCents,100000);assert.equal(r.cash.reduce((s,a)=>s+a.openingCents+a.debitCents-a.creditCents,0),r.flow[0].closingCents);});
 test('reabrir conserva el resultado económico del ejercicio',async()=>{const c=await closed(),r=await operation(c.data,{operation:'workflowReopen',id:c.id});assert.equal(statement(r.data,'2025-01-01','2025-12-31').profit,80);assert.equal(financialReports(r.data,'2025-01-01','2025-12-31').results[0].profitCents,8000);});
+
+test('cierre real traspasa retiros 3103 y conserva apertura, flujo y resultado; reapertura revierte',async()=>{
+ const d=complete(enabled(company(),['cierre_anual']));d.accounts.push({code:'3103',name:'Retiros del propietario',tipo:'patrimonio',nat:'D',sub:'fin'});
+ d.entries.push(entry('personal','2025-02-01','capital-socio',[['3103',125,0],['1101',0,125]],{total:125}));
+ const before=financialReports(d,'2025-01-01','2025-12-31'),c=await closed(d),transfer=c.data.entries.find(e=>e.type==='traspaso-anual');
+ assert.ok(transfer.lines.some(l=>l.a==='3103'&&l.c===125));assert.ok(transfer.lines.some(l=>l.a==='3102'&&l.d===125));
+ const opening=c.data.entries.find(e=>e.type==='apertura-anual');assert.equal(opening.lines.some(l=>l.a==='3103'),false);assert.equal(opening.lines.reduce((s,l)=>s+Math.round(l.d*100)-Math.round(l.c*100),0),0);
+ const next=financialReports(c.data,'2026-01-01','2026-12-31');assert.equal(next.balance[0].equityCents,before.balance[0].equityCents);assert.equal(next.results[0].profitCents,0);assert.equal(next.flow[0].closingCents,before.flow[0].closingCents);
+ const r=await operation(c.data,{operation:'workflowReopen',id:c.id});assert.deepEqual(financialReports(r.data,'2025-01-01','2025-12-31').results,before.results);
+});
+
+// El paquete contiene diarios completos: no debe eludir la proyección privada del socio.
+test('un socio vinculado no descarga paquetes con movimientos ajenos aunque tenga módulos contables',()=>{
+ const d=company();assert.throws(()=>permitPackage(access(d,{owner:false,member:{active:true,partnerAccess:{partnerId:'p',statement:true}}}),()=>{},d),/otros socios/);
+ assert.doesNotThrow(()=>permitPackage(access(d),()=>{},d));
+});
